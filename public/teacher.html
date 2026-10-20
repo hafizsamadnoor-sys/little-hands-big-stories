@@ -18,7 +18,7 @@
 <script>
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["mysteries","🕵️ Mysteries"],
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
-  ["learning","📋 Learning Tasks"],
+  ["learning","📋 Learning Tasks"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"]];
 let cur = "approvals";
 (async () => {
@@ -40,7 +40,7 @@ async function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
   ({ approvals: vApprovals, tasks: vTasks, mysteries: vMysteries, challenges: vChallenges,
-     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks })[cur](p);
+     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks })[cur](p);
 }
 
 async function vApprovals(p) {
@@ -198,6 +198,7 @@ async function vStudents(p) {
       <td>${esc(s.ad_no || "")}</td><td>${s.pin ? `<code style="font-size:1.2rem">${esc(s.pin)}</code>` : "❌"}</td>
       <td><button class="btn small ghost" data-ed="${s.id}">Edit</button>
           <button class="btn small ghost" data-rp="${s.id}">🔑 Reset pw</button>
+          <button class="btn small ghost" data-bg="${s.id}">🏆 Best Story</button>
           <a class="btn small ghost" href="/preview.html?id=${s.id}" target="_blank">👁️ View</a></td></tr>`).join("")}
     </tbody></table></div><div id="edbox"></div>`;
   document.getElementById("genpw").onclick = async () => {
@@ -211,6 +212,12 @@ async function vStudents(p) {
   p.querySelectorAll("[data-rp]").forEach(b => b.onclick = async () => {
     const r = await api("POST", `/api/teacher/student/${b.dataset.rp}/reset-password`);
     toast(`New password: ${r.password} — share it privately.`);
+  });
+  p.querySelectorAll("[data-bg]").forEach(b => b.onclick = async () => {
+    const s = d.students.find(x => String(x.id) === b.dataset.bg);
+    if (!confirm(`Award the 🏆 Best Story badge to ${s.display_name}?`)) return;
+    await api("POST", "/api/teacher/badge", { student_id: s.id, award: true });
+    toast(`🏆 Best Story badge awarded to ${s.display_name}!`);
   });
   p.querySelectorAll("[data-ed]").forEach(b => b.onclick = async () => {
     const s = d.students.find(x => String(x.id) === b.dataset.ed);
@@ -532,6 +539,66 @@ async function vLearning(p) {
     } catch (e) { document.getElementById("sb_rows").innerHTML = `<tr><td colspan="5" class="muted">Could not load summary.</td></tr>`; }
   }
   await loadTasks(); await loadStudents(); await loadClass(); await loadGuests(); await loadSummary();
+}
+
+async function vMarks(p) {
+  p.innerHTML = `
+  <div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h2 style="color:#fff;margin:0 0 4px">📊 Student Marks</h2>
+    <p class="muted" style="color:#cfe8ef;margin:0">Only the student and their parent can see these marks.</p>
+  </div>
+  <div class="card">
+    <h3>➕ Add / Update Marks</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <select id="mk_student"></select>
+      <input id="mk_subject" placeholder="Subject (e.g. Maths)">
+      <input id="mk_exam" placeholder="Exam (e.g. Term 1)">
+      <input id="mk_marks" type="number" step="0.5" placeholder="Marks">
+      <input id="mk_max" type="number" step="1" placeholder="Max (default 100)">
+      <input id="mk_grade" placeholder="Grade (e.g. A+)">
+    </div>
+    <button class="btn" style="margin-top:8px" onclick="saveMark()">💾 Save Marks</button>
+  </div>
+  <div class="card">
+    <h3>📋 All Marks</h3>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:.85rem">
+      <tr><th>Student</th><th>Subject</th><th>Exam</th><th>Marks</th><th>Grade</th><th></th></tr>
+      <tbody id="mk_rows"></tbody>
+    </table></div>
+  </div>`;
+  const ss = await api("GET", "/api/teacher/students");
+  document.getElementById("mk_student").innerHTML =
+    ss.students.map(s => `<option value="${s.id}">${esc(s.display_name)} (${s.ad_no})</option>`).join("");
+  window.saveMark = async () => {
+    const body = {
+      student_id: +document.getElementById("mk_student").value,
+      subject: document.getElementById("mk_subject").value.trim(),
+      exam: document.getElementById("mk_exam").value.trim(),
+      marks: parseFloat(document.getElementById("mk_marks").value),
+      max_marks: parseFloat(document.getElementById("mk_max").value) || 100,
+      grade: document.getElementById("mk_grade").value.trim()
+    };
+    if (!body.subject || isNaN(body.marks)) return alert("Subject and marks required.");
+    await api("POST", "/api/teacher/marks", body);
+    document.getElementById("mk_subject").value = "";
+    document.getElementById("mk_marks").value = "";
+    document.getElementById("mk_grade").value = "";
+    loadMarks();
+  };
+  window.delMark = async (id) => {
+    if (!confirm("Delete this mark entry?")) return;
+    await api("DELETE", "/api/teacher/marks/" + id);
+    loadMarks();
+  };
+  async function loadMarks() {
+    const d = await api("GET", "/api/teacher/marks");
+    document.getElementById("mk_rows").innerHTML = d.marks.map(m => `
+      <tr><td>${esc(m.student_name)}</td><td>${esc(m.subject)}</td><td>${esc(m.exam)}</td>
+      <td><b>${m.marks}</b>/${m.max_marks}</td><td>${esc(m.grade)}</td>
+      <td><button class="btn ghost small" onclick="delMark(${m.id})">🗑️</button></td></tr>`).join("")
+      || `<tr><td colspan="6" class="muted">No marks yet.</td></tr>`;
+  }
+  await loadMarks();
 }
 
 async function vWow(p) {
