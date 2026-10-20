@@ -38,7 +38,7 @@ async function guard(role) {
 function studentNav(active) {
   const links = [
     ["dashboard.html", "🏠 Home"], ["write.html", "✍️ Write"], ["works.html", "📖 Stories"],
-    ["tasks.html", "📅 Tasks"], ["mystery.html", "🕵️ Mystery"], ["challenges.html", "🎯 Challenges"],
+    ["tasks.html", "📅 Tasks"], ["mystery.html", "🕵️ Mystery"], ["puzzle.html", "🧩 Puzzle"], ["challenges.html", "🎯 Challenges"],
     ["board.html", "🏆 Board"], ["certificate.html", "🏅 Certificate"], ["books.html", "📚 Books"], ["authors.html", "👥 Authors"], ["about.html", "ℹ️ About"],
   ];
   return navHtml(links, active);

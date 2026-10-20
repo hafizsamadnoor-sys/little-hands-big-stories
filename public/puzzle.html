@@ -1,0 +1,194 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Word Puzzle · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b3c46">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+.puzzle-letters { display: flex; gap: 8px; justify-content: center; margin: 20px 0; flex-wrap: wrap; }
+.puzzle-letter {
+  width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; font-weight: 800; background: #fff; border: 2px solid #0e7c8c;
+  border-radius: 12px; cursor: pointer; color: #0b3c46; user-select: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,.1); transition: all .15s;
+}
+.puzzle-letter:active { transform: scale(.92); }
+.puzzle-letter.used { opacity: .25; pointer-events: none; }
+.puzzle-answer { display: flex; gap: 6px; justify-content: center; margin: 16px 0; min-height: 56px; flex-wrap: wrap; }
+.puzzle-slot {
+  width: 48px; height: 52px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.6rem; font-weight: 800; background: #e8f4f6; border: 2px dashed #0e7c8c;
+  border-radius: 10px; color: #0b3c46; cursor: pointer;
+}
+.puzzle-slot.filled { background: #0e7c8c; color: #fff; border-style: solid; }
+.puzzle-hint { background: #fff8e1; border-left: 4px solid #f9a825; padding: 10px 14px; border-radius: 8px; margin: 12px 0; }
+.puzzle-stats { display: flex; gap: 12px; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
+.puzzle-stat { background: #fff; padding: 8px 16px; border-radius: 20px; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.puzzle-win { text-align: center; padding: 20px; }
+.puzzle-win .big { font-size: 3rem; }
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff;text-align:center">
+  <h1 style="color:#fff;margin:0">🧩 Word Puzzle</h1>
+  <p style="color:#cfe8ef;margin:8px 0 0">Unscramble the letters to make a word! Each word = 2 points 🎯</p>
+</div>
+<div class="puzzle-stats">
+  <div class="puzzle-stat">🎯 Score: <span id="score">0</span></div>
+  <div class="puzzle-stat">📝 Word <span id="wno">1</span></div>
+  <div class="puzzle-stat">🔥 Streak: <span id="streak">0</span></div>
+</div>
+<div class="card" id="game">
+  <div class="puzzle-hint" id="hint"></div>
+  <div class="puzzle-answer" id="answer"></div>
+  <div class="puzzle-letters" id="letters"></div>
+  <div style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="btn" onclick="checkWord()">✅ Check</button>
+    <button class="btn ghost" onclick="clearWord()">🔄 Clear</button>
+    <button class="btn ghost" onclick="skipWord()">⏭️ Skip</button>
+  </div>
+  <div id="msg" style="text-align:center;margin-top:12px;min-height:24px;font-weight:700"></div>
+</div>
+<div class="card puzzle-win" id="winbox" style="display:none">
+  <div class="big">🎉</div>
+  <h2>Amazing!</h2>
+  <p>You solved all the words!</p>
+  <p><b>Final score: <span id="finalscore">0</span> points</b></p>
+  <button class="btn" onclick="startGame()">🔄 Play Again</button>
+</div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+const WORDS = [
+  ["STORY", "A tale you read or write 📖"],
+  ["FRIEND", "Someone you play with 👫"],
+  ["SCHOOL", "Where you learn 🏫"],
+  ["BOOK", "You read it 📚"],
+  ["HAPPY", "Feeling glad 😊"],
+  ["FLOWER", "Blooms in the garden 🌸"],
+  ["BIRD", "Flies in the sky 🐦"],
+  ["WATER", "You drink it 💧"],
+  ["LIGHT", "Opposite of dark 💡"],
+  ["DREAM", "You see it while sleeping 💭"],
+  ["SMILE", "Curve on your face 😄"],
+  ["BRAVE", "Not afraid 🦁"],
+  ["CLOUD", "Floats in the sky ☁️"],
+  ["RIVER", "Water flows in it 🏞️"],
+  ["STARS", "Shine at night ✨"],
+  ["MAGIC", "Wizards do it 🪄"],
+  ["LAUGH", "What you do at jokes 😂"],
+  ["DANCE", "Move to music 💃"],
+  ["APPLE", "A red fruit 🍎"],
+  ["TIGER", "A big striped cat 🐯"],
+];
+let order = [], idx = 0, score = 0, streak = 0, current = "", picked = [];
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+async function startGame() {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("") : studentNav("puzzle.html");
+  order = shuffle([...WORDS.keys()]);
+  idx = 0; score = 0; streak = 0;
+  document.getElementById("winbox").style.display = "none";
+  document.getElementById("game").style.display = "";
+  loadWord();
+}
+
+function loadWord() {
+  if (idx >= order.length) {
+    document.getElementById("game").style.display = "none";
+    document.getElementById("winbox").style.display = "";
+    document.getElementById("finalscore").textContent = score;
+    return;
+  }
+  const [word, hint] = WORDS[order[idx]];
+  current = word; picked = [];
+  document.getElementById("hint").innerHTML = `<b>Hint:</b> ${hint}`;
+  document.getElementById("wno").textContent = idx + 1;
+  document.getElementById("msg").textContent = "";
+  const ans = document.getElementById("answer");
+  ans.innerHTML = "";
+  for (let i = 0; i < word.length; i++) {
+    const s = document.createElement("div");
+    s.className = "puzzle-slot"; s.dataset.i = i;
+    s.onclick = () => unpick(i);
+    ans.appendChild(s);
+  }
+  const scrambled = shuffle(word.split(""));
+  // avoid showing the correct order by accident
+  if (scrambled.join("") === word) scrambled.reverse();
+  const lt = document.getElementById("letters");
+  lt.innerHTML = "";
+  scrambled.forEach((ch, i) => {
+    const d = document.createElement("div");
+    d.className = "puzzle-letter"; d.textContent = ch; d.dataset.i = i;
+    d.onclick = () => pick(i, ch, d);
+    lt.appendChild(d);
+  });
+  updateStats();
+}
+
+function pick(i, ch, el) {
+  const slot = [...document.getElementById("answer").children].find(s => !s.textContent);
+  if (!slot) return;
+  slot.textContent = ch; slot.classList.add("filled");
+  slot.dataset.li = i;
+  el.classList.add("used");
+  picked.push(i);
+}
+
+function unpick(i) {
+  const slot = document.getElementById("answer").children[i];
+  if (!slot.textContent) return;
+  const li = +slot.dataset.li;
+  document.querySelector(`.puzzle-letter[data-i="${li}"]`).classList.remove("used");
+  slot.textContent = ""; slot.classList.remove("filled");
+  picked = picked.filter(x => x !== li);
+}
+
+function clearWord() { loadWord(); }
+
+function skipWord() {
+  streak = 0; idx++;
+  document.getElementById("msg").innerHTML = `<span style="color:#999">Skipped! The word was <b>${current}</b></span>`;
+  setTimeout(loadWord, 1200);
+}
+
+async function checkWord() {
+  const guess = [...document.getElementById("answer").children].map(s => s.textContent).join("");
+  const msg = document.getElementById("msg");
+  if (guess.length < current.length) {
+    msg.innerHTML = `<span style="color:#f9a825">Fill all the letters first!</span>`;
+    return;
+  }
+  if (guess === current) {
+    score += 2; streak++;
+    msg.innerHTML = `<span style="color:#2e7d32">🎉 Correct! +2 points</span>`;
+    updateStats();
+    try { await api("POST", "/api/puzzle/score", { points: 2 }); } catch (e) {}
+    idx++;
+    setTimeout(loadWord, 1000);
+  } else {
+    streak = 0;
+    msg.innerHTML = `<span style="color:#c62828">❌ Try again!</span>`;
+    updateStats();
+  }
+}
+
+function updateStats() {
+  document.getElementById("score").textContent = score;
+  document.getElementById("streak").textContent = streak;
+}
+
+startGame();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
