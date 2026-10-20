@@ -51,7 +51,9 @@ async function vApprovals(p) {
       <span class="muted" style="font-size:.85rem">by ${esc(w.author)} · ${fmtDate(w.created_at)}</span></p>
       <div class="card" style="white-space:pre-wrap;box-shadow:none">${esc(w.content)}</div>
       <label>Stars (0–5)</label>
-      <select id="st${w.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
+      <select id="st${w.id}" onchange="document.getElementById('pt${w.id}').value = (parseInt(document.getElementById('pt${w.id}').dataset.base)||0) + parseInt(this.value)"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
+      <label>Points (marks)</label>
+      <input id="pt${w.id}" type="number" min="0" style="width:90px" data-base="${w.base_points || 0}" value="${(w.base_points || 0) + 5}">
       <button class="btn small" data-a="${w.id}">✅ Approve</button>
       <button class="btn small ghost" data-r="${w.id}">❌ Reject</button>
       <button class="btn small danger" data-d="${w.id}">🗑 Delete</button></div>`).join("")
@@ -63,7 +65,9 @@ async function vApprovals(p) {
   });
   async function review(id, decision) {
     try {
-      await api("POST", `/api/teacher/work/${id}/review`, { decision, stars: document.getElementById("st" + id).value });
+      const body = { decision, stars: document.getElementById("st" + id).value };
+      if (decision === "approve") body.points = document.getElementById("pt" + id).value;
+      await api("POST", `/api/teacher/work/${id}/review`, body);
       toast(decision === "approve" ? "Published! ⭐" : "Rejected."); render();
     } catch (e) { toast(e.message, false); }
   }
