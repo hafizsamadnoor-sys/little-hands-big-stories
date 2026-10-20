@@ -295,13 +295,7 @@ async function seedParentUsers() {
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
-  { key: "first_story", name: "First Story", icon: "🌱", desc: "Published your first piece of writing." },
-  { key: "young_writer", name: "Young Writer", icon: "✍️", desc: "Published 5 pieces of writing." },
-  { key: "story_collector", name: "Story Collector", icon: "📚", desc: "Read 25 stories." },
-  { key: "master_detective", name: "Master Detective", icon: "🕵️", desc: "Solved 10 mysteries." },
-  { key: "creative_flame", name: "Creative Flame", icon: "🔥", desc: "Completed 10 challenges." },
-  { key: "rising_author", name: "Rising Author", icon: "🌟", desc: "Reached 50 points." },
-  { key: "story_champion", name: "Story Champion", icon: "🏆", desc: "Reached #1 on the points board." },
+  { key: "best_story", name: "Best Story", icon: "🏆", desc: "Awarded by the teacher for the best story." },
 ];
 async function totalPoints(student_id) {
   const r = (await db.execute({ sql: "SELECT COALESCE(SUM(points),0) AS t FROM points_log WHERE student_id=?", args: [student_id] })).rows[0];
@@ -316,24 +310,8 @@ async function studentStats(student_id) {
   return { approved, reads, solves, chall, stars, points: await totalPoints(student_id) };
 }
 async function checkBadges(student_id) {
-  const st = await studentStats(student_id);
-  const have = new Set((await db.execute({ sql: "SELECT badge_key FROM student_badges WHERE student_id=?", args: [student_id] })).rows.map(r => r.badge_key));
-  const earn = [];
-  if (st.approved >= 1) earn.push("first_story");
-  if (st.approved >= 5) earn.push("young_writer");
-  if (st.reads >= 25) earn.push("story_collector");
-  if (st.solves >= 10) earn.push("master_detective");
-  if (st.chall >= 10) earn.push("creative_flame");
-  if (st.points >= 50) earn.push("rising_author");
-  // story_champion: #1 on all-time board
-  const top = (await db.execute({ sql: `
-    SELECT u.id FROM users u
-    LEFT JOIN points_log p ON p.student_id = u.id
-    WHERE u.role='student'
-    GROUP BY u.id ORDER BY COALESCE(SUM(p.points),0) DESC LIMIT 1`, args: [] })).rows[0];
-  if (top && top.id === student_id) earn.push("story_champion");
-  const ins_sql = "INSERT OR IGNORE INTO student_badges (student_id, badge_key) VALUES (?,?)";
-  for (const k of earn) if (!have.has(k)) await db.execute({ sql: ins_sql, args: [student_id, k] });
+  // Badges are no longer auto-awarded. The teacher awards the "Best Story"
+  // badge manually via /api/teacher/badge.
 }
 async function awardPoints(student_id, points, reason, ref_type = null, ref_id = null) {
   if (!points || points <= 0) return;
@@ -742,6 +720,17 @@ app.get("/api/writer-of-week", requireLogin, async (req, res) => {
   const w = (await db.execute({ sql: `SELECT w.note, w.created_at, u.display_name, u.photo, u.id AS student_id
     FROM writer_of_week w JOIN users u ON u.id=w.student_id ORDER BY w.id DESC LIMIT 1`, args: [] })).rows[0];
   res.json({ writer: w || null });
+});
+// Teacher-only: award or revoke the Best Story badge.
+app.post("/api/teacher/badge", requireTeacher, async (req, res) => {
+  const { student_id, award } = req.body || {};
+  const s = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [student_id] })).rows[0];
+  if (!s) return res.status(404).json({ error: "Student not found." });
+  if (award) await db.execute({ sql: "INSERT OR IGNORE INTO student_badges (student_id, badge_key) VALUES (?, 'best_story')", args: [s.id] });
+  else await db.execute({ sql: "DELETE FROM student_badges WHERE student_id=? AND badge_key='best_story'", args: [s.id] });
+  await logActivity(req.user.id, req.user.role, award ? "badge" : "unbadge",
+    `${award ? "Awarded" : "Removed"} Best Story badge ${award ? "to" : "from"} ${s.display_name}`, "badge", s.id);
+  res.json({ ok: true });
 });
 app.get("/api/badges", requireLogin, (req, res) => res.json({ badges: BADGES }));
 app.get("/api/my/badges", requireStudent, async (req, res) => {
