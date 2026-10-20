@@ -112,6 +112,18 @@ CREATE TABLE IF NOT EXISTS learning_task_done (
   UNIQUE(task_id, student_id)
 );`);
   await db.execute(`
+CREATE TABLE IF NOT EXISTS student_marks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject TEXT NOT NULL,
+  exam TEXT NOT NULL DEFAULT '',
+  marks REAL NOT NULL,
+  max_marks REAL NOT NULL DEFAULT 100,
+  grade TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(student_id, subject, exam)
+);`);
+  await db.execute(`
 CREATE TABLE IF NOT EXISTS student_badges (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -867,7 +879,7 @@ app.get("/api/teacher/backup", requireTeacher, async (req, res) => {
 // after the hosting wipes the disk). Replaces all content tables atomically.
 const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log","activity_log","student_badges",
   "weekly_tasks","quiz_questions","quiz_attempts","mysteries","mystery_solves",
-  "challenges","challenge_entries","writer_of_week","point_settings","books"];
+  "challenges","challenge_entries","writer_of_week","point_settings","books","student_marks"];
 app.post("/api/teacher/restore", requireTeacher, async (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -963,6 +975,12 @@ app.post("/api/teacher/student/:id", requireTeacher, async (req, res) => {
   await db.execute({ sql: "UPDATE users SET display_name=COALESCE(?,display_name), bio=?, photo=? WHERE id=?", args: [display_name && display_name.trim() ? display_name.trim() : null, bio || null, photo || null, s.id] });
   res.json({ ok: true });
 });
+// Puzzle game score: students earn points for solving word puzzles.
+app.post("/api/puzzle/score", requireStudent, async (req, res) => {
+  const p = Math.min(Math.max(parseInt(req.body.points) || 0, 0), 10);
+  if (p > 0) await awardPoints(req.user.id, p, "Word puzzle solved 🧩", "puzzle", null);
+  res.json({ ok: true, total: await totalPoints(req.user.id) });
+});
 app.post("/api/teacher/adjust-points", requireTeacher, async (req, res) => {
   const { student_id, points, reason } = req.body || {};
   const s = (await db.execute({ sql: "SELECT id FROM users WHERE id=? AND role='student'", args: [student_id] })).rows[0];
@@ -1031,6 +1049,44 @@ app.post("/api/teacher/learning-task", requireTeacher, async (req, res) => {
 app.delete("/api/teacher/learning-task/:id", requireTeacher, async (req, res) => {
   await db.execute({ sql: "DELETE FROM learning_tasks WHERE id=?", args: [req.params.id] });
   res.json({ ok: true });
+});
+// ---- Student Marks (teacher manages; student/parent see only their own) ----
+app.get("/api/teacher/marks", requireTeacher, async (req, res) => {
+  const rows = (await db.execute(`SELECT m.*, u.display_name as student_name, u.ad_no
+    FROM student_marks m JOIN users u ON u.id=m.student_id
+    ORDER BY u.display_name, m.subject`)).rows;
+  res.json({ marks: rows });
+});
+app.post("/api/teacher/marks", requireTeacher, async (req, res) => {
+  const { student_id, subject, exam, marks, max_marks, grade } = req.body || {};
+  if (!student_id || !subject || marks === undefined)
+    return res.status(400).json({ error: "student_id, subject and marks required." });
+  await db.execute({ sql: `INSERT INTO student_marks (student_id, subject, exam, marks, max_marks, grade)
+    VALUES (?,?,?,?,?,?)
+    ON CONFLICT(student_id, subject, exam) DO UPDATE SET marks=excluded.marks, max_marks=excluded.max_marks, grade=excluded.grade`,
+    args: [student_id, subject, exam || '', Number(marks), Number(max_marks) || 100, grade || ''] });
+  const s = (await db.execute({ sql: "SELECT display_name FROM users WHERE id=?", args: [student_id] })).rows[0];
+  await logActivity(req.user.id, req.user.role, "marks",
+    `Updated marks for ${s ? s.display_name : student_id}: ${subject} = ${marks}`, "marks", student_id);
+  res.json({ ok: true });
+});
+app.delete("/api/teacher/marks/:id", requireTeacher, async (req, res) => {
+  await db.execute({ sql: "DELETE FROM student_marks WHERE id=?", args: [req.params.id] });
+  res.json({ ok: true });
+});
+// Student sees ONLY their own marks.
+app.get("/api/my/marks", requireStudent, async (req, res) => {
+  const rows = (await db.execute({ sql: "SELECT subject, exam, marks, max_marks, grade FROM student_marks WHERE student_id=? ORDER BY subject",
+    args: [req.user.id] })).rows;
+  res.json({ marks: rows });
+});
+// Parent sees ONLY their own child's marks.
+app.get("/api/parent/marks", requireParent, async (req, res) => {
+  const child = (await db.execute({ sql: "SELECT id FROM users WHERE id=?", args: [req.user.parent_of] })).rows[0];
+  if (!child) return res.json({ marks: [] });
+  const rows = (await db.execute({ sql: "SELECT subject, exam, marks, max_marks, grade FROM student_marks WHERE student_id=? ORDER BY subject",
+    args: [req.user.parent_of] })).rows;
+  res.json({ marks: rows });
 });
 // Tick / untick a task for a student (teacher or guest).
 app.post("/api/teacher/learning-tick", requireTeacherOrGuest, async (req, res) => {
