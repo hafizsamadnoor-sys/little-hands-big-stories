@@ -764,19 +764,23 @@ app.get("/api/teacher/overview", requireTeacher, async (req, res) => {
 app.get("/api/teacher/pending", requireTeacher, async (req, res) => {
   const rows = (await db.execute({ sql: `SELECT w.*, u.display_name AS author FROM works w
     JOIN users u ON u.id=w.student_id WHERE w.status='pending' ORDER BY w.created_at`, args: [] })).rows;
+  for (const r of rows) r.base_points = await getSetting(r.type);
   res.json({ works: rows });
 });
 
 app.post("/api/teacher/work/:id/review", requireTeacher, async (req, res) => {
   const w = (await db.execute({ sql: "SELECT * FROM works WHERE id=?", args: [req.params.id] })).rows[0];
   if (!w) return res.status(404).json({ error: "Not found." });
-  const { decision, stars } = req.body || {};
+  const { decision, stars, points } = req.body || {};
   if (!["approve", "reject"].includes(decision)) return res.status(400).json({ error: "Invalid decision." });
   const st = Math.max(0, Math.min(5, parseInt(stars) || 0));
   const was = w.status;
   await db.execute({ sql: "UPDATE works SET status=?, stars=?, reviewed_at=datetime('now') WHERE id=?", args: [decision === "approve" ? "approved" : "rejected", decision === "approve" ? st : 0, w.id] });
   if (decision === "approve" && was !== "approved") {
-    const pts = await getSetting(w.type) + st * await getSetting("per_star");
+    // Teacher can override the points at approval time; default = type points + stars.
+    const defaultPts = await getSetting(w.type) + st * await getSetting("per_star");
+    const pts = (points !== undefined && points !== null && points !== "")
+      ? Math.max(0, parseInt(points) || 0) : defaultPts;
     await db.execute({ sql: "UPDATE works SET points_awarded=? WHERE id=?", args: [pts, w.id] });
     await awardPoints(w.student_id, pts, `Approved ${w.type} "${w.title}"`, "work", w.id);
     if (w.weekly_task_id) {
