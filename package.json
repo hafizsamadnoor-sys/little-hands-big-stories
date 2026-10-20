@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "express": "^4.22.3",
+    "pdfkit": "^0.17.0"
+  },
+  "description": "Little Hands, Big Stories \u2014 portable children's writing platform (Express + SQLite)",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "server.js",
+  "name": "little-hands-big-stories",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "version": "1.0.0"
+}

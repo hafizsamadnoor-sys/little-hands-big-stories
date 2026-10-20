@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: little-hands-big-stories
+    runtime: docker
+    plan: free
+    # Attach a persistent disk so the SQLite database survives restarts.
+    # In the Render dashboard: Disks → add disk, mount path /app/data, size 1 GB.
+    envVars:
+      - key: PORT
+        value: 10000
