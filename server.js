@@ -296,6 +296,8 @@ async function seedParentUsers() {
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
   { key: "best_story", name: "Best Story", icon: "🏆", desc: "Awarded by the teacher for the best story." },
+  { key: "rising_author", name: "Rising Author", icon: "🌟", desc: "Reached 50 points." },
+  { key: "story_champion", name: "Story Champion", icon: "👑", desc: "Reached #1 on the points board." },
 ];
 async function totalPoints(student_id) {
   const r = (await db.execute({ sql: "SELECT COALESCE(SUM(points),0) AS t FROM points_log WHERE student_id=?", args: [student_id] })).rows[0];
@@ -310,8 +312,20 @@ async function studentStats(student_id) {
   return { approved, reads, solves, chall, stars, points: await totalPoints(student_id) };
 }
 async function checkBadges(student_id) {
-  // Badges are no longer auto-awarded. The teacher awards the "Best Story"
-  // badge manually via /api/teacher/badge.
+  // Auto-awarded badges only: Rising Author (50 points) and Story Champion (#1).
+  // The Best Story badge is awarded manually by the teacher via /api/teacher/badge.
+  const st = await studentStats(student_id);
+  const have = new Set((await db.execute({ sql: "SELECT badge_key FROM student_badges WHERE student_id=?", args: [student_id] })).rows.map(r => r.badge_key));
+  const earn = [];
+  if (st.points >= 50) earn.push("rising_author");
+  const top = (await db.execute({ sql: `
+    SELECT u.id FROM users u
+    LEFT JOIN points_log p ON p.student_id = u.id
+    WHERE u.role='student'
+    GROUP BY u.id ORDER BY COALESCE(SUM(p.points),0) DESC LIMIT 1`, args: [] })).rows[0];
+  if (top && top.id === student_id) earn.push("story_champion");
+  const ins_sql = "INSERT OR IGNORE INTO student_badges (student_id, badge_key) VALUES (?,?)";
+  for (const k of earn) if (!have.has(k)) await db.execute({ sql: ins_sql, args: [student_id, k] });
 }
 async function awardPoints(student_id, points, reason, ref_type = null, ref_id = null) {
   if (!points || points <= 0) return;
