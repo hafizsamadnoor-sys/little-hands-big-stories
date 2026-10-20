@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Points Board · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<h1>🏆 Points Board</h1>
+<p class="muted">Every writer can see this board. Keep writing, keep climbing! ✨</p>
+<div style="margin:12px 0"><a class="btn" href="/top10.html">🖨️ Top 10 Printable Poster</a> <a class="btn ghost" href="/certificate.html">🏅 Winner Certificates</a></div>
+<div class="tabs">
+  <button id="t_all" class="on">All-time</button>
+  <button id="t_month">This month</button>
+</div>
+<div class="card" style="padding:6px 14px"><table>
+<thead><tr><th>#</th><th>Author</th><th>Points</th><th>⭐</th><th>Works</th></tr></thead>
+<tbody id="rows"></tbody></table></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("board.html") : studentNav("board.html");
+  async function load(period) {
+    const d = await api("GET", "/api/points-board?period=" + period);
+    document.getElementById("rows").innerHTML = d.board.map((r, i) =>
+      `<tr class="${i === 0 ? "rank1" : ""}">
+        <td>${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</td>
+        <td><a href="/author.html?id=${r.id}" style="color:inherit;font-weight:700">${esc(r.display_name)}</a>${r.id === user.id ? " 👈 you" : ""}</td>
+        <td><b>${r.points}</b></td><td>${r.stars}⭐</td><td>${r.works}</td></tr>`).join("");
+  }
+  const ta = document.getElementById("t_all"), tm = document.getElementById("t_month");
+  ta.onclick = () => { ta.classList.add("on"); tm.classList.remove("on"); load("all"); };
+  tm.onclick = () => { tm.classList.add("on"); ta.classList.remove("on"); load("month"); };
+  await load("all");
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

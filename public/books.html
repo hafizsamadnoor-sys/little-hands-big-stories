@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Books · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<h1>📚 Illustrated Books</h1>
+<p class="muted">Stories by our young authors, turned into real picture books.</p>
+<div id="list" class="grid"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("books.html") : studentNav("books.html");
+  const d = await api("GET", "/api/books");
+  const list = document.getElementById("list");
+  if (!d.books.length) {
+    list.innerHTML = `<div class="card"><p class="muted">No books yet. The first illustrated books are on their way! 🎨</p></div>`;
+    return;
+  }
+  list.innerHTML = d.books.map(b => `
+    <a href="/api/books/${b.id}/file" target="_blank" style="text-decoration:none;color:inherit">
+      <div class="storycard" style="text-align:center;padding:22px 14px">
+        <div style="font-size:2.6rem">📖</div>
+        <h3 style="margin:.4em 0">${esc(b.title)}</h3>
+        <p class="muted">by ${esc(b.author_name)}</p>
+        <p><span class="pill">${b.pages} pages</span></p>
+      </div>
+    </a>`).join("");
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

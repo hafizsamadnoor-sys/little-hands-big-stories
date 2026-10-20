@@ -1,0 +1,650 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Teacher Panel · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<h1>🧑‍🏫 Teacher Panel</h1>
+<div class="statrow" id="ov"></div>
+<div class="tabs" id="tabs"></div>
+<div id="panel"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["mysteries","🕵️ Mysteries"],
+  ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
+  ["learning","📋 Learning Tasks"],
+  ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"]];
+let cur = "approvals";
+(async () => {
+  const user = await guard("teacher"); if (!user) return;
+  document.getElementById("nav").innerHTML = teacherNav("teacher.html");
+  const o = await api("GET", "/api/teacher/overview");
+  document.getElementById("ov").innerHTML = `
+    <div class="stat"><b>${o.pending}</b><span>Waiting approval</span></div>
+    <div class="stat"><b>${o.students}</b><span>Students</span></div>
+    <div class="stat"><b>${o.published}</b><span>Published</span></div>
+    <div class="stat"><b>${o.noPw}</b><span>Need passwords</span></div>`;
+  const tb = document.getElementById("tabs");
+  tb.innerHTML = TABS.map(([k, t]) => `<button data-t="${k}" class="${k === cur ? "on" : ""}${k === "learning" ? " hl" : ""}">${t}</button>`).join("");
+  tb.onclick = (e) => { const b = e.target.closest("button"); if (b) { cur = b.dataset.t; render(); } };
+  await render();
+})();
+
+async function render() {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
+  const p = document.getElementById("panel");
+  ({ approvals: vApprovals, tasks: vTasks, mysteries: vMysteries, challenges: vChallenges,
+     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks })[cur](p);
+}
+
+async function vApprovals(p) {
+  const d = await api("GET", "/api/teacher/pending");
+  p.innerHTML = `<h2>📮 Waiting for approval (${d.works.length})</h2>` + (d.works.length ? d.works.map(w => `
+    <div class="card"><h3>${esc(w.title)}</h3>
+      <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
+      <span class="muted" style="font-size:.85rem">by ${esc(w.author)} · ${fmtDate(w.created_at)}</span></p>
+      <div class="card" style="white-space:pre-wrap;box-shadow:none">${esc(w.content)}</div>
+      <label>Stars (0–5)</label>
+      <select id="st${w.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
+      <button class="btn small" data-a="${w.id}">✅ Approve</button>
+      <button class="btn small ghost" data-r="${w.id}">❌ Reject</button>
+      <button class="btn small danger" data-d="${w.id}">🗑 Delete</button></div>`).join("")
+    : `<div class="card"><p class="muted">Nothing waiting. 🎉</p></div>`);
+  p.querySelectorAll("[data-a]").forEach(b => b.onclick = () => review(b.dataset.a, "approve"));
+  p.querySelectorAll("[data-r]").forEach(b => b.onclick = () => review(b.dataset.r, "reject"));
+  p.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
+    if (confirm("Delete this work?")) { await api("POST", `/api/teacher/work/${b.dataset.d}/delete`); render(); }
+  });
+  async function review(id, decision) {
+    try {
+      await api("POST", `/api/teacher/work/${id}/review`, { decision, stars: document.getElementById("st" + id).value });
+      toast(decision === "approve" ? "Published! ⭐" : "Rejected."); render();
+    } catch (e) { toast(e.message, false); }
+  }
+}
+
+async function vTasks(p) {
+  const t = await api("GET", "/api/weekly-tasks");
+  p.innerHTML = `
+    <div class="card"><h2>➕ New weekly task</h2>
+      <label>Title</label><input id="n_title" placeholder="e.g. The Mysterious Box">
+      <label>Kind</label><select id="n_kind">
+        <option value="story_start">✨ Complete a story starter</option>
+        <option value="theme">🌈 Write on a theme</option>
+        <option value="quiz">🧠 Quiz</option></select>
+      <label>Prompt / instructions</label><textarea id="n_prompt" style="min-height:100px"></textarea>
+      <div id="qbox" style="display:none">
+        <label>Quiz questions (one per line: question | correct answer)</label>
+        <textarea id="n_q" style="min-height:120px" placeholder="What is 2+2? | 4&#10;Capital of Kerala? | Thiruvananthapuram"></textarea>
+      </div>
+      <div class="grid cols2"><div><label>Points${" "}(per task, or per correct answer for quiz)</label><input id="n_pts" type="number" value="5" min="0"></div>
+      <div><label>Start date</label><input id="n_date" type="date" value="${new Date().toISOString().slice(0, 10)}"></div></div>
+      <p class="muted" style="font-size:.85rem">Deadline is always set automatically to 7 days after the start date.</p>
+      <button class="btn" id="n_go">Create task 📅</button></div>
+    <h2>📅 Tasks</h2><div id="tl"></div>`;
+  document.getElementById("n_kind").onchange = (e) =>
+    document.getElementById("qbox").style.display = e.target.value === "quiz" ? "block" : "none";
+  document.getElementById("n_go").onclick = async () => {
+    const kind = document.getElementById("n_kind").value;
+    const questions = kind === "quiz" ? document.getElementById("n_q").value.split("\n")
+      .map(l => l.split("|")).filter(x => x.length === 2).map(([question, answer]) => ({ question, answer })) : [];
+    try {
+      const r = await api("POST", "/api/teacher/weekly-task", {
+        title: document.getElementById("n_title").value, kind,
+        prompt: document.getElementById("n_prompt").value,
+        points: document.getElementById("n_pts").value,
+        start_date: document.getElementById("n_date").value, questions });
+      toast(`Task created — deadline auto-set to ${r.deadline}.`); render();
+    } catch (e) { toast(e.message, false); }
+  };
+  const all = [...(t.current ? [t.current] : []), ...(t.archive || [])];
+  document.getElementById("tl").innerHTML = all.map(x => `
+    <div class="card"><h3>${esc(x.title)} <span class="tag">${esc(x.kind)}</span></h3>
+      <p class="muted" style="font-size:.85rem">Start ${x.start_date} → deadline ${x.deadline} · ${x.points} pts</p>
+      ${x.kind === "quiz" ? `<button class="btn small ghost" data-qa="${x.id}">📊 Answers & scores</button> ` : ""}
+      <button class="btn small danger" data-td="${x.id}">Delete</button>
+      <div id="qa${x.id}"></div></div>`).join("") || `<p class="muted">No tasks yet.</p>`;
+  p.querySelectorAll("[data-td]").forEach(b => b.onclick = async () => {
+    if (confirm("Delete this task?")) { await api("POST", `/api/teacher/weekly-task/${b.dataset.td}/delete`); render(); }
+  });
+  p.querySelectorAll("[data-qa]").forEach(b => b.onclick = async () => {
+    const d = await api("GET", `/api/teacher/quiz/${b.dataset.qa}/attempts`);
+    document.getElementById("qa" + b.dataset.qa).innerHTML = d.attempts.length ? `<table>
+      <thead><tr><th>Student</th><th>Score</th><th>Points</th><th>Answers</th></tr></thead><tbody>` +
+      d.attempts.map(a => `<tr><td>${esc(a.display_name)}</td><td>${a.score}/${a.total}</td><td>${a.points_awarded}</td>
+        <td style="font-size:.8rem">${a.answers.map(x => `${x.correct ? "✅" : "❌"} ${esc(x.given || "—")}`).join("<br>")}</td></tr>`).join("")
+      + `</tbody></table>` : `<p class="muted">No attempts yet.</p>`;
+  });
+}
+
+async function vMysteries(p) {
+  const d = await api("GET", "/api/mysteries");
+  p.innerHTML = `
+    <div class="card"><h2>➕ New mystery</h2>
+      <label>Title</label><input id="m_title">
+      <label>Description / riddle</label><textarea id="m_desc" style="min-height:100px"></textarea>
+      <label>Correct solution</label><input id="m_sol">
+      <label>Points</label><input id="m_pts" type="number" value="3" min="0">
+      <button class="btn" id="m_go">Add mystery 🕵️</button></div>
+    <h2>🕵️ Mysteries</h2>` + d.mysteries.map(m => `
+    <div class="card"><h3>${esc(m.title)}</h3><p class="muted" style="font-size:.85rem">Solution: ${esc(m.solution)} · +${m.points} pts</p>
+      <button class="btn small danger" data-md="${m.id}">Delete</button></div>`).join("");
+  document.getElementById("m_go").onclick = async () => {
+    try {
+      await api("POST", "/api/teacher/mystery", { title: document.getElementById("m_title").value,
+        description: document.getElementById("m_desc").value, solution: document.getElementById("m_sol").value,
+        points: document.getElementById("m_pts").value });
+      toast("Mystery added!"); render();
+    } catch (e) { toast(e.message, false); }
+  };
+  p.querySelectorAll("[data-md]").forEach(b => b.onclick = async () => {
+    if (confirm("Delete?")) { await api("POST", `/api/teacher/mystery/${b.dataset.md}/delete`); render(); }
+  });
+}
+
+async function vChallenges(p) {
+  const d = await api("GET", "/api/challenges");
+  p.innerHTML = `
+    <div class="card"><h2>➕ New challenge</h2>
+      <label>Title</label><input id="c_title"><label>Description</label><textarea id="c_desc" style="min-height:80px"></textarea>
+      <div class="grid cols2"><div><label>Points</label><input id="c_pts" type="number" value="4" min="0"></div>
+      <div><label>Deadline (optional)</label><input id="c_dl" type="date"></div></div>
+      <button class="btn" id="c_go">Add challenge 🎯</button></div>
+    <h2>🎯 Challenges</h2>` + d.challenges.map(c => `
+    <div class="card"><h3>${esc(c.title)}</h3><p class="muted" style="font-size:.85rem">+${c.points} pts ${c.deadline ? "· until " + fmtDate(c.deadline) : ""}</p>
+      <button class="btn small ghost" data-ce="${c.id}">📥 Entries</button>
+      <button class="btn small danger" data-cd="${c.id}">Delete</button><div id="ce${c.id}"></div></div>`).join("");
+  document.getElementById("c_go").onclick = async () => {
+    try {
+      await api("POST", "/api/teacher/challenge", { title: document.getElementById("c_title").value,
+        description: document.getElementById("c_desc").value, points: document.getElementById("c_pts").value,
+        deadline: document.getElementById("c_dl").value || null });
+      toast("Challenge added!"); render();
+    } catch (e) { toast(e.message, false); }
+  };
+  p.querySelectorAll("[data-cd]").forEach(b => b.onclick = async () => {
+    if (confirm("Delete?")) { await api("POST", `/api/teacher/challenge/${b.dataset.cd}/delete`); render(); }
+  });
+  p.querySelectorAll("[data-ce]").forEach(b => b.onclick = async () => {
+    const e = await api("GET", `/api/teacher/challenge/${b.dataset.ce}/entries`);
+    document.getElementById("ce" + b.dataset.ce).innerHTML = e.entries.length ? e.entries.map(x => `
+      <div class="storycard"><p><b>${esc(x.display_name)}</b> · ${x.status === "done" ? "✅ done" : "⏳ pending"}</p>
+      <p style="white-space:pre-wrap">${esc(x.content)}</p>
+      ${x.status !== "done" ? `<button class="btn small" data-done="${x.id}">Mark complete ✅</button>` : ""}</div>`).join("")
+      : `<p class="muted">No entries yet.</p>`;
+    document.querySelectorAll("[data-done]").forEach(db2 => db2.onclick = async () => {
+      await api("POST", `/api/teacher/challenge-entry/${db2.dataset.done}/complete`); toast("Completed! Points awarded."); render();
+    });
+  });
+}
+
+async function vStudents(p) {
+  const d = await api("GET", "/api/teacher/students");
+  p.innerHTML = `
+    <div class="card"><h2>🔑 Passwords</h2>
+      <p class="muted">Usernames are made automatically from first name + Ad No and can't be renamed. Passwords are shown only here.</p>
+      <button class="btn" id="genpw">Generate passwords for boys who have none</button>
+      <div id="genout"></div></div>
+    <h2>👥 Students (${d.students.length})</h2>
+    <div class="card" style="padding:6px 14px;overflow-x:auto"><table>
+    <thead><tr><th>Name</th><th>Username</th><th>Ad No</th><th>PIN</th><th></th></tr></thead><tbody>
+    ${d.students.map(s => `<tr><td>${esc(s.display_name)}</td><td><code>${esc(s.username)}</code></td>
+      <td>${esc(s.ad_no || "")}</td><td>${s.pin ? `<code style="font-size:1.2rem">${esc(s.pin)}</code>` : "❌"}</td>
+      <td><button class="btn small ghost" data-ed="${s.id}">Edit</button>
+          <button class="btn small ghost" data-rp="${s.id}">🔑 Reset pw</button>
+          <a class="btn small ghost" href="/preview.html?id=${s.id}" target="_blank">👁️ View</a></td></tr>`).join("")}
+    </tbody></table></div><div id="edbox"></div>`;
+  document.getElementById("genpw").onclick = async () => {
+    const r = await api("POST", "/api/teacher/generate-passwords");
+    document.getElementById("genout").innerHTML = r.generated.length
+      ? `<table><thead><tr><th>Name</th><th>Username</th><th>Password</th></tr></thead><tbody>` +
+        r.generated.map(g => `<tr><td>${esc(g.display_name)}</td><td><code>${esc(g.username)}</code></td><td><code>${esc(g.password)}</code></td></tr>`).join("") + `</tbody></table>
+        <p class="alert">⚠️ Copy these now and share each privately with the boy. They won't be shown again in a list.</p>`
+      : `<p class="muted">Everyone already has a password.</p>`;
+  };
+  p.querySelectorAll("[data-rp]").forEach(b => b.onclick = async () => {
+    const r = await api("POST", `/api/teacher/student/${b.dataset.rp}/reset-password`);
+    toast(`New password: ${r.password} — share it privately.`);
+  });
+  p.querySelectorAll("[data-ed]").forEach(b => b.onclick = async () => {
+    const s = d.students.find(x => String(x.id) === b.dataset.ed);
+    document.getElementById("edbox").innerHTML = `<div class="card"><h3>Edit ${esc(s.display_name)}</h3>
+      <label>Display name</label><input id="e_name" value="${esc(s.display_name)}">
+      <label>Bio</label><textarea id="e_bio" style="min-height:80px">${esc(s.bio || "")}</textarea>
+      <label>Photo (paste image URL, or leave empty)</label><input id="e_photo" value="${esc(s.photo || "")}" placeholder="https://…">
+      <button class="btn small" id="e_save">Save</button></div>`;
+    document.getElementById("e_save").onclick = async () => {
+      try {
+        await api("POST", `/api/teacher/student/${s.id}`, { display_name: document.getElementById("e_name").value,
+          bio: document.getElementById("e_bio").value, photo: document.getElementById("e_photo").value || null });
+        toast("Saved."); render();
+      } catch (e) { toast(e.message, false); }
+    };
+  });
+}
+
+async function vParents(p) {
+  const d = await api("GET", "/api/teacher/parents");
+  p.innerHTML = `
+    <div class="card"><h2>👪 Parent logins</h2>
+      <p class="muted">Each parent logs in by choosing their child's name and entering the 4-digit parent PIN. Parents can only <b>view</b> — their child's full progress plus every child's scoreboard, books and writings. They cannot write, edit, like or complete anything, and see only their own child's task progress. PINs are shown only here — share each privately with the parent.</p></div>
+    <h2>👪 Parents (${d.parents.length})</h2>
+    <div class="card" style="padding:6px 14px;overflow-x:auto"><table>
+    <thead><tr><th>Student</th><th>Ad No</th><th>Parent username</th><th>Parent PIN</th><th></th></tr></thead><tbody>
+    ${d.parents.map(r => `<tr><td>${esc(r.display_name)}</td><td>${esc(r.ad_no || "")}</td>
+      <td><code>${esc(r.parent_username || "—")}</code></td>
+      <td>${r.parent_pin ? `<code style="font-size:1.2rem">${esc(r.parent_pin)}</code>` : "❌"}</td>
+      <td><button class="btn small ghost" data-rp="${r.student_id}">🔄 New PIN</button></td></tr>`).join("")}
+    </tbody></table></div>`;
+  p.querySelectorAll("[data-rp]").forEach(b => b.onclick = async () => {
+    if (!confirm("Generate a new 4-digit PIN for this parent? The old PIN stops working.")) return;
+    const r = await api("POST", `/api/teacher/parent/${b.dataset.rp}/regenerate-pin`);
+    toast(`New parent PIN: ${r.pin} — share it privately.`);
+    render();
+  });
+}
+
+async function vPoints(p) {
+  const d = await api("GET", "/api/teacher/students");
+  const opts = d.students.map(s => `<option value="${s.id}">${esc(s.display_name)}</option>`).join("");
+  p.innerHTML = `<div class="card"><h2>➕ Award / remove points</h2>
+    <label>Student</label><select id="p_s">${opts}</select>
+    <label>Points (use negative to remove, e.g. -2)</label><input id="p_n" type="number" value="2">
+    <label>Reason</label><input id="p_r" placeholder="e.g. Excellent diary entry">
+    <button class="btn" id="p_go">Apply</button></div>
+  <div class="card"><h2>✏️ Set exact total / reset</h2>
+    <p class="muted">Set a boy's total points to any number (0 to reset).</p>
+    <label>Student</label><select id="sp_s">${opts}</select>
+    <label>Total points</label><input id="sp_n" type="number" min="0" value="0">
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn" id="sp_go">Set total</button>
+      <button class="btn ghost" id="sp_reset">Reset to 0</button>
+    </div></div>
+  <div class="card"><h2>📝 Points history — edit / delete entries</h2>
+    <p class="muted">See every point given to a boy. Edit or delete any single entry.</p>
+    <label>Student</label><select id="h_s">${opts}</select>
+    <button class="btn" id="h_go" style="margin-top:4px">Show history</button>
+    <div id="h_list" style="margin-top:12px"></div></div>`;
+  document.getElementById("p_go").onclick = async () => {
+    try {
+      const r = await api("POST", "/api/teacher/adjust-points", { student_id: document.getElementById("p_s").value,
+        points: document.getElementById("p_n").value, reason: document.getElementById("p_r").value });
+      toast(`Done. New total: ${r.total} pts.`);
+    } catch (e) { toast(e.message, false); }
+  };
+  const setTotal = async (val) => {
+    try {
+      const r = await api("POST", "/api/teacher/set-points", { student_id: document.getElementById("sp_s").value, points: val });
+      toast(`Done. New total: ${r.total} pts.`);
+    } catch (e) { toast(e.message, false); }
+  };
+  document.getElementById("sp_go").onclick = () => setTotal(document.getElementById("sp_n").value);
+  document.getElementById("sp_reset").onclick = async () => {
+    const s = document.getElementById("sp_s");
+    const name = s.options[s.selectedIndex].text;
+    if (confirm(`Reset ${name}'s points to 0?`)) setTotal(0);
+  };
+  const loadHistory = async () => {
+    const sid = document.getElementById("h_s").value;
+    const box = document.getElementById("h_list");
+    try {
+      const r = await api("GET", `/api/teacher/student/${sid}/points-log`);
+      if (!r.log.length) { box.innerHTML = `<p class="muted">No points yet.</p>`; return; }
+      box.innerHTML = `<p><b>Total: ${r.total} pts</b></p><table>
+        <thead><tr><th>Date</th><th>Pts</th><th>Reason</th><th></th></tr></thead><tbody>` +
+        r.log.map(e => `<tr>
+          <td style="font-size:.78rem;white-space:nowrap">${esc((e.created_at || "").slice(0, 10))}</td>
+          <td><b style="color:${e.points >= 0 ? "var(--green)" : "#dc2626"}">${e.points > 0 ? "+" : ""}${e.points}</b></td>
+          <td style="font-size:.85rem">${esc(e.reason)}</td>
+          <td style="white-space:nowrap">
+            <button class="btn small ghost" onclick="editPts(${e.id},${e.points},'${esc(e.reason).replace(/'/g, "\\'")}')">✏️</button>
+            <button class="btn small danger" onclick="delPts(${e.id})">🗑️</button>
+          </td></tr>`).join("") + `</tbody></table>`;
+    } catch (e) { toast(e.message, false); }
+  };
+  document.getElementById("h_go").onclick = loadHistory;
+  window.editPts = async (id, curPts, curReason) => {
+    const np = prompt("New points value:", curPts);
+    if (np === null) return;
+    const nr = prompt("Reason:", curReason);
+    if (nr === null) return;
+    try {
+      const r = await api("POST", `/api/teacher/points-log/${id}`, { points: np, reason: nr });
+      toast(`Updated. New total: ${r.total} pts.`);
+      loadHistory();
+    } catch (e) { toast(e.message, false); }
+  };
+  window.delPts = async (id) => {
+    if (!confirm("Delete this points entry?")) return;
+    try {
+      const r = await api("DELETE", `/api/teacher/points-log/${id}`);
+      toast(`Deleted. New total: ${r.total} pts.`);
+      loadHistory();
+    } catch (e) { toast(e.message, false); }
+  };
+}
+
+async function vLearning(p) {
+  const cats = { dua5: "🕌 5 Daily Duas", dua: "🤲 General Dua", quran: "📖 Quran Hifz", speech: "🎤 Speech", other: "📌 Other" };
+  p.innerHTML = `<div class="card" id="lt_banner" style="background:linear-gradient(135deg,#0b3c46 0%,#0e7c8c 100%);color:#fff;border:none"><p style="color:#c9e8ee">Loading…</p></div>
+  <div class="card"><h2>📊 Total Summary</h2><div id="lt_class"><p class="muted">Loading…</p></div></div>
+  <div class="card"><h2>✅ Tick Completed — per student</h2>
+    <p class="muted">Select a student, tick what they've completed.</p>
+    <label>Student</label><select id="lt_s"></select>
+    <div id="lt_ticks" style="margin-top:10px"></div>
+    <div id="lt_prog" style="margin-top:12px"></div></div>
+  <div class="card" style="background:linear-gradient(135deg,#0b3c46 0%,#0e7c8c 100%);color:#fff;border:none">
+    <h2 style="color:#fff;margin-top:0">➕ Add Learning Task</h2>
+    <p style="color:#c9e8ee;font-size:.88rem">Things every child must learn — duas, Quran portions, speeches.</p>
+    <label style="color:#fff">Title</label><input id="lt_t" placeholder="e.g. Dua after Salah" style="border:none">
+    <label style="color:#fff">Category</label><select id="lt_c" style="border:none">${Object.entries(cats).map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select>
+    <label style="color:#fff">Details (optional)</label><input id="lt_d" placeholder="e.g. Arabic text or reference" style="border:none">
+    <button class="btn" id="lt_add" style="margin-top:8px;background:#fff;color:#0b3c46;box-shadow:none">Add Task</button></div>
+  <div class="card"><h2>📋 All Tasks</h2><div id="lt_list"></div></div>
+  <div class="card"><h2>📝 Summary</h2>
+    <p class="muted">Ranked by completion %. <button class="btn small" onclick="window.print()">🖨️ Print</button></p>
+    <div style="overflow-x:auto"><table style="font-size:.88rem">
+      <thead><tr><th>#</th><th>Student</th><th>Progress</th><th>%</th><th>Done</th></tr></thead>
+      <tbody id="sb_rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody></table></div></div>
+  <div class="card"><h2>👥 Mentor Accounts</h2>
+    <p class="muted">Mentors can only tick learning tasks and view graphs — nothing else. Give them a username + password.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <input id="g_u" placeholder="Username" style="flex:1;min-width:120px">
+      <input id="g_n" placeholder="Display name" style="flex:1;min-width:120px">
+      <input id="g_p" placeholder="Password (min 4)" type="password" style="flex:1;min-width:120px">
+      <button class="btn" id="g_add">Add Guest</button>
+    </div>
+    <div id="g_list"></div></div>`;
+
+  const loadTasks = async () => {
+    const d = await api("GET", "/api/learning-tasks");
+    const box = document.getElementById("lt_list");
+    if (!d.tasks.length) { box.innerHTML = "<p class='muted'>No tasks yet. Add the first one above.</p>"; return; }
+    let lastCat = "";
+    box.innerHTML = d.tasks.map(t => {
+      const head = t.category !== lastCat ? `<h3 style="margin:14px 0 6px;color:#1e3a8a">${cats[t.category] || t.category}</h3>` : "";
+      lastCat = t.category;
+      return head + `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9">
+        <div><b>${esc(t.title)}</b>${t.details ? `<div class="muted" style="font-size:.82rem">${esc(t.details)}</div>` : ""}</div>
+        <button class="btn small danger" onclick="delLearnTask(${t.id})">🗑️</button></div>`;
+    }).join("");
+  };
+  const loadStudents = async () => {
+    const d = await api("GET", "/api/teacher/students");
+    document.getElementById("lt_s").innerHTML = d.students.map(s => `<option value="${s.id}">${esc(s.display_name)}</option>`).join("");
+    loadTicks();
+  };
+  const progBar = (pct) => {
+    const col = pct >= 80 ? "#16a34a" : pct >= 50 ? "#d4a017" : pct >= 25 ? "#ea580c" : "#dc2626";
+    return `<div style="display:flex;align-items:center;gap:10px;margin:6px 0">
+      <div style="flex:1;background:#e2e8f0;border-radius:999px;height:18px;overflow:hidden">
+        <div style="width:${pct}%;background:${col};height:100%;border-radius:999px;transition:width .3s"></div></div>
+      <b style="min-width:48px;text-align:right">${pct}%</b></div>`;
+  };
+  const loadTicks = async () => {
+    const sid = document.getElementById("lt_s").value;
+    if (!sid) return;
+    const [tasks, ticks] = await Promise.all([
+      api("GET", "/api/learning-tasks"),
+      api("GET", `/api/teacher/learning-ticks/${sid}`)
+    ]);
+    const doneSet = new Set(ticks.done);
+    let lastCat = "";
+    document.getElementById("lt_ticks").innerHTML = tasks.tasks.map(t => {
+      const head = t.category !== lastCat ? `<h3 style="margin:14px 0 6px;color:#1e3a8a">${cats[t.category] || t.category}</h3>` : "";
+      lastCat = t.category;
+      const on = doneSet.has(t.id);
+      return head + `<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid ${on ? "#16a34a" : "#e2e8f0"};border-radius:8px;margin:6px 0;cursor:pointer;background:${on ? "#f0fdf4" : "#fff"}">
+        <input type="checkbox" data-t="${t.id}" ${on ? "checked" : ""} style="width:20px;height:20px;accent-color:#16a34a">
+        <span><b>${esc(t.title)}</b>${t.details ? ` <span class="muted" style="font-size:.82rem">— ${esc(t.details)}</span>` : ""}</span>
+        <span style="margin-left:auto">${on ? "✅" : ""}</span></label>`;
+    }).join("") || "<p class='muted'>No tasks yet.</p>";
+    document.getElementById("lt_prog").innerHTML = `<b>Progress: ${ticks.progress.done}/${ticks.progress.total}</b>` + progBar(ticks.progress.pct);
+    document.getElementById("lt_ticks").querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.onchange = async () => {
+        try {
+          const r = await api("POST", "/api/teacher/learning-tick", { task_id: cb.dataset.t, student_id: sid, done: cb.checked });
+          const lbl = cb.closest("label");
+          lbl.style.borderColor = cb.checked ? "#16a34a" : "#e2e8f0";
+          lbl.style.background = cb.checked ? "#f0fdf4" : "#fff";
+          lbl.querySelector("span:last-child").textContent = cb.checked ? "✅" : "";
+          document.getElementById("lt_prog").innerHTML = `<b>Progress: ${r.progress.done}/${r.progress.total}</b>` + progBar(r.progress.pct);
+          loadClass(); loadSummary();
+        } catch (e) { toast(e.message, false); cb.checked = !cb.checked; }
+      };
+    });
+  };
+  const loadClass = async () => {
+    const d = await api("GET", "/api/teacher/learning-progress");
+    const students = [...(d.students || [])].sort((a, b) => b.pct - a.pct);
+    const avg = students.length ? Math.round(students.reduce((a, s) => a + s.pct, 0) / students.length) : 0;
+    const top = students[0];
+    const done100 = students.filter(s => s.pct === 100).length;
+    const avgCol = avg >= 80 ? "#16a34a" : avg >= 50 ? "#d4a017" : avg >= 25 ? "#ea580c" : "#dc2626";
+    // Highlight banner: big class-average ring + key numbers
+    const C = (2 * Math.PI * 40).toFixed(1);
+    document.getElementById("lt_banner").innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <svg width="104" height="104" viewBox="0 0 104 104" style="flex:0 0 auto">
+          <circle cx="52" cy="52" r="40" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="11"/>
+          <circle class="avgring" data-off="${(C * (1 - avg / 100)).toFixed(1)}" cx="52" cy="52" r="40" fill="none"
+            stroke="#fbbf24" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"
+            transform="rotate(-90 52 52)" style="transition:stroke-dashoffset 1.2s ease"/>
+          <text x="52" y="60" text-anchor="middle" font-size="1.25rem" font-weight="800" fill="#fff">${avg}%</text>
+        </svg>
+        <div style="flex:1;min-width:200px">
+          <h2 style="color:#fff;margin:0 0 4px">📋 Learning Tasks</h2>
+          <p style="color:#c9e8ee;margin:0 0 8px;font-size:.9rem">Quran, duas &amp; speech — tick what each child completes.</p>
+          <p style="color:#fff;margin:0"><b>${done100} of ${students.length}</b> at 100%${top ? ` · 🏆 <b>${esc(top.display_name)}</b> (${top.pct}%)` : ""}</p>
+        </div>
+      </div>`;
+    // Total summary graph: one horizontal bar per student, ranked
+    const rows = students.map(s => {
+      const col = s.pct >= 80 ? "#16a34a" : s.pct >= 50 ? "#0e7c8c" : s.pct >= 25 ? "#ea580c" : "#dc2626";
+      return `<div style="display:flex;align-items:center;gap:10px;margin:6px 0">
+        <div style="width:118px;flex:0 0 auto;font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(s.display_name)}">${esc(s.display_name)}</div>
+        <div style="flex:1;background:#e2e8f0;border-radius:99px;height:16px;overflow:hidden">
+          <div class="tbar" data-w="${s.pct}" style="width:0;background:${col};height:100%;border-radius:99px;transition:width 1s ease"></div></div>
+        <b style="width:46px;flex:0 0 auto;text-align:right;font-size:.82rem">${s.pct}%</b></div>`;
+    }).join("");
+    document.getElementById("lt_class").innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
+        <div style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff;border-radius:14px;padding:14px;text-align:center">
+          <div style="font-size:1.6rem;font-weight:800">${avg}%</div><div style="font-size:.75rem;opacity:.85">Class average</div></div>
+        <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:0 2px 8px rgba(11,60,70,.08)">
+          <div style="font-size:1.6rem;font-weight:800;color:${avgCol}">${done100}</div><div class="muted" style="font-size:.75rem">100% complete</div></div>
+        <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:0 2px 8px rgba(11,60,70,.08)">
+          <div style="font-size:.95rem;font-weight:800;color:#0b3c46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${top ? "🏆 " + esc(top.display_name) : "—"}</div><div class="muted" style="font-size:.75rem">${top ? "Top: " + top.pct + "%" : "Top student"}</div></div>
+      </div>
+      <div class="section-label">Total summary — all students, ranked</div>
+      ${rows || "<p class='muted'>No students.</p>"}`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll("#lt_banner .avgring").forEach(c => { c.style.strokeDashoffset = c.dataset.off; });
+      document.querySelectorAll("#lt_class .tbar").forEach(b => { b.style.width = b.dataset.w + "%"; });
+    }));
+  };
+  window.delLearnTask = async (id) => {
+    if (!confirm("Delete this task?")) return;
+    await api("DELETE", `/api/teacher/learning-task/${id}`);
+    loadTasks(); loadTicks(); loadClass();
+  };
+  document.getElementById("lt_add").onclick = async () => {
+    const t = document.getElementById("lt_t").value.trim();
+    if (!t) { toast("Enter a title.", false); return; }
+    try {
+      await api("POST", "/api/teacher/learning-task", { title: t, category: document.getElementById("lt_c").value, details: document.getElementById("lt_d").value });
+      document.getElementById("lt_t").value = ""; document.getElementById("lt_d").value = "";
+      toast("Task added.");
+      loadTasks(); loadTicks(); loadClass();
+    } catch (e) { toast(e.message, false); }
+  };
+  document.getElementById("lt_s").onchange = loadTicks;
+  const loadGuests = async () => {
+    const d = await api("GET", "/api/teacher/guests");
+    document.getElementById("g_list").innerHTML = d.guests.map(g =>
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9">
+        <div><b>${esc(g.display_name)}</b> <span class="muted">@${esc(g.username)}</span></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn small ghost" onclick="resetGuestPw(${g.id},'${esc(g.display_name)}')">🔑 Reset PW</button>
+          <button class="btn small danger" onclick="delGuest(${g.id},'${esc(g.display_name)}')">🗑️</button>
+        </div></div>`).join("") || "<p class='muted'>No guest accounts yet.</p>";
+  };
+  window.resetGuestPw = async (id, name) => {
+    const pw = prompt(`New password for ${name} (min 4 chars):`);
+    if (!pw) return;
+    try { await api("POST", `/api/teacher/guest/${id}/password`, { password: pw }); toast("Password updated."); }
+    catch (e) { toast(e.message, false); }
+  };
+  window.delGuest = async (id, name) => {
+    if (!confirm(`Delete guest ${name}?`)) return;
+    await api("DELETE", `/api/teacher/guest/${id}`);
+    loadGuests();
+  };
+  document.getElementById("g_add").onclick = async () => {
+    try {
+      await api("POST", "/api/teacher/guest", {
+        username: document.getElementById("g_u").value,
+        display_name: document.getElementById("g_n").value,
+        password: document.getElementById("g_p").value
+      });
+      document.getElementById("g_u").value = ""; document.getElementById("g_n").value = ""; document.getElementById("g_p").value = "";
+      toast("Guest added.");
+      loadGuests();
+    } catch (e) { toast(e.message, false); }
+  };
+  async function loadSummary() {
+    try {
+      const d = await api("GET", "/api/teacher/learning-progress");
+      const rows = [...(d.students || [])].sort((a, b) => b.pct - a.pct).map((s, i) => {
+        const col = s.pct >= 80 ? "#16a34a" : s.pct >= 50 ? "#0e7c8c" : s.pct >= 25 ? "#ea580c" : "#dc2626";
+        return `<tr><td>${i + 1}</td><td><b>${esc(s.display_name)}</b></td>
+          <td><div style="background:#e2e8f0;border-radius:99px;height:12px;overflow:hidden;min-width:90px"><div style="width:${s.pct}%;background:${col};height:100%;border-radius:99px"></div></div></td>
+          <td style="text-align:center"><b>${s.pct}%</b></td>
+          <td class="muted" style="text-align:center;font-size:.8rem">${s.done}/${s.total}</td></tr>`;
+      }).join("");
+      document.getElementById("sb_rows").innerHTML = rows || `<tr><td colspan="5" class="muted">No students.</td></tr>`;
+    } catch (e) { document.getElementById("sb_rows").innerHTML = `<tr><td colspan="5" class="muted">Could not load summary.</td></tr>`; }
+  }
+  await loadTasks(); await loadStudents(); await loadClass(); await loadGuests(); await loadSummary();
+}
+
+async function vWow(p) {
+  const d = await api("GET", "/api/teacher/students");
+  const w = await api("GET", "/api/writer-of-week");
+  p.innerHTML = `<div class="card"><h2>🌟 Select Writer of the Week</h2>
+    ${w.writer ? `<p class="muted">Current: <b>${esc(w.writer.display_name)}</b></p>` : ""}
+    <label>Student</label><select id="w_s">${d.students.map(s => `<option value="${s.id}">${esc(s.display_name)}</option>`).join("")}</select>
+    <label>Message</label><input id="w_n" placeholder="Why is he this week's writer?">
+    <button class="btn" id="w_go">Set Writer of the Week</button></div>`;
+  document.getElementById("w_go").onclick = async () => {
+    try { await api("POST", "/api/teacher/writer-of-week", { student_id: document.getElementById("w_s").value, note: document.getElementById("w_n").value });
+      toast("Writer of the Week set! 🌟"); } catch (e) { toast(e.message, false); }
+  };
+}
+
+async function vSettings(p) {
+  const d = await api("GET", "/api/teacher/point-settings");
+  const labels = { story: "📖 Story", diary: "📔 Diary", letter: "💌 Letter", poem: "🎵 Poem", manifesto: "📜 Manifesto", review: "⭐ Book Review", anything: "✨ Write Anything",
+    per_star: "⭐ Per star", read: "👁️ Reading a story", like_received: "❤️ Receiving a like",
+    mystery: "🕵️ Solving a mystery", challenge: "🎯 Challenge", quiz_correct: "🧠 Quiz (per correct)", featured: "🌟 Featured bonus" };
+  p.innerHTML = `<div class="card"><h2>⚙️ Point values</h2>
+    ${Object.keys(labels).map(k => `<label>${labels[k]}</label><input type="number" min="0" id="ps_${k}" value="${d.settings[k] ?? 0}">`).join("")}
+    <button class="btn" id="ps_go">Save</button></div>`;
+  document.getElementById("ps_go").onclick = async () => {
+    const body = {}; Object.keys(labels).forEach(k => body[k] = document.getElementById("ps_" + k).value);
+    try { await api("POST", "/api/teacher/point-settings", body); toast("Point values saved."); }
+    catch (e) { toast(e.message, false); }
+  };
+}
+
+async function vActivity(p) {
+  const d = await api("GET", "/api/teacher/activity");
+  const KICON = { points: "✨", login: "🔑", tick: "✅", untick: "↩️", submit: "📮" };
+  const RNAME = { student: "🧑‍🎓 Student", parent: "👪 Parent", guest: "👥 Mentor", teacher: "🧑‍🏫 Teacher" };
+  const RCOL = { student: "#0e7c8c", parent: "#7c3aed", guest: "#b45309", teacher: "#334155" };
+  let f = "all";
+  const render = () => {
+    const rows = d.feed.filter(e => f === "all" ||
+      (f === "students" && e.actor_role === "student") ||
+      (f === "parents" && e.actor_role === "parent") ||
+      (f === "mentors" && e.actor_role === "guest"));
+    document.getElementById("act_rows").innerHTML = rows.map(e => {
+      const c = RCOL[e.actor_role] || "#334155";
+      return `<tr><td style="font-size:.78rem;white-space:nowrap">${fmtDate(e.at)}</td>
+        <td><span class="pill" style="border:1px solid ${c};color:${c};margin-right:6px">${RNAME[e.actor_role] || esc(e.actor_role || "")}</span><b>${esc(e.actor || "—")}</b></td>
+        <td style="font-size:1.15rem">${KICON[e.kind] || "•"}</td>
+        <td style="font-size:.85rem">${e.kind === "login" ? "Logged in" : esc(e.text)}${e.points ? ` <b style="color:${e.points > 0 ? "#16a34a" : "#dc2626"}">${e.points > 0 ? "+" : ""}${e.points}</b>` : ""}</td></tr>`;
+    }).join("") || `<tr><td colspan="4" class="muted">No activity yet.</td></tr>`;
+    p.querySelectorAll("#act_filters button").forEach(b => b.classList.toggle("on", b.dataset.f === f));
+  };
+  p.innerHTML = `<h2>📊 Activity</h2>
+    <p class="muted">Everything students, parents and mentors do — logins, submissions, points, task ticks. Tracking started when this update went live.</p>
+    <div class="tabs" id="act_filters" style="margin-bottom:10px">
+      <button data-f="all" class="on">All</button><button data-f="students">🧑‍🎓 Students</button><button data-f="parents">👪 Parents</button><button data-f="mentors">👥 Mentors</button>
+    </div>
+    <div class="card" style="padding:6px 14px;overflow-x:auto"><table>
+    <thead><tr><th>When</th><th>Who</th><th></th><th>Activity</th></tr></thead>
+    <tbody id="act_rows"></tbody></table></div>`;
+  p.querySelectorAll("#act_filters button").forEach(b => b.onclick = () => { f = b.dataset.f; render(); });
+  render();
+}
+
+async function vAccount(p) {
+  const me = await api("GET", "/api/me");
+  p.innerHTML = `<div class="card"><h2>👤 My Account</h2>
+    <p class="muted">Your login for this app. Username is shown on the login screen.</p>
+    <label>Username</label><input id="ac_user" value="${esc(me.username)}" style="max-width:280px">
+    <label>New password</label><input id="ac_pw" type="text" placeholder="Leave blank to keep current" style="max-width:280px">
+    <button class="btn" id="ac_go">Save changes</button></div>
+  <div class="card"><h2>💾 Backup</h2>
+    <p class="muted">Download a copy of all stories, points and accounts.</p>
+    <a class="btn" href="/api/teacher/backup">Download backup</a></div>`;
+  document.getElementById("ac_go").onclick = async () => {
+    const body = {};
+    const u = document.getElementById("ac_user").value.trim();
+    const pw = document.getElementById("ac_pw").value;
+    if (u) body.username = u;
+    if (pw) body.password = pw;
+    try { const r = await api("POST", "/api/teacher/profile", body); toast("Saved. Your username is now " + esc(r.username) + "."); }
+    catch (e) { toast(e.message, false); }
+  };
+}
+
+async function vBooks(p) {
+  const d = await api("GET", "/api/books");
+  p.innerHTML = `<div class="card"><h2>📚 Illustrated Books</h2>
+    <p class="muted">Upload a book PDF (made from a boy's story). It appears in \u00a7 Books for all students.</p>
+    <label>Title</label><input id="bk_title" style="max-width:320px">
+    <label>Author name</label><input id="bk_author" style="max-width:320px">
+    <label>Book PDF</label><input type="file" id="bk_file" accept="application/pdf">
+    <button class="btn" id="bk_go">Upload book</button></div>
+  <h2>Published books (${d.books.length})</h2>
+  <div class="grid">${d.books.map(b => `
+    <div class="card"><h3>${esc(b.title)}</h3><p class="muted">by ${esc(b.author_name)} · ${b.pages} pages</p>
+    <a class="btn small" href="/api/books/${b.id}/file" target="_blank">Open</a>
+    <button class="btn small danger" data-del="${b.id}">Delete</button></div>`).join("") || `<div class="card"><p class="muted">No books yet.</p></div>`}</div>`;
+  document.getElementById("bk_go").onclick = async () => {
+    const f = document.getElementById("bk_file").files[0];
+    if (!f) return toast("Choose a PDF file.", false);
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(f);
+    });
+    try {
+      await api("POST", "/api/teacher/books", { title: document.getElementById("bk_title").value,
+        author_name: document.getElementById("bk_author").value, pdf_base64: b64 });
+      toast("Book published!"); vBooks(p);
+    } catch (e) { toast(e.message, false); }
+  };
+  p.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this book?")) return;
+    await api("DELETE", "/api/teacher/books/" + b.dataset.del); toast("Deleted."); vBooks(p);
+  });
+}
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

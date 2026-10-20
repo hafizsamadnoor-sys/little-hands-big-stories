@@ -1,0 +1,196 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Learning Tasks · Mentor</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script>
+<style>
+  .mentor-hero{background:linear-gradient(135deg,#0b3c46 0%,#0e7c8c 100%);color:#fff;border-radius:16px;
+    padding:22px 20px;margin:14px 0;box-shadow:0 4px 20px rgba(11,60,70,.15);
+    display:flex;align-items:center;gap:14px;}
+  .mentor-hero .avatar{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.18);
+    display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex:0 0 auto;}
+  .mentor-hero h1{color:#fff;margin:0;font-size:1.25rem;border:none;padding:0;}
+  .mentor-hero p{color:#a5e3ec;margin:4px 0 0;font-size:.85rem;}
+  .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0;}
+  .summary-card{background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:0 2px 10px rgba(11,60,70,.08);}
+  .summary-card .num{font-size:1.5rem;font-weight:800;color:#0b3c46;}
+  .summary-card .lbl{font-size:.72rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.8px;}
+  .tick-list label{display:flex;align-items:center;gap:12px;border:2px solid #e8f2f6;border-radius:12px;
+    padding:12px 14px;cursor:pointer;background:#fff;margin:8px 0;transition:.15s;}
+  .tick-list label:hover{border-color:#0e7c8c;transform:translateX(2px);}
+  .tick-list label.on{border-color:#16a34a;background:#f0fdf4;}
+  .tick-list input[type="checkbox"]{width:24px;height:24px;accent-color:#16a34a;flex:0 0 auto;cursor:pointer;}
+  .tick-list .tick-icon{margin-left:auto;font-size:1.2rem;flex:0 0 auto;}
+  .cat-head{display:flex;align-items:center;gap:8px;margin:18px 0 4px;color:#0b3c46;font-weight:800;font-size:1rem;}
+  .cat-head .count{margin-left:auto;font-size:.75rem;background:#e8f2f6;color:#0b3c46;padding:3px 10px;border-radius:99px;font-weight:700;}
+  .student-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}
+  .stu-mini{background:#fff;border-radius:12px;padding:12px;text-align:center;cursor:pointer;
+    box-shadow:0 2px 8px rgba(11,60,70,.07);border:2.5px solid transparent;transition:.15s;}
+  .stu-mini:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(11,60,70,.12);}
+  .stu-mini.selected{border-color:#0e7c8c;background:#e8f2f6;}
+  .stu-mini .nm{font-weight:700;font-size:.82rem;margin:6px 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ring{transform:rotate(-90deg);}
+  .ring-bg{fill:none;stroke:#e2e8f0;stroke-width:6;}
+  .ring-fg{fill:none;stroke-linecap:round;stroke-width:6;transition:stroke-dashoffset .6s;}
+</style>
+</head>
+<body><div class="wrap" style="max-width:860px">
+
+<div class="mentor-hero">
+  <div class="avatar" id="prof_avatar">👥</div>
+  <div style="flex:1"><h1>Mentor Panel</h1><p id="gname">Loading…</p></div>
+  <a class="btn ghost small" href="/api/logout" style="margin:0">Logout</a>
+</div>
+
+<div class="card" id="prof_card" style="display:none">
+  <h2>👤 My Profile</h2>
+  <div style="display:flex;gap:16px;align-items:center">
+    <div id="prof_photo" style="width:84px;height:84px;border-radius:50%;background:#e8f2f6;display:flex;align-items:center;justify-content:center;font-size:2.2rem;overflow:hidden;flex:0 0 auto"></div>
+    <div style="flex:1">
+      <div id="prof_name" style="font-size:1.15rem;font-weight:800;color:#0b3c46"></div>
+      <div id="prof_details" class="muted" style="font-size:.88rem;margin-top:4px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="summary-grid" id="gsummary">
+  <div class="summary-card"><div class="num" id="gs_avg">–</div><div class="lbl">Class average</div></div>
+  <div class="summary-card"><div class="num" id="gs_done">–</div><div class="lbl">Fully completed</div></div>
+  <div class="summary-card"><div class="num" id="gs_tasks">–</div><div class="lbl">Total tasks</div></div>
+</div>
+
+<div class="card">
+  <h2>✅ Tick Completed</h2>
+  <p class="muted">Tap a student, then tick what they've finished.</p>
+  <div class="student-card-grid" id="g_students" style="margin:10px 0"></div>
+  <div id="g_selinfo" style="display:none;margin-top:14px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <h3 id="g_selname" style="margin:0"></h3>
+      <span id="g_selpct" style="font-weight:800;color:#0b3c46"></span>
+    </div>
+    <div id="g_progbar" style="margin-bottom:8px"></div>
+    <div class="tick-list" id="g_ticks"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>📊 Class Summary</h2>
+  <p class="muted">Tap any student above to tick their tasks.</p>
+  <div id="g_class"></div>
+</div>
+
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy</div>
+</div>
+<script>
+const CATS = { dua5: "🕌 5 Daily Duas", dua: "🤲 General Dua", quran: "📖 Quran Hifz", speech: "🎤 Speech", other: "📌 Other" };
+function ringSVG(pct, size) {
+  const col = pct >= 80 ? "#16a34a" : pct >= 50 ? "#0e7c8c" : pct >= 25 ? "#ea580c" : "#dc2626";
+  const r = (size / 2) - 5, circ = 2 * Math.PI * r, c = size / 2;
+  return `<svg class="ring" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle class="ring-bg" cx="${c}" cy="${c}" r="${r}"/>
+    <circle class="ring-fg" cx="${c}" cy="${c}" r="${r}" stroke="${col}"
+      stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - pct / 100)}"/>
+    <text x="${c}" y="${c + 4}" text-anchor="middle" font-size="${Math.round(size / 3.4)}" font-weight="800" fill="#0b3c46" transform="rotate(90 ${c} ${c})">${pct}%</text>
+  </svg>`;
+}
+function barHTML(pct) {
+  const col = pct >= 80 ? "#16a34a" : pct >= 50 ? "#0e7c8c" : pct >= 25 ? "#ea580c" : "#dc2626";
+  return `<div style="height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-top:6px">
+    <div style="height:100%;width:${pct}%;background:${col};border-radius:99px;transition:width .5s"></div></div>`;
+}
+(async () => {
+  const me = await api("GET", "/api/me");
+  if (!me.user || me.user.role !== "guest") { location.href = "/index.html"; return; }
+  document.getElementById("gname").textContent = "Welcome, " + me.user.display_name + " — tick what each student has completed.";
+  // Load my profile
+  try {
+    const pr = await api("GET", "/api/mentor/profile");
+    const p = pr.profile || {};
+    if (p.display_name) {
+      document.getElementById("prof_card").style.display = "block";
+      document.getElementById("prof_name").textContent = p.display_name;
+      const bits = [];
+      if (p.ad_no) bits.push("Ad No: " + p.ad_no);
+      if (p.class_name) bits.push("Class: " + p.class_name);
+      if (p.dob) bits.push("DOB: " + p.dob);
+      if (p.bio) bits.push(p.bio);
+      document.getElementById("prof_details").innerHTML = bits.map(esc).join("<br>");
+      document.getElementById("prof_photo").innerHTML = p.photo ? `<img src="${esc(p.photo)}" style="width:100%;height:100%;object-fit:cover">` : "👤";
+      if (p.photo) document.getElementById("prof_avatar").innerHTML = `<img src="${esc(p.photo)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    }
+  } catch (e) { /* profile optional */ }
+  let students = [], selectedId = null;
+  async function refreshAll() {
+    const prog = await api("GET", "/api/teacher/learning-progress");
+    students = prog.students;
+    // Summary
+    const avg = students.length ? Math.round(students.reduce((a, s) => a + s.pct, 0) / students.length) : 0;
+    document.getElementById("gs_avg").textContent = avg + "%";
+    document.getElementById("gs_done").textContent = students.filter(s => s.pct === 100).length + "/" + students.length;
+    document.getElementById("gs_tasks").textContent = prog.total || 0;
+    // Student cards
+    const grid = document.getElementById("g_students");
+    grid.innerHTML = [...students].sort((a, b) => b.pct - a.pct).map(s => `
+      <div class="stu-mini ${s.id === selectedId ? "selected" : ""}" data-id="${s.id}">
+        ${ringSVG(s.pct, 56)}
+        <div class="nm">${esc(s.display_name)}</div>
+        <div class="muted" style="font-size:.72rem">${s.done}/${s.total}</div>
+      </div>`).join("");
+    grid.querySelectorAll(".stu-mini").forEach(el => el.onclick = () => { selectedId = +el.dataset.id; refreshAll(); loadTicks(); });
+    // Class summary list
+    document.getElementById("g_class").innerHTML = [...students].sort((a, b) => b.pct - a.pct).map((s, i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
+        <span class="muted" style="width:22px;font-size:.8rem">${i + 1}</span>
+        <span style="flex:1;font-weight:600;font-size:.88rem">${esc(s.display_name)}</span>
+        <span style="width:110px">${barHTML(s.pct)}</span>
+        <b style="width:44px;text-align:right;font-size:.85rem">${s.pct}%</b>
+      </div>`).join("");
+    if (selectedId) updateSelHeader();
+  }
+  function updateSelHeader() {
+    const s = students.find(x => x.id === selectedId);
+    if (!s) return;
+    document.getElementById("g_selinfo").style.display = "block";
+    document.getElementById("g_selname").textContent = "📝 " + s.display_name;
+    document.getElementById("g_selpct").textContent = s.done + "/" + s.total + " · " + s.pct + "%";
+    document.getElementById("g_progbar").innerHTML = barHTML(s.pct);
+  }
+  async function loadTicks() {
+    if (!selectedId) return;
+    const [tasks, ticks] = await Promise.all([
+      api("GET", "/api/learning-tasks"),
+      api("GET", `/api/teacher/learning-ticks/${selectedId}`)
+    ]);
+    const doneSet = new Set(ticks.done);
+    let lastCat = "", html = "";
+    const catCount = {};
+    tasks.tasks.forEach(t => { catCount[t.category] = catCount[t.category] || { done: 0, total: 0 }; catCount[t.category].total++; if (doneSet.has(t.id)) catCount[t.category].done++; });
+    tasks.tasks.forEach(t => {
+      if (t.category !== lastCat) {
+        const cc = catCount[t.category];
+        html += `<div class="cat-head">${CATS[t.category] || t.category}<span class="count">${cc.done}/${cc.total}</span></div>`;
+        lastCat = t.category;
+      }
+      const on = doneSet.has(t.id);
+      html += `<label class="${on ? "on" : ""}">
+        <input type="checkbox" data-t="${t.id}" ${on ? "checked" : ""}>
+        <span><b>${esc(t.title)}</b>${t.details ? ` <span class="muted" style="font-size:.8rem">— ${esc(t.details)}</span>` : ""}</span>
+        <span class="tick-icon">${on ? "✅" : "⬜"}</span></label>`;
+    });
+    document.getElementById("g_ticks").innerHTML = html || "<p class='muted'>No tasks yet.</p>";
+    updateSelHeader();
+    document.getElementById("g_selinfo").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.getElementById("g_ticks").querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.onchange = async () => {
+        try {
+          await api("POST", "/api/teacher/learning-tick", { task_id: cb.dataset.t, student_id: selectedId, done: cb.checked });
+          const lbl = cb.closest("label");
+          lbl.classList.toggle("on", cb.checked);
+          lbl.querySelector(".tick-icon").textContent = cb.checked ? "✅" : "⬜";
+          refreshAll();
+        } catch (e) { toast(e.message, false); cb.checked = !cb.checked; }
+      };
+    });
+  }
+  await refreshAll();
+})();
+</script></body></html>

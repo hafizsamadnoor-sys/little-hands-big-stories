@@ -1,0 +1,192 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Winner Certificate · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<style>
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  #nav, .no-print, .footer { display: none !important; }
+  html, body { background: #fff; margin: 0; padding: 0; }
+  .wrap { max-width: 100%; padding: 0; margin: 0; }
+  .cert {
+    box-shadow: none; margin: 0; padding: 28px 24px;
+    page-break-inside: avoid; break-inside: avoid;
+    max-height: 277mm; overflow: hidden;
+  }
+  .cert .trophy { font-size: 2.4rem; margin: 4px 0; }
+  .cert .congrats { font-size: 2rem; margin: 6px 0 2px; }
+  .cert .cname { font-size: 1.6rem; margin: 8px 0 2px; padding-bottom: 4px; }
+  .cert .rank-badge { font-size: 1.05rem; padding: 7px 24px; margin: 8px 0; }
+  .cert .cmsg { font-size: .9rem; margin: 10px auto; }
+  .cert .programs { padding: 7px 12px; font-size: .85rem; }
+  .cert .stats { margin: 12px 0; gap: 18px; }
+  .cert .stat b { font-size: 1.3rem; }
+  .cert .cdate { margin-top: 8px; }
+  .cert .cfooter { margin-top: 16px; padding-top: 10px; }
+  .cert .cfooter .sigline { margin-top: 16px; }
+}
+.cert {
+  background: #fff;
+  border: 4px double #1e3a8a;
+  border-radius: 4px;
+  padding: 48px 36px;
+  margin: 20px 0;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(30,58,138,.12);
+  position: relative;
+}
+.cert::before {
+  content: ""; position: absolute; inset: 10px;
+  border: 2px solid #b45309; border-radius: 2px;
+  pointer-events: none;
+}
+.cert .inst {
+  font-size: .78rem; font-weight: 700; letter-spacing: 2.5px;
+  color: #1e3a8a; text-transform: uppercase;
+}
+.cert .congrats {
+  font-family: Georgia, serif; font-size: 2.6rem; color: #b45309;
+  margin: 12px 0 4px; font-weight: 700;
+}
+.cert .trophy { font-size: 3.5rem; margin: 8px 0; }
+.cert .cname {
+  font-family: Georgia, serif; font-size: 2rem; color: #1e3a8a;
+  margin: 12px 0 4px; font-weight: 700;
+  border-bottom: 2px solid #e2e8f0; display: inline-block; padding: 0 24px 8px;
+}
+.cert .rank-badge {
+  display: inline-block; margin: 12px 0;
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  color: #fff; font-weight: 800; font-size: 1.3rem;
+  padding: 10px 32px; border-radius: 999px; letter-spacing: 1px;
+}
+.cert .rank-badge.gold { background: linear-gradient(135deg, #b45309, #f59e0b); }
+.cert .rank-badge.silver { background: linear-gradient(135deg, #64748b, #94a3b8); }
+.cert .rank-badge.bronze { background: linear-gradient(135deg, #9a3412, #ea580c); }
+.cert .stats {
+  display: flex; justify-content: center; gap: 24px; margin: 20px 0;
+  flex-wrap: wrap;
+}
+.cert .stat { text-align: center; }
+.cert .stat b { font-size: 1.6rem; color: #1e3a8a; display: block; }
+.cert .stat span { font-size: .78rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+.cert .cmsg { color: #475569; font-size: 1.02rem; margin: 16px auto; max-width: 480px; line-height: 1.7; }
+.cert .programs {
+  margin: 8px auto 0; max-width: 520px;
+  font-size: .92rem; color: #475569;
+  background: #f8fafc;
+  border: 1px dashed #94a3b8; border-radius: 8px;
+  padding: 10px 16px; line-height: 1.8;
+}
+.cert .programs b { color: #1e3a8a; }
+.cert .cdate { color: #64748b; font-size: .85rem; margin-top: 12px; }
+.cert .cfooter {
+  margin-top: 28px; padding-top: 16px; border-top: 2px solid #1e3a8a;
+  display: flex; justify-content: space-between; align-items: flex-end;
+  text-align: left; font-size: .8rem; color: #64748b;
+}
+.cert .cfooter .sig { text-align: center; }
+.cert .cfooter .sigline { border-top: 1px solid #94a3b8; padding-top: 4px; margin-top: 24px; min-width: 140px; }
+.rank-select { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.rank-select button {
+  border: 2px solid #e2e8f0; background: #fff; border-radius: 8px;
+  padding: 10px 16px; font-weight: 700; cursor: pointer; font-size: .95rem;
+}
+.rank-select button.on { border-color: #1e3a8a; background: #eff6ff; color: #1e3a8a; }
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div class="no-print" style="margin:16px 0;" id="controls">
+  <h1>🏅 Winner Certificate</h1>
+  <div id="teacherctl">
+    <p class="muted">Select a rank, then print the certificate.</p>
+    <div class="rank-select" id="ranks"></div>
+  </div>
+  <div id="studentctl" style="display:none">
+    <p class="muted">This is your certificate. You can download or print it.</p>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+    <button class="btn" id="printbtn">🖨️ Print Certificate</button>
+    <button class="btn ghost" id="dlbtn">⬇️ Download</button>
+    <a class="btn ghost" href="/top10.html" id="top10link">← Top 10 Poster</a>
+  </div>
+</div>
+<div class="cert" id="cert"><p class="muted">Loading…</p></div>
+<div class="footer no-print"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("board.html") : studentNav("board.html");
+  const isTeacher = user.role === "teacher";
+  const d = await api("GET", "/api/points-board?period=all");
+  const board = d.board;
+  const top10 = board.slice(0, 10);
+  if (!top10.length) { document.getElementById("cert").innerHTML = "<p class='muted'>No ranked writers yet.</p>"; return; }
+  const ordFull = n => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th";
+  const badgeCls = ["gold", "silver", "bronze"];
+  const medals = ["🥇", "🥈", "🥉"];
+  const labels = { story: "📖 Story", diary: "📔 Diary", letter: "✉️ Letter", poem: "🎭 Poem", manifesto: "📜 Manifesto", anything: "✨ Write Anything", review: "⭐ Book Review" };
+  const rankBox = document.getElementById("ranks");
+
+  document.getElementById("printbtn").onclick = () => window.print();
+  document.getElementById("dlbtn").onclick = () => window.print(); // Save as PDF from the print dialog
+
+  function showCert(r, rankIdx) {
+    document.getElementById("cert").innerHTML = `
+      <div class="inst">Noorul Huda Centre for Excellence</div>
+      <div class="trophy">${medals[rankIdx] || "🏅"}</div>
+      <div class="congrats">Congratulations!</div>
+      <div class="cname">${esc(r.display_name)}</div>
+      <div><span class="rank-badge ${badgeCls[rankIdx] || ""}">${ordFull(rankIdx + 1)} Position</span></div>
+      <div class="cmsg">For outstanding creativity and dedication in <b>Little Hands, Big Stories</b> — the young writers' platform of Noorul Huda Islamic Academy, S1 — 12th Batch.</div>
+      <div class="programs" id="cert_programs">Loading programs…</div>
+      <div class="stats">
+        <div class="stat"><b>${r.points}</b><span>Points</span></div>
+        <div class="stat"><b>${r.works}</b><span>Works</span></div>
+        <div class="stat"><b>${r.stars}⭐</b><span>Stars</span></div>
+      </div>
+      <div class="cdate">${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</div>
+      <div class="cfooter">
+        <div><b>Little Hands, Big Stories</b><br>Noorul Huda Islamic Academy</div>
+        <div class="sig"><div class="sigline">Teacher's Signature</div></div>
+      </div>`;
+    api("GET", `/api/author/${r.id}`).then(a => {
+      const box = document.getElementById("cert_programs");
+      if (!box) return;
+      const counts = {};
+      (a.works || []).forEach(w => { counts[w.type] = (counts[w.type] || 0) + 1; });
+      const parts = Object.entries(counts).map(([t, c]) => `<b>${labels[t] || t}</b> × ${c}`);
+      box.innerHTML = parts.length ? `📚 Programs: ${parts.join(" &nbsp;·&nbsp; ")}` : "";
+    }).catch(() => {});
+  }
+
+  if (isTeacher) {
+    // Teacher: full access — pick any rank, print any certificate
+    rankBox.innerHTML = top10.map((r, i) =>
+      `<button data-i="${i}" class="${i === 0 ? "on" : ""}">${medals[i] || ""} ${ordFull(i + 1)} — ${esc(r.display_name.split(" ")[0])}</button>`).join("");
+    const show = i => {
+      rankBox.querySelectorAll("button").forEach((b, j) => b.classList.toggle("on", j === i));
+      showCert(top10[i], i);
+    };
+    rankBox.querySelectorAll("button").forEach(b => b.onclick = () => show(+b.dataset.i));
+    show(0);
+  } else {
+    // Student: only their own certificate
+    document.getElementById("teacherctl").style.display = "none";
+    document.getElementById("studentctl").style.display = "";
+    document.getElementById("top10link").style.display = "none";
+    const myIdx = board.findIndex(r => r.id === user.id);
+    if (myIdx < 0) {
+      document.getElementById("cert").innerHTML = "<p class='muted'>You don't have any points yet. Keep writing to earn your certificate! ✍️</p>";
+      document.getElementById("printbtn").style.display = "none";
+      document.getElementById("dlbtn").style.display = "none";
+      return;
+    }
+    showCert(board[myIdx], myIdx);
+  }
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

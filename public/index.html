@@ -1,0 +1,198 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Little Hands, Big Stories — Young Writers of Noorul Huda Islamic Academy</title>
+<meta name="description" content="Little Hands, Big Stories: stories, poems, diaries and letters written by the young authors of Secondary First Year, 12th Batch, Noorul Huda Islamic Academy.">
+<meta name="keywords" content="little hands big stories, noorul huda, young writers, children stories, s1 12th batch">
+<meta property="og:title" content="Little Hands, Big Stories">
+<meta property="og:description" content="Stories written by the young authors of Noorul Huda Islamic Academy — read them all here.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b3c46">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+  .hero-compact{background:linear-gradient(135deg,#0b3c46 0%,#0e7c8c 100%);color:#fff;border-radius:16px;
+    padding:24px 20px;text-align:center;margin:14px 0;box-shadow:0 4px 20px rgba(11,60,70,.15);}
+  .hero-compact .inst-name{font-size:.68rem;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;color:#a5e3ec;margin-bottom:6px;}
+  .hero-compact h1{color:#fff;font-size:1.45rem;margin:.2em 0;font-weight:800;letter-spacing:.4px;border:none;padding:0;}
+  .hero-compact p{color:#d4f0f5;font-size:.88rem;margin:6px 0 0;}
+  .login-opts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0;}
+  @media(max-width:560px){.login-opts{grid-template-columns:repeat(2,1fr);}}
+  .opt-card{background:#fff;border-radius:14px;padding:16px 8px;text-align:center;cursor:pointer;
+    box-shadow:0 2px 10px rgba(11,60,70,.08);transition:.15s;border:2.5px solid transparent;}
+  .opt-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(11,60,70,.14);}
+  .opt-card.active{border-color:#0e7c8c;background:#e8f2f6;}
+  .opt-card .emoji{font-size:2rem;display:block;margin-bottom:6px;}
+  .opt-card .lbl{font-weight:700;font-size:.88rem;color:#0b3c46;}
+  .opt-card .sub{font-size:.72rem;color:#64748b;}
+  .login-panel{display:none;}
+  .login-panel.active{display:block;animation:fadeIn .25s;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .mentor-pick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0;}
+  .mentor-btn{background:#fff;border:2px solid #e2e8f0;border-radius:12px;padding:14px;cursor:pointer;
+    text-align:center;font-weight:700;transition:.15s;}
+  .mentor-btn:hover{border-color:#0e7c8c;background:#e8f2f6;}
+  .mentor-btn.selected{border-color:#0e7c8c;background:#e8f2f6;box-shadow:0 0 0 3px rgba(14,124,140,.15);}
+</style>
+</head>
+<body><div class="wrap">
+
+<div class="hero-compact">
+  <div class="inst-name">Noorul Huda Centre for Excellence</div>
+  <h1>📚 Little Hands, Big Stories</h1>
+  <p><i>Small hands. Big imagination. Endless stories.</i> — Young writers of S1, 12th Batch</p>
+</div>
+
+<div class="login-opts">
+  <div class="opt-card" data-opt="student"><span class="emoji">🧑‍🎓</span><div class="lbl">Student</div><div class="sub">Tap name + PIN</div></div>
+  <div class="opt-card" data-opt="parent"><span class="emoji">👪</span><div class="lbl">Parent</div><div class="sub">Child name + PIN</div></div>
+  <div class="opt-card" data-opt="mentor"><span class="emoji">👥</span><div class="lbl">Mentor</div><div class="sub">Tick tasks</div></div>
+  <div class="opt-card" data-opt="admin"><span class="emoji">🧑‍🏫</span><div class="lbl">Admin</div><div class="sub">Teacher login</div></div>
+</div>
+
+<!-- Student panel -->
+<div class="login-panel card" id="panel-student">
+  <h2>🧑‍🎓 Student Login</h2>
+  <p class="muted">Tap your name, enter your 4-digit PIN.</p>
+  <div id="names" class="grid names"><p class="muted">Loading names…</p></div>
+  <div id="pwbox" style="display:none" class="card">
+    <h3 id="pwname"></h3>
+    <label>Username</label>
+    <input id="uname" readonly style="background:#f3f4f6;color:#6b7280">
+    <label>PIN</label>
+    <input type="password" id="pw" placeholder="Your 4-digit PIN" autocomplete="current-password" inputmode="numeric" pattern="[0-9]*" maxlength="4">
+    <button class="btn" id="gobtn">Enter ✍️</button>
+    <button class="btn ghost small" id="backbtn">← choose another name</button>
+    <p class="muted" style="font-size:.85rem">No PIN yet? Ask your teacher.</p>
+  </div>
+</div>
+
+<!-- Parent panel -->
+<div class="login-panel card" id="panel-parent">
+  <h2>👪 Parent Login</h2>
+  <p class="muted">Choose your child's name, enter the 4-digit parent PIN.</p>
+  <label>Your child</label><select id="p_child"><option value="">Loading names…</option></select>
+  <label>PIN</label>
+  <input type="password" id="p_pin" placeholder="4-digit parent PIN" autocomplete="current-password" inputmode="numeric" pattern="[0-9]*" maxlength="4">
+  <button class="btn" id="pbtn">View progress 👀</button>
+  <p class="muted" style="font-size:.85rem">No PIN yet? Ask the teacher.</p>
+</div>
+
+<!-- Mentor panel -->
+<div class="login-panel card" id="panel-mentor">
+  <h2>👥 Mentor Login</h2>
+  <p class="muted">Tap your name, enter your password.</p>
+  <div class="mentor-pick">
+    <div class="mentor-btn" data-muser="basith01" data-mname="Basith"><div style="font-size:1.8rem">👨‍🏫</div>Basith</div>
+    <div class="mentor-btn" data-muser="fahiz01" data-mname="Fahiz"><div style="font-size:1.8rem">👨‍🏫</div>Fahiz</div>
+  </div>
+  <div id="mbox" style="display:none">
+    <h3 id="mname"></h3>
+    <label>Password</label>
+    <input type="password" id="m_pass" autocomplete="current-password" placeholder="Your password">
+    <button class="btn" id="mbtn">Log in as Mentor</button>
+  </div>
+</div>
+
+<!-- Admin (teacher) panel -->
+<div class="login-panel card" id="panel-admin">
+  <h2>🧑‍🏫 Admin Login</h2>
+  <p class="muted">Teacher sign-in.</p>
+  <div id="loginbox">
+    <label>Username</label><input id="t_user" autocomplete="username">
+    <label>Password</label><input type="password" id="t_pass" autocomplete="current-password">
+    <button class="btn" id="tbtn">Log in</button>
+  </div>
+</div>
+
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const u = await currentUser();
+  if (u) { location.href = u.role === "teacher" ? "/teacher.html" : u.role === "guest" ? "/guest.html" : u.role === "parent" ? "/parent.html" : "/dashboard.html"; return; }
+  // Option tabs
+  const opts = document.querySelectorAll(".opt-card");
+  const panels = { student: "panel-student", parent: "panel-parent", mentor: "panel-mentor", admin: "panel-admin" };
+  function selectOpt(name) {
+    opts.forEach(o => o.classList.toggle("active", o.dataset.opt === name));
+    Object.entries(panels).forEach(([k, id]) => document.getElementById(id).classList.toggle("active", k === name));
+  }
+  opts.forEach(o => o.onclick = () => selectOpt(o.dataset.opt));
+  selectOpt("student");
+  // Student: name grid + PIN
+  const { students } = await api("GET", "/api/taplist");
+  const box = document.getElementById("names");
+  box.innerHTML = students.map(s =>
+    `<div class="namecard" data-id="${s.id}" data-name="${esc(s.display_name)}" data-user="${esc(s.username)}">
+       <div class="avatar">${avatar(s.display_name, s.photo)}</div>${esc(s.display_name)}</div>`).join("");
+  let chosen = null;
+  box.onclick = (e) => {
+    const c = e.target.closest(".namecard"); if (!c) return;
+    chosen = { id: c.dataset.id, name: c.dataset.name };
+    document.getElementById("pwname").textContent = "👋 Hi, " + chosen.name + "!";
+    document.getElementById("uname").value = c.dataset.user || "";
+    document.getElementById("pwbox").style.display = "block";
+    document.getElementById("pw").focus();
+    window.scrollTo(0, document.getElementById("pwbox").offsetTop - 80);
+  };
+  document.getElementById("backbtn").onclick = () => {
+    document.getElementById("pwbox").style.display = "none"; chosen = null;
+  };
+  async function studentLogin() {
+    try {
+      await api("POST", "/api/login", { student_id: chosen.id, password: document.getElementById("pw").value });
+      location.href = "/dashboard.html";
+    } catch (e) { toast(e.message, false); }
+  }
+  document.getElementById("gobtn").onclick = studentLogin;
+  document.getElementById("pw").onkeydown = (e) => { if (e.key === "Enter") studentLogin(); };
+  // Admin (teacher)
+  document.getElementById("tbtn").onclick = async () => {
+    try {
+      const r = await api("POST", "/api/login", { username: document.getElementById("t_user").value, password: document.getElementById("t_pass").value });
+      location.href = r.role === "guest" ? "/guest.html" : "/teacher.html";
+    } catch (e) { toast(e.message, false); }
+  };
+  // Mentor: tap Basith/Fahiz, enter password
+  let mUser = null;
+  document.querySelectorAll(".mentor-btn").forEach(b => b.onclick = () => {
+    document.querySelectorAll(".mentor-btn").forEach(x => x.classList.remove("selected"));
+    b.classList.add("selected");
+    mUser = b.dataset.muser;
+    document.getElementById("mname").textContent = "👋 Hi, " + b.dataset.mname + "!";
+    document.getElementById("mbox").style.display = "block";
+    document.getElementById("m_pass").focus();
+  });
+  async function mentorLogin() {
+    if (!mUser) { toast("Please tap your name first.", false); return; }
+    try {
+      const r = await api("POST", "/api/login", { username: mUser, password: document.getElementById("m_pass").value });
+      if (r.role !== "guest") { toast("This login is for mentors only.", false); await api("POST", "/api/logout"); return; }
+      location.href = "/guest.html";
+    } catch (e) { toast(e.message, false); }
+  }
+  document.getElementById("mbtn").onclick = mentorLogin;
+  document.getElementById("m_pass").onkeydown = (e) => { if (e.key === "Enter") mentorLogin(); };
+  // Parents: pick child, enter 4-digit parent PIN
+  const psel = document.getElementById("p_child");
+  try {
+    psel.innerHTML = `<option value="">— Choose your child —</option>` + students.map(s =>
+      `<option value="${esc(s.username)}">${esc(s.display_name)}</option>`).join("");
+  } catch (e) { psel.innerHTML = `<option value="">Could not load names</option>`; }
+  async function parentLogin() {
+    const u = psel.value;
+    if (!u) { toast("Please choose your child's name first.", false); return; }
+    try {
+      const r = await api("POST", "/api/login", { username: "parent-" + u, password: document.getElementById("p_pin").value });
+      if (r.role !== "parent") { toast("This login is for parents only.", false); await api("POST", "/api/logout"); return; }
+      location.href = "/parent.html";
+    } catch (e) { toast(e.message, false); }
+  }
+  document.getElementById("pbtn").onclick = parentLogin;
+  document.getElementById("p_pin").onkeydown = (e) => { if (e.key === "Enter") parentLogin(); };
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

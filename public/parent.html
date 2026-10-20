@@ -1,0 +1,113 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parents' Corner · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+</head>
+<body><div class="wrap">
+<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0">
+  <h1 style="margin:0">👪 Parents' Corner</h1>
+  <a class="btn ghost small" href="/api/logout">Logout</a>
+</div>
+<p class="muted">View-only access. You can see everything published, but cannot write, edit or complete anything.</p>
+
+<div class="card" id="childcard"><p class="muted">Loading your child's progress…</p></div>
+
+<div class="card" id="classtasks"><p class="muted">Loading class tasks…</p></div>
+
+<div class="card"><h2>🏆 Scoreboard — all students</h2><div id="board"></div></div>
+
+<div class="card"><h2>📚 Books — all students</h2><div id="books"></div></div>
+
+<div class="card"><h2>📖 Writings — all students</h2><div id="works"></div></div>
+
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const me = await guard("parent"); if (!me) return;
+  // ---- My child's progress (private to this parent) ----
+  const d = await api("GET", "/api/parent/child");
+  const s = d.student;
+  document.getElementById("childcard").innerHTML = `
+    <h2>🌟 ${esc(s.display_name)}'s progress</h2>
+    <div class="grid cols2">
+      <div class="stat"><b>${d.points}</b><span>Total points</span></div>
+      <div class="stat"><b>⭐ ${d.stars}</b><span>Stars earned</span></div>
+      <div class="stat"><b>${d.worksCount}</b><span>Published pieces</span></div>
+      <div class="stat"><b>🎖️ ${d.badgeCount}</b><span>Badges</span></div>
+    </div>
+    <h3>📅 Weekly tasks</h3>
+    ${d.taskProgress.length ? d.taskProgress.map(t =>
+      `<p>${t.done ? "✅" : "⏳"} <b>${esc(t.title)}</b> <span class="muted">(${t.points} pts)</span></p>`).join("") : `<p class="muted">No tasks yet.</p>`}
+    <h3>📚 Books completed (${d.books.length})</h3>
+    ${d.books.length ? d.books.map(b =>
+      `<p>📕 <a href="/api/books/${b.id}/file" target="_blank">${esc(b.title)}</a></p>`).join("") : `<p class="muted">No books yet.</p>`}`;
+  const myId = s.id;
+
+  // ---- Class Tasks: own child's % + summary graph (private to this parent) ----
+  const L = d.learning || { done: 0, total: 0, pct: 0, cats: [] };
+  const ringC = L.pct >= 80 ? "#16a34a" : L.pct >= 50 ? "#0e7c8c" : L.pct >= 25 ? "#ea580c" : "#dc2626";
+  const circ = 2 * Math.PI * 54;
+  const catBar = (label, done, total, pct) => {
+    const col = pct >= 80 ? "#16a34a" : pct >= 50 ? "#0e7c8c" : pct >= 25 ? "#ea580c" : "#dc2626";
+    return `<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-size:.88rem;margin-bottom:4px">
+      <span>${esc(label)}</span><b>${done}/${total} · ${pct}%</b></div>
+      <div style="height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:${col};border-radius:99px;transition:width .6s"></div></div></div>`;
+  };
+  document.getElementById("classtasks").innerHTML = `
+    <h2>📋 Class Tasks — ${esc(s.display_name)}</h2>
+    <p class="muted">Only you and the teacher can see this.</p>
+    <div style="display:flex;align-items:center;gap:20px;margin:8px 0 4px">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r="54" fill="none" stroke="#e2e8f0" stroke-width="14"/>
+        <circle cx="70" cy="70" r="54" fill="none" stroke="${ringC}" stroke-width="14"
+          stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - L.pct / 100)}"
+          transform="rotate(-90 70 70)" style="transition:stroke-dashoffset 1s"/>
+        <text x="70" y="78" text-anchor="middle" font-size="1.6rem" font-weight="800" fill="#0b3c46">${L.pct}%</text>
+      </svg>
+      <div><div style="font-size:1.1rem;font-weight:700;color:#0b3c46">${L.done} of ${L.total} tasks done</div>
+      <div class="muted" style="font-size:.88rem">Class tasks your child has completed</div></div>
+    </div>
+    <div class="section-label">Summary by category</div>
+    ${L.cats.length ? L.cats.map(c => catBar(c.label, c.done, c.total, c.pct)).join("") : `<p class="muted">No tasks yet.</p>`}`;
+
+  // ---- Scoreboard (public to parents) ----
+  const b = await api("GET", "/api/points-board");
+  document.getElementById("board").innerHTML =
+    `<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Student</th><th>Points</th><th>⭐</th><th>Pieces</th></tr></thead><tbody>` +
+    b.board.map((r, i) => `<tr${r.id === myId ? ` style="background:#eff6ff;font-weight:bold"` : ""}>
+      <td>${i + 1}</td><td>${esc(r.display_name)}${r.id === myId ? " 👈" : ""}</td>
+      <td>${r.points}</td><td>${r.stars}</td><td>${r.works}</td></tr>`).join("") +
+    `</tbody></table></div>`;
+
+  // ---- Books (public to parents) ----
+  const bk = await api("GET", "/api/books");
+  document.getElementById("books").innerHTML = bk.books.length ? bk.books.map(x =>
+    `<p>📕 <a href="/api/books/${x.id}/file" target="_blank">${esc(x.title)}</a> <span class="muted">— ${esc(x.author_name)}</span></p>`).join("")
+    : `<p class="muted">No books yet.</p>`;
+
+  // ---- Writings (public to parents, read-only) ----
+  const w = await api("GET", "/api/works");
+  const typeEmo = { story: "📖", diary: "📔", letter: "💌", poem: "🎵", manifesto: "📜", review: "⭐", anything: "✨" };
+  document.getElementById("works").innerHTML = w.works.length ? w.works.map(x =>
+    `<details class="storycard"><summary><b>${esc(x.title)}</b>
+      <span class="tag">${typeEmo[x.type] || "📝"} ${esc(x.type)}</span>
+      <span class="tag lang">${esc(x.language)}</span>
+      <span class="muted">— ${esc(x.author)}${x.stars ? ` · ⭐ ${x.stars}` : ""}</span></summary>
+      <div class="wbody" data-wid="${x.id}"><p class="muted">Loading…</p></div></details>`).join("")
+    : `<p class="muted">Nothing published yet.</p>`;
+  document.getElementById("works").addEventListener("toggle", async (e) => {
+    const det = e.target.closest("details"); if (!det || !det.open) return;
+    const body = det.querySelector(".wbody");
+    if (body.dataset.done) return; body.dataset.done = "1";
+    try {
+      const r = await api("GET", "/api/work/" + body.dataset.wid);
+      body.innerHTML = `<p style="white-space:pre-wrap">${esc(r.work.content)}</p>`;
+    } catch (err) { body.innerHTML = `<p class="muted">Could not load.</p>`; }
+  }, true);
+})();
+</script>
+</body></html>

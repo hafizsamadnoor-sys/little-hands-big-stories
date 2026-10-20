@@ -1,0 +1,130 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Dashboard · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<h1 id="hello">👋</h1>
+<div class="statrow" id="stats"></div>
+<div class="card"><h2>📊 My Total Progress</h2><div id="totalprog"><p class="muted">Loading…</p></div></div>
+<div id="taskcard"></div>
+<div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
+<div class="card">
+  <h2>✍️ Start creating</h2>
+  <a class="btn" href="/write.html">✍️ Write now</a>
+  <a class="btn ghost" href="/works.html">📖 Read stories</a>
+  <a class="btn ghost" href="/mystery.html">🕵️ Mystery Room</a>
+  <a class="btn ghost" href="/board.html">🏆 Points Board</a>
+</div>
+<div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
+<div class="card"><h2>🏅 My badges</h2><div id="badges"></div></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard("student"); if (!user) return;
+  document.getElementById("nav").innerHTML = studentNav("dashboard.html");
+  document.getElementById("hello").textContent = "👋 Hi, " + user.display_name + "!";
+  const d = await api("GET", "/api/dashboard");
+  document.getElementById("stats").innerHTML = `
+    <div class="stat" style="--sc:#d4a017"><span class="ic">🎯</span><b>${d.points}</b><span>Points</span></div>
+    <div class="stat" style="--sc:#0e7c8c"><span class="ic">🏅</span><b>#${d.rank}</b><span>Rank</span></div>
+    <div class="stat" style="--sc:#16a34a"><span class="ic">📖</span><b>${d.approved}</b><span>Published</span></div>
+    <div class="stat" style="--sc:#7c3aed"><span class="ic">🎖️</span><b>${d.badges.length}</b><span>Badges</span></div>
+    <div class="stat" style="--sc:#f59e0b"><span class="ic">⭐</span><b>${d.stars}</b><span>Stars</span></div>`;
+  // ---- Total progress: animated rings + where-my-points-came-from bar ----
+  const TCOL = { work:["✍️","Writing","#0e7c8c"], task:["📅","Weekly tasks","#16a34a"],
+    quiz:["🧠","Quizzes","#7c3aed"], mystery:["🕵️","Mysteries","#b45309"],
+    challenge:["🎯","Challenges","#dc2626"], like:["❤️","Likes","#e11d48"],
+    read:["📚","Reading","#0284c7"], other:["🎁","Bonus","#64748b"] };
+  function ring(pct, color, emoji, label) {
+    const C = (2 * Math.PI * 52).toFixed(1);
+    const off = (2 * Math.PI * 52 * (1 - pct / 100)).toFixed(1);
+    return `<div style="text-align:center;flex:1;min-width:132px">
+      <svg width="132" height="132" viewBox="0 0 132 132">
+        <circle cx="66" cy="66" r="52" fill="none" stroke="#e2e8f0" stroke-width="13"/>
+        <circle class="ringfg" data-off="${off}" cx="66" cy="66" r="52" fill="none" stroke="${color}"
+          stroke-width="13" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C}"
+          transform="rotate(-90 66 66)" style="transition:stroke-dashoffset 1.2s ease"/>
+        <text x="66" y="62" text-anchor="middle" font-size="1.6rem">${emoji}</text>
+        <text x="66" y="90" text-anchor="middle" font-size="1.05rem" font-weight="800" fill="#0b3c46">${pct}%</text>
+      </svg><div style="font-weight:700;color:#0b3c46;margin-top:2px">${label}</div></div>`;
+  }
+  try {
+    const lp = await api("GET", "/api/my/learning-progress");
+    const lpc = lp.progress.total ? lp.progress.pct : 0;
+    const wpc = d.weekly.total ? Math.round(d.weekly.done / d.weekly.total * 100) : 0;
+    const tot = d.byType.reduce((a, x) => a + x.pts, 0) || 1;
+    const segs = d.byType.filter(x => x.pts > 0).map(x => {
+      const t = TCOL[x.t] || TCOL.other, w = (x.pts / tot * 100);
+      return w < 2 ? "" : `<div title="${t[0]} ${t[1]}: ${x.pts} pts" style="width:${w}%;background:${t[2]};height:100%"></div>`;
+    }).join("");
+    const legend = d.byType.filter(x => x.pts > 0).map(x => {
+      const t = TCOL[x.t] || TCOL.other;
+      return `<span style="display:inline-flex;align-items:center;gap:5px;margin:5px 12px 0 0;font-size:.83rem"><span style="width:12px;height:12px;border-radius:4px;background:${t[2]};display:inline-block"></span>${t[0]} ${t[1]} <b>${x.pts}</b></span>`;
+    }).join("");
+    document.getElementById("totalprog").innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:4px 0 12px">
+        ${ring(lpc, "#7c3aed", "📋", "Study Tasks")}
+        ${ring(wpc, "#0e7c8c", "📅", "Weekly Tasks")}
+      </div>
+      <h3 style="margin:8px 0 6px">🎯 Where my ${d.points} points came from</h3>
+      ${segs ? `<div style="display:flex;height:26px;border-radius:99px;overflow:hidden;background:#e2e8f0">${segs}</div>
+        <div style="margin-top:4px">${legend}</div>`
+        : `<p class="muted">No points yet — write your first piece! ✍️</p>`}`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll("#totalprog .ringfg").forEach(c => { c.style.strokeDashoffset = c.dataset.off; });
+    }));
+  } catch (e) { document.getElementById("totalprog").innerHTML = `<p class="muted">Could not load progress.</p>`; }
+  const t = await api("GET", "/api/weekly-tasks");
+  const tc = document.getElementById("taskcard");
+  if (t.current) {
+    const c = t.current;
+    const kind = c.kind === "quiz" ? "🧠 Quiz" : c.kind === "story_start" ? "✨ Complete the story" : "🌈 Write on a theme";
+    tc.innerHTML = `<div class="card" style="border:2px solid var(--accent)">
+      <h2>📅 This Week's Task</h2>
+      <h3>${esc(c.title)}</h3>
+      <p><span class="tag">${kind}</span> <span class="pill">⏳ ${c.daysLeft} day(s) left</span> <span class="pill">+${c.points} pts${c.kind === "quiz" ? " per correct answer" : ""}</span></p>
+      <p>${esc(c.prompt).slice(0, 220)}${c.prompt.length > 220 ? "…" : ""}</p>
+      <a class="btn" href="${c.kind === "quiz" ? "/quiz.html?task=" + c.id : "/write.html?task=" + c.id}">Start →</a>
+    </div>`;
+  }
+  const w = await api("GET", "/api/writer-of-week");
+  document.getElementById("wow").innerHTML = w.writer
+    ? `<p style="font-size:1.1rem">🌟 <b>${esc(w.writer.display_name)}</b></p><p class="muted">${esc(w.writer.note)}</p>`
+    : `<p class="muted">No writer of the week yet.</p>`;
+  const b = await api("GET", "/api/my/badges");
+  const mine = new Set(b.mine.map(x => x.badge_key));
+  document.getElementById("badges").innerHTML = b.badges.map(x =>
+    `<span class="badge ${mine.has(x.key) ? "" : "locked"}">${x.icon} ${esc(x.name)}</span>`).join("");
+  // My learning tasks progress
+  try {
+    const lp = await api("GET", "/api/my/learning-progress");
+    const pr = lp.progress;
+    const col = pr.pct >= 80 ? "#16a34a" : pr.pct >= 50 ? "#d4a017" : pr.pct >= 25 ? "#ea580c" : "#dc2626";
+    let lastCat = "";
+    const items = lp.tasks.map(t => {
+      const head = t.category !== lastCat ? `<h3 style="margin:12px 0 4px;color:#1e3a8a;font-size:.95rem">${lp.categories[t.category] || t.category}</h3>` : "";
+      lastCat = t.category;
+      return head + `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
+        <span style="font-size:1.2rem">${t.done ? "✅" : "⬜"}</span>
+        <span><b>${esc(t.title)}</b>${t.details ? `<div class="muted" style="font-size:.8rem">${esc(t.details)}</div>` : ""}</span></div>`;
+    }).join("");
+    document.getElementById("learnprog").innerHTML = pr.total
+      ? `<p><b>${pr.done} of ${pr.total} completed</b></p>
+        <div style="background:#e2e8f0;border-radius:999px;height:26px;overflow:hidden;margin:8px 0;box-shadow:inset 0 1px 3px rgba(0,0,0,.08)">
+          <div id="learnfill" data-w="${pr.pct}" style="width:0;background:linear-gradient(90deg,${col},${col}cc);height:100%;border-radius:999px;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-weight:800;font-size:.85rem;transition:width 1.2s ease">${pr.pct}%</div></div>
+        <div style="margin-top:10px">${items}</div>`
+      : `<p class="muted">No learning tasks yet. Your teacher will add them soon. 📋</p>`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const f = document.getElementById("learnfill"); if (f) f.style.width = f.dataset.w + "%";
+    }));
+  } catch (e) { document.getElementById("learnprog").innerHTML = ""; }
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
