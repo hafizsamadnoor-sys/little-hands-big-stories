@@ -813,7 +813,17 @@ app.post("/api/teacher/work/:id/feature", requireTeacher, async (req, res) => {
 });
 
 app.post("/api/teacher/work/:id/delete", requireTeacher, async (req, res) => {
-  await db.execute({ sql: "DELETE FROM works WHERE id=?", args: [req.params.id] });
+  // Complete removal: the work, its points, its auto-book, reads and likes —
+  // nothing about it stays anywhere on the site.
+  const id = req.params.id;
+  const w = (await db.execute({ sql: "SELECT title, student_id FROM works WHERE id=?", args: [id] })).rows[0];
+  await db.execute({ sql: "DELETE FROM points_log WHERE ref_type='work' AND ref_id=?", args: [id] });
+  await db.execute({ sql: "DELETE FROM books WHERE work_id=?", args: [id] });
+  await db.execute({ sql: "DELETE FROM reads WHERE work_id=?", args: [id] });
+  await db.execute({ sql: "DELETE FROM likes WHERE work_id=?", args: [id] });
+  await db.execute({ sql: "DELETE FROM works WHERE id=?", args: [id] });
+  if (w) await logActivity(req.user.id, req.user.role, "delete",
+    `Deleted work \"${w.title}\" completely (points, book, reads, likes removed)`, "work", Number(id));
   res.json({ ok: true });
 });
 
