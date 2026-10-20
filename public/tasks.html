@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly Tasks · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<h1>📅 Weekly Tasks</h1>
+<div id="current"></div>
+<h2>🗂️ Past weeks</h2>
+<div id="archive"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+function card(t, isCurrent) {
+  const kind = t.kind === "quiz" ? "🧠 Quiz" : t.kind === "story_start" ? "✨ Complete the story" : "🌈 Write on a theme";
+  const link = t.kind === "quiz" ? `/quiz.html?task=${t.id}` : `/write.html?task=${t.id}`;
+  return `<div class="card" ${isCurrent ? 'style="border:2px solid var(--accent)"' : ""}>
+    <h3>${esc(t.title)}</h3>
+    <p><span class="tag">${kind}</span>
+    <span class="pill">+${t.points} pts${t.kind === "quiz" ? " per correct answer" : ""}</span>
+    ${isCurrent ? `<span class="pill">⏳ ${t.daysLeft} day(s) left</span>` : `<span class="muted" style="font-size:.8rem">week of ${fmtDate(t.start_date)}</span>`}</p>
+    <p>${esc(t.prompt).slice(0, 260)}${t.prompt.length > 260 ? "…" : ""}</p>
+    ${isCurrent ? `<a class="btn" href="${link}">Start →</a>` : ""}</div>`;
+}
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("") : studentNav("tasks.html");
+  const t = await api("GET", "/api/weekly-tasks");
+  document.getElementById("current").innerHTML = t.current ? card(t.current, true)
+    : `<div class="card"><p class="muted">No task this week yet — check back soon! ✨</p></div>`;
+  document.getElementById("archive").innerHTML = (t.archive || []).length
+    ? t.archive.map(x => card(x, false)).join("") : `<p class="muted">No past tasks.</p>`;
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

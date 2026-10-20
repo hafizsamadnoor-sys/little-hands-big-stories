@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Read · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="story"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("") : studentNav("");
+  const id = new URLSearchParams(location.search).get("id");
+  const d = await api("GET", "/api/work/" + id);
+  const w = d.work;
+  document.getElementById("story").innerHTML = `
+    ${w.featured ? `<p><span class="pill">🌟 Featured Story</span></p>` : ""}
+    <h1>${esc(w.title)}</h1>
+    <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
+    ${w.stars ? `<span class="pill">⭐ ${w.stars} stars</span>` : ""}</p>
+    <p class="muted">by <b>${esc(w.author)}</b> · ${fmtDate(w.created_at)} · 👁️ ${d.reads} reads</p>
+    <div class="card" style="font-size:1.08rem; white-space:pre-wrap">${esc(w.content)}</div>
+    <p>${user.role === "student" && !d.isOwner
+      ? `<button class="btn ${d.liked ? "ghost" : ""}" id="like">${d.liked ? "💔 Unlike" : "❤️ Like"} (${d.likes})</button>`
+      : `<span class="muted">❤️ ${d.likes} likes</span>`}
+      <a class="btn ghost" href="/works.html">← All stories</a></p>
+    ${d.isOwner && w.status === "approved" ? `<div class="alert">🔒 This work is published and locked. Only your teacher can change it.</div>` : ""}`;
+  const lb = document.getElementById("like");
+  if (lb) lb.onclick = async () => {
+    const r = await api("POST", "/api/work/" + id + "/like");
+    lb.textContent = (r.liked ? "💔 Unlike" : "❤️ Like") + ` (${d.likes + (r.liked ? 1 : -1)})`;
+    d.likes += r.liked ? 1 : -1;
+  };
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

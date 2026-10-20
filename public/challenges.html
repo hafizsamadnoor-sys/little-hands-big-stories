@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Challenges · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<h1>🎯 Challenges</h1>
+<p class="muted">Special writing challenges from your teacher. Complete them for bonus points!</p>
+<div id="list"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("") : studentNav("challenges.html");
+  async function load() {
+    const d = await api("GET", "/api/challenges");
+    const mine = Object.fromEntries((d.myEntries || []).map(e => [e.challenge_id, e.status]));
+    document.getElementById("list").innerHTML = d.challenges.length ? d.challenges.map(c => `
+      <div class="card"><h3>${esc(c.title)}</h3><p>${esc(c.description)}</p>
+        <p><span class="pill">+${c.points} pts</span>
+        ${c.deadline ? `<span class="muted" style="font-size:.85rem">until ${fmtDate(c.deadline)}</span>` : ""}</p>
+        ${user.role === "student" ? (mine[c.id] === "done" ? `<p class="muted">✅ Completed!</p>`
+          : mine[c.id] ? `<p class="muted">⏳ Submitted — waiting for teacher.</p>`
+          : `<label>Your entry</label><textarea id="e${c.id}" style="min-height:100px" placeholder="Write your entry…"></textarea>
+             <button class="btn small" data-c="${c.id}">Submit entry 📮</button>`) : ""}</div>`).join("")
+      : `<div class="card"><p class="muted">No challenges yet.</p></div>`;
+    document.querySelectorAll("[data-c]").forEach(b => b.onclick = async () => {
+      try {
+        await api("POST", "/api/challenge/" + b.dataset.c + "/enter", { content: document.getElementById("e" + b.dataset.c).value });
+        toast("Entry submitted! Your teacher will check it. 🎯"); await load();
+      } catch (e) { toast(e.message, false); }
+    });
+  }
+  await load();
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

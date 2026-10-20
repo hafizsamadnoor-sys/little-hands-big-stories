@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quiz · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="quiz"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard("student"); if (!user) return;
+  document.getElementById("nav").innerHTML = studentNav("tasks.html");
+  const taskId = new URLSearchParams(location.search).get("task");
+  const d = await api("GET", "/api/quiz/" + taskId + "/questions");
+  const box = document.getElementById("quiz");
+  if (d.myAttempt) {
+    box.innerHTML = `<div class="card"><h1>🧠 ${esc(d.task.title)}</h1>
+      <div class="ok"><b>Already answered:</b> ${d.myAttempt.score}/${d.questions.length} correct · +${d.myAttempt.points_awarded} pts 🎉</div>
+      <a class="btn ghost" href="/tasks.html">← Back to tasks</a></div>`;
+    return;
+  }
+  box.innerHTML = `<h1>🧠 ${esc(d.task.title)}</h1>
+    <p class="muted">${esc(d.task.prompt)}</p>
+    <p><span class="pill">+${d.task.points} pts per correct answer</span>
+    <span class="pill">⏳ ${d.task.daysLeft} day(s) left</span></p>
+    <div class="card">${d.questions.map((q, i) => `
+      <div class="quizq"><label>Q${i + 1}. ${esc(q.question)}</label>
+      <input id="a${i}" placeholder="Your answer"></div>`).join("")}
+      <button class="btn" id="send">Submit answers ✅</button>
+      <p class="muted" style="font-size:.85rem">You can answer only once — think carefully!</p>
+    </div>`;
+  document.getElementById("send").onclick = async () => {
+    const answers = d.questions.map((_, i) => document.getElementById("a" + i).value);
+    try {
+      const r = await api("POST", "/api/quiz/" + taskId + "/attempt", { answers });
+      box.innerHTML = `<div class="card"><h1>🎉 ${r.score}/${r.total} correct!</h1>
+        <p><span class="pill">+${r.points} points earned</span></p>
+        ${r.detail.map((x, i) => `<p>${x.correct ? "✅" : "❌"} <b>Q${i + 1}.</b> ${esc(x.question)}<br>
+          <span class="muted">You: ${esc(x.given || "—")} · Correct: ${esc(x.answer)}</span></p>`).join("")}
+        <a class="btn" href="/dashboard.html">Back home →</a></div>`;
+      window.scrollTo(0, 0);
+    } catch (e) { toast(e.message, false); }
+  };
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

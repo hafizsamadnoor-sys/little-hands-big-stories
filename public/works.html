@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stories · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<h1>📖 Stories</h1>
+<div class="card">
+  <div class="grid cols2">
+    <div><label>Search</label><input id="q" placeholder="Title, word, or author…"></div>
+    <div><label>Writing type</label><select id="type">
+      <option value="">All types</option><option value="story">Story</option><option value="diary">Diary</option>
+      <option value="letter">Letter</option><option value="poem">Poem</option><option value="manifesto">Manifesto</option><option value="review">Book Review</option><option value="anything">Write Anything</option></select></div>
+  </div>
+  <label>Language</label><select id="lang">
+    <option value="">All languages</option><option>English</option><option>Malayalam</option><option>Arabic</option><option>Urdu</option><option>Kannada</option><option>Manglish</option>
+  </select>
+  <button class="btn small" id="search">🔍 Search</button>
+</div>
+<div id="list"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("works.html") : studentNav("works.html");
+  async function load() {
+    const p = new URLSearchParams({ q: document.getElementById("q").value, type: document.getElementById("type").value, language: document.getElementById("lang").value });
+    const d = await api("GET", "/api/works?" + p.toString());
+    document.getElementById("list").innerHTML = d.works.length ? d.works.map(w =>
+      `<a href="/work.html?id=${w.id}" style="text-decoration:none;color:inherit"><div class="storycard">
+        ${w.featured ? `<p><span class="pill">🌟 Featured</span></p>` : ""}
+        <h3>${esc(w.title)}</h3>
+        <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span></p>
+        <p class="muted" style="font-size:.85rem">by ${esc(w.author)} · ❤️ ${w.likes} · 👁️ ${w.reads} ${w.stars ? `· ⭐ ${w.stars}` : ""}</p>
+      </div></a>`).join("") : `<p class="muted">No stories found yet.</p>`;
+  }
+  document.getElementById("search").onclick = load;
+  document.getElementById("q").onkeydown = e => { if (e.key === "Enter") load(); };
+  await load();
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

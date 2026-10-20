@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student Preview · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div class="card" style="border:2px dashed var(--accent);background:#fffbeb">
+  <p style="margin:0">👁️ <b>Teacher preview</b> — you are viewing this student's account. You are still logged in as teacher.</p>
+</div>
+<h1 id="hello">👋</h1>
+<div class="statrow" id="stats"></div>
+<div class="card"><h2>📚 Works</h2><div id="works"></div></div>
+<div class="card"><h2>🏅 Badges</h2><div id="badges"></div></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard("teacher"); if (!user) return;
+  document.getElementById("nav").innerHTML = teacherNav("teacher.html");
+  const id = new URLSearchParams(location.search).get("id");
+  if (!id) { document.querySelector(".wrap").innerHTML = "<p>No student selected.</p>"; return; }
+  const d = await api("GET", "/api/teacher/student/" + id + "/preview");
+  const s = d.student;
+  document.getElementById("hello").innerHTML =
+    `<span class="avatar" style="width:56px;height:56px;font-size:1.8rem;vertical-align:middle">${avatar(s.display_name, s.photo)}</span> ${esc(s.display_name)} <span class="muted" style="font-size:1rem">(@${esc(s.username)})</span>`;
+  document.getElementById("stats").innerHTML = `
+    <div class="stat"><b>${d.points}</b><span>Points</span></div>
+    <div class="stat"><b>#${d.rank}</b><span>Rank</span></div>
+    <div class="stat"><b>${d.approved}</b><span>Published</span></div>
+    <div class="stat"><b>${d.badges.length}</b><span>Badges</span></div>
+    <div class="stat"><b>${d.stars}⭐</b><span>Stars</span></div>`;
+  document.getElementById("works").innerHTML = d.works.length ? d.works.map(w => `
+    <div class="storycard"><h3>${esc(w.title)}</h3>
+      <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
+      <span class="pill">${w.status}</span>${w.stars ? ` <span class="pill">⭐ ${w.stars}</span>` : ""}</p></div>`).join("")
+    : `<p class="muted">No works yet.</p>`;
+  const all = await api("GET", "/api/badges");
+  const mine = new Set(d.badges);
+  document.getElementById("badges").innerHTML = all.badges.map(x =>
+    `<span class="badge ${mine.has(x.key) ? "" : "locked"}">${x.icon} ${esc(x.name)}</span>`).join("");
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

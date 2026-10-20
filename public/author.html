@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Author · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="profile"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("authors.html") : studentNav("authors.html");
+  const id = new URLSearchParams(location.search).get("id");
+  const d = await api("GET", "/api/author/" + id);
+  const a = d.author, st = d.stats;
+  document.getElementById("profile").innerHTML = `
+    <div class="card" style="text-align:center">
+      <div class="avatar" style="width:90px;height:90px;font-size:2.4rem;margin:0 auto 10px">${avatar(a.display_name, a.photo)}</div>
+      <h1 style="margin:.2em 0">${esc(a.display_name)}</h1>
+      ${a.bio ? `<p class="muted">${esc(a.bio)}</p>` : ""}
+    </div>
+    <div class="statrow">
+      <div class="stat"><b>${st.points}</b><span>Points</span></div>
+      <div class="stat"><b>${st.approved}</b><span>Published</span></div>
+      <div class="stat"><b>${st.stars}⭐</b><span>Stars</span></div>
+      <div class="stat"><b>${st.reads}</b><span>Stories read</span></div>
+    </div>
+    <div class="card"><h2>🏅 Badges</h2><div id="bd"></div></div>
+    <div class="card"><h2>📚 Published works</h2>
+      ${d.works.length ? d.works.map(w =>
+        `<a href="/work.html?id=${w.id}" style="text-decoration:none;color:inherit"><div class="storycard">
+          <h3>${esc(w.title)}</h3>
+          <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
+          ${w.stars ? `<span class="pill">⭐ ${w.stars}</span>` : ""}</p></div></a>`).join("")
+        : `<p class="muted">No published works yet.</p>`}</div>`;
+  const all = await api("GET", "/api/badges");
+  const mine = new Set(d.badges);
+  document.getElementById("bd").innerHTML = all.badges.map(x =>
+    `<span class="badge ${mine.has(x.key) ? "" : "locked"}" title="${esc(x.desc)}">${x.icon} ${esc(x.name)}</span>`).join("");
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
