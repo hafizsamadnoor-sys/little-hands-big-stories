@@ -73,6 +73,40 @@
 </div>
 
 <div class="card">
+  <h2>✍️ Write for a Student</h2>
+  <p class="muted">Choose a student and write a story, poem or any work in their name. It goes to the teacher for approval, just like the student's own writing.</p>
+  <label style="display:block;font-weight:700;margin:10px 0 4px">Student</label>
+  <select id="w_student" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px"></select>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div>
+      <label style="display:block;font-weight:700;margin:10px 0 4px">Type</label>
+      <select id="w_type" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px">
+        <option value="story">📖 Story</option>
+        <option value="poem">🎭 Poem</option>
+        <option value="diary">📔 Diary Writing</option>
+        <option value="letter">✉️ Letter Writing</option>
+        <option value="manifesto">📜 Manifesto Writing</option>
+        <option value="review">⭐ Book Review</option>
+        <option value="anything">✨ Write Anything</option>
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-weight:700;margin:10px 0 4px">Language</label>
+      <select id="w_lang" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px">
+        <option>English</option><option>Malayalam</option><option>Manglish</option>
+        <option>Arabic</option><option>Urdu</option><option>Kannada</option>
+      </select>
+    </div>
+  </div>
+  <label style="display:block;font-weight:700;margin:10px 0 4px">Title</label>
+  <input id="w_title" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px" placeholder="Title of the work">
+  <label style="display:block;font-weight:700;margin:10px 0 4px">Content</label>
+  <textarea id="w_content" rows="9" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px" placeholder="Write the work here…"></textarea>
+  <button class="btn" id="w_submit" style="margin-top:12px">📩 Send to Teacher for Approval</button>
+  <div id="w_msg" style="margin-top:10px;font-weight:700"></div>
+</div>
+
+<div class="card">
   <h2>📊 Class Summary</h2>
   <p class="muted">Tap any student above to tick their tasks.</p>
   <div id="g_class"></div>
@@ -135,6 +169,12 @@ function barHTML(pct) {
         <div class="nm">${esc(s.display_name)}</div>
         <div class="muted" style="font-size:.72rem">${s.done}/${s.total}</div>
       </div>`).join("");
+    // Write-for-a-student dropdown (keep the current choice)
+    const wsel = document.getElementById("w_student");
+    const wcur = wsel.value;
+    wsel.innerHTML = [...students].sort((a, b) => a.display_name.localeCompare(b.display_name))
+      .map(s => `<option value="${s.id}">${esc(s.display_name)}</option>`).join("");
+    if (wcur && students.some(s => String(s.id) === wcur)) wsel.value = wcur;
     grid.querySelectorAll(".stu-mini").forEach(el => el.onclick = () => { selectedId = +el.dataset.id; refreshAll(); loadTicks(); });
     // Class summary list
     document.getElementById("g_class").innerHTML = [...students].sort((a, b) => b.pct - a.pct).map((s, i) => `
@@ -191,6 +231,33 @@ function barHTML(pct) {
       };
     });
   }
+  // Write-for-a-student form
+  document.getElementById("w_type").onchange = (e) => {
+    const c = document.getElementById("w_content");
+    if (e.target.value === "review" && !c.value.trim())
+      c.value = "Book name: \nAuthor: \nWhat the book is about: \nWhat I liked most: \nMy rating (1-5 stars): \n\nMy review:\n";
+  };
+  document.getElementById("w_submit").onclick = async () => {
+    const msg = document.getElementById("w_msg");
+    const body = {
+      student_id: +document.getElementById("w_student").value,
+      type: document.getElementById("w_type").value,
+      language: document.getElementById("w_lang").value,
+      title: document.getElementById("w_title").value,
+      content: document.getElementById("w_content").value
+    };
+    const stu = students.find(s => s.id === body.student_id);
+    msg.style.color = "#64748b"; msg.textContent = "⏳ Sending…";
+    try {
+      await api("POST", "/api/guest/works", body);
+      msg.style.color = "#16a34a";
+      msg.textContent = `✅ Sent! “${body.title.trim()}” is now waiting for the teacher's approval in ${stu ? stu.display_name : "the student"}'s name.`;
+      document.getElementById("w_title").value = "";
+      document.getElementById("w_content").value = "";
+    } catch (e) {
+      msg.style.color = "#dc2626"; msg.textContent = "❌ " + e.message;
+    }
+  };
   await refreshAll();
 })();
 </script></body></html>

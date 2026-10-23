@@ -70,6 +70,19 @@
       document.head.appendChild(s);
     });
   }
+  function showSaveOverlay(dataUrl) {
+    let ov = document.getElementById("saveOverlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "saveOverlay";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(2,20,26,.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:12px";
+      ov.innerHTML = `<div style="color:#fff;font-weight:700;text-align:center">📥 Your poster is ready!<br><span style="font-weight:400;font-size:.85rem">Press &amp; hold the image, then tap “Save to Photos”</span></div><img id="saveOverlayImg" style="max-width:94vw;max-height:74vh;border-radius:8px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.5)"><button class="btn" id="saveOverlayClose">✖ Close</button>`;
+      document.body.appendChild(ov);
+      ov.querySelector("#saveOverlayClose").onclick = () => { ov.style.display = "none"; };
+    }
+    ov.querySelector("#saveOverlayImg").src = dataUrl;
+    ov.style.display = "flex";
+  }
   const pb = document.getElementById("posterbtn");
   if (pb) pb.onclick = async () => {
     const old = pb.textContent;
@@ -86,10 +99,14 @@
       const sc = Math.min((A4W - 2 * M) / src.width, (A4H - 2 * M) / src.height);
       const dw = Math.round(src.width * sc), dh = Math.round(src.height * sc);
       ctx.drawImage(src, Math.round((A4W - dw) / 2), Math.round((A4H - dh) / 2), dw, dh);
-      const a = document.createElement("a");
-      a.download = "Poem-Poster-" + (w.title || "Poem").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".png";
-      a.href = out.toDataURL("image/png");
-      a.click();
+      const url = out.toDataURL("image/png");
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) { showSaveOverlay(url); }
+      else {
+        const a = document.createElement("a");
+        a.download = "Poem-Poster-" + (w.title || "Poem").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".png";
+        a.href = url;
+        a.click();
+      }
     } catch (e) { alert("Could not make the poster. Please check your internet and try again."); }
     pb.disabled = false; pb.textContent = old;
   };
