@@ -5,6 +5,7 @@
 // Set TURSO_URL and TURSO_AUTH_TOKEN in production.
 // ─────────────────────────────────────────────────────────────
 const express = require("express");
+process.on("unhandledRejection", (e) => { console.error("Unhandled rejection (kept alive):", e && e.message); });
 const crypto = require("crypto");
 const path = require("path");
 const { createClient } = require("@libsql/client");
@@ -1161,10 +1162,10 @@ app.get("/api/my/marks", requireStudent, async (req, res) => {
 });
 // Parent sees ONLY their own child's marks.
 app.get("/api/parent/marks", requireParent, async (req, res) => {
-  const child = (await db.execute({ sql: "SELECT id FROM users WHERE id=?", args: [req.user.parent_of] })).rows[0];
-  if (!child) return res.json({ marks: [] });
+  const me = (await db.execute({ sql: "SELECT parent_of FROM users WHERE id=?", args: [req.user.id] })).rows[0];
+  if (!me || !me.parent_of) return res.json({ marks: [] });
   const rows = (await db.execute({ sql: "SELECT subject, exam, marks, max_marks, grade FROM student_marks WHERE student_id=? ORDER BY subject",
-    args: [req.user.parent_of] })).rows;
+    args: [me.parent_of] })).rows;
   res.json({ marks: rows });
 });
 // Tick / untick a task for a student (teacher or guest).
