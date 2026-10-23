@@ -4,6 +4,18 @@
 <link rel="stylesheet" href="/style.css"><script src="/app.js"></script>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1e3a8a">
+<style>
+.poemposter{max-width:640px;margin:16px auto;background:#ffffff;border:3px solid #0b3c46;border-radius:12px;padding:38px 34px;text-align:center;box-shadow:0 6px 24px rgba(11,60,70,.15);position:relative}
+.poemposter::before{content:"";position:absolute;inset:8px;border:1.5px solid #b45309;border-radius:8px;pointer-events:none}
+.pp-inst{font-size:.72rem;font-weight:700;letter-spacing:2.5px;color:#0e7c8c;text-transform:uppercase}
+.pp-kind{display:inline-block;margin-top:12px;background:#0b3c46;color:#fff;font-size:.8rem;font-weight:700;padding:4px 14px;border-radius:999px}
+.pp-title{font-family:Georgia,serif;font-size:1.9rem;font-weight:700;color:#0b3c46;margin:14px 0 4px;line-height:1.3}
+.pp-div{color:#b45309;letter-spacing:6px;margin:6px 0 14px}
+.pp-body{white-space:pre-wrap;font-size:1.12rem;line-height:2;color:#263238;font-family:Georgia,serif}
+.pp-author{margin-top:20px;font-family:Georgia,serif;font-style:italic;font-size:1.05rem;color:#0b3c46}
+.pp-foot{margin-top:16px;padding-top:12px;border-top:1px dashed #b45309;font-size:.78rem;color:#64748b;letter-spacing:.5px}
+.pp-app{margin-top:8px;font-size:.72rem;color:#94a3b8;line-height:1.6}
+</style>
 </head>
 <body><div class="wrap">
 <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0">
@@ -99,7 +111,7 @@
   // ---- Books (public to parents) ----
   const bk = await api("GET", "/api/books");
   document.getElementById("books").innerHTML = bk.books.length ? bk.books.map(x =>
-    `<p>📕 <a href="/api/books/${x.id}/file" target="_blank">${esc(x.title)}</a> <span class="muted">— ${esc(x.author_name)}</span></p>`).join("")
+    `<p>📕 <a href="/api/books/${x.id}/file" target="_blank">${esc(x.title)}</a> <span class="muted">— ${esc(x.author_name)} · ⬇️ tap to open the illustrated book, then save or share it</span></p>`).join("")
     : `<p class="muted">No books yet.</p>`;
 
   // ---- Writings (public to parents, read-only) ----
@@ -112,15 +124,93 @@
       <span class="muted">— ${esc(x.author)}${x.stars ? ` · ⭐ ${x.stars}` : ""}</span></summary>
       <div class="wbody" data-wid="${x.id}"><p class="muted">Loading…</p></div></details>`).join("")
     : `<p class="muted">Nothing published yet.</p>`;
+  const bookByWork = {};
+  bk.books.forEach(bk2 => { if (bk2.work_id) bookByWork[bk2.work_id] = bk2.id; });
+  function posterHTML(wk) {
+    return `<h3 style="margin-top:18px">🖼️ Poem Poster</h3>
+    <div id="pp-${wk.id}" class="poemposter">
+      <div class="pp-inst">Noorul Huda Centre for Excellence</div>
+      <div><span class="pp-kind">🎭 Poem</span></div>
+      <div class="pp-title">${esc(wk.title)}</div>
+      <div class="pp-div">✿ ✿ ✿</div>
+      <div class="pp-body"${wk.language === "Arabic" || wk.language === "Urdu" ? ` dir="rtl"` : ""}>${esc(wk.content)}</div>
+      <div class="pp-author">— ${esc(wk.author)}</div>
+      <div class="pp-foot">🌼 Little Hands, Big Stories · S1 — 12th Batch 🌼</div>
+      <div class="pp-app">📱 <b>Little Hands, Big Stories</b> — our young writers' app, where the S1 boys write, publish &amp; shine.<br>Read more poems &amp; stories: littlehandsbigstories.blogspot.com</div>
+    </div>
+    <p style="margin-top:10px"><button class="btn" data-dlposter="${wk.id}" data-title="${esc(wk.title)}">⬇️ Download Poster (PNG)</button></p>`;
+  }
   document.getElementById("works").addEventListener("toggle", async (e) => {
     const det = e.target.closest("details"); if (!det || !det.open) return;
     const body = det.querySelector(".wbody");
     if (body.dataset.done) return; body.dataset.done = "1";
     try {
       const r = await api("GET", "/api/work/" + body.dataset.wid);
-      body.innerHTML = `<p style="white-space:pre-wrap">${esc(r.work.content)}</p>`;
+      const wk = r.work;
+      let html = `<p style="white-space:pre-wrap">${esc(wk.content)}</p>`;
+      if (wk.type === "story" && bookByWork[wk.id])
+        html += `<p style="margin-top:12px"><a class="btn" href="/api/books/${bookByWork[wk.id]}/file" target="_blank">📕 Download the Illustrated Book (PDF)</a></p>`;
+      if (wk.type === "poem") html += posterHTML(wk);
+      body.innerHTML = html;
     } catch (err) { body.innerHTML = `<p class="muted">Could not load.</p>`; }
   }, true);
+  // Poem poster downloads (same A4 poster as the reading page, saved via the app save page)
+  function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  function showSaveOverlay(u) {
+    let ov = document.getElementById("saveOverlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "saveOverlay";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(2,20,26,.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:12px";
+      ov.innerHTML = `<div style="color:#fff;font-weight:700;text-align:center">📥 Your poster is ready!<br><span style="font-weight:400;font-size:.85rem">Press &amp; hold the image, then tap “Save to Photos”</span></div><img id="saveOverlayImg" style="max-width:94vw;max-height:74vh;border-radius:8px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.5)"><button class="btn" id="saveOverlayClose">✖ Close</button>`;
+      document.body.appendChild(ov);
+      ov.querySelector("#saveOverlayClose").onclick = () => { ov.style.display = "none"; };
+    }
+    ov.querySelector("#saveOverlayImg").src = u;
+    ov.style.display = "flex";
+  }
+  document.getElementById("works").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-dlposter]"); if (!btn) return;
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = "⏳ Making poster…";
+    try {
+      await loadScriptOnce("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+      const src = await html2canvas(document.getElementById("pp-" + btn.dataset.dlposter), { scale: 3, backgroundColor: "#ffffff", useCORS: true });
+      const A4W = 2480, A4H = 3508, M = 120;
+      const out = document.createElement("canvas");
+      out.width = A4W; out.height = A4H;
+      const ctx = out.getContext("2d");
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, A4W, A4H);
+      const sc = Math.min((A4W - 2 * M) / src.width, (A4H - 2 * M) / src.height);
+      const dw = Math.round(src.width * sc), dh = Math.round(src.height * sc);
+      ctx.drawImage(src, Math.round((A4W - dw) / 2), Math.round((A4H - dh) / 2), dw, dh);
+      const blob = await new Promise(r => out.toBlob(r, "image/png"));
+      const fname = "Poem-Poster-" + (btn.dataset.title || "Poem").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".png";
+      let delivered = false;
+      try {
+        const res = await fetch("/api/save-file", { method: "POST", headers: { "Content-Type": "image/png", "X-Filename": fname }, body: blob });
+        const d = await res.json();
+        if (d && d.url) { delivered = true; location.href = d.url; }
+      } catch (e2) { /* fall through to the fallback */ }
+      if (!delivered) {
+        const u = URL.createObjectURL(blob);
+        const isAppleTouch = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+        if (isAppleTouch) { showSaveOverlay(u); }
+        else {
+          const a = document.createElement("a");
+          a.download = fname; a.href = u; a.click();
+          setTimeout(() => URL.revokeObjectURL(u), 30000);
+        }
+      }
+    } catch (err) { alert("Could not make the poster. Please check your internet and try again."); }
+    btn.disabled = false; btn.textContent = old;
+  });
 })();
 </script>
 </body></html>
