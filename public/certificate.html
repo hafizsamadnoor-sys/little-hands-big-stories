@@ -163,6 +163,22 @@
     ov.querySelector("#saveOverlayImg").src = dataUrl;
     ov.style.display = "flex";
   }
+  async function deliverFile(blob, filename) {
+    // Best path (works on iPhone/iPad): upload to the app and open a real save page
+    try {
+      const res = await fetch("/api/save-file", { method: "POST", headers: { "Content-Type": blob.type || "application/octet-stream", "X-Filename": filename }, body: blob });
+      const d = await res.json();
+      if (d && d.url) { location.href = d.url; return; }
+      throw new Error("no url");
+    } catch (e) {
+      const u = URL.createObjectURL(blob);
+      const isAppleTouch = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+      if (isAppleTouch) { showSaveOverlay(u); return; }
+      const a = document.createElement("a");
+      a.download = filename; a.href = u; a.click();
+      setTimeout(() => URL.revokeObjectURL(u), 30000);
+    }
+  }
   async function captureCert() {
     await loadPdfLibs();
     const el = document.getElementById("cert");
@@ -185,7 +201,7 @@
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     // The certificate design is itself a full A4 page — fill the whole PDF page with it
     pdf.addImage(src.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 210, 297);
-    pdf.save(certFileBase() + ".pdf");
+    await deliverFile(pdf.output("blob"), certFileBase() + ".pdf");
   });
   document.getElementById("imgbtn").onclick = (e) => withBusy(e.currentTarget, async () => {
     const src = await captureCert();
@@ -195,12 +211,8 @@
     const ctx = out.getContext("2d");
     ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 2480, 3508);
     ctx.drawImage(src, 0, 0, 2480, 3508);
-    const url = out.toDataURL("image/png");
-    if (/iphone|ipad|ipod/i.test(navigator.userAgent)) { showSaveOverlay(url); return; }
-    const a = document.createElement("a");
-    a.download = certFileBase() + ".png";
-    a.href = url;
-    a.click();
+    const blob = await new Promise(r => out.toBlob(r, "image/png"));
+    await deliverFile(blob, certFileBase() + ".png");
   });
 
   function showCert(r, rankIdx) {

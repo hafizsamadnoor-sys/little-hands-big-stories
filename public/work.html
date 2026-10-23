@@ -99,13 +99,25 @@
       const sc = Math.min((A4W - 2 * M) / src.width, (A4H - 2 * M) / src.height);
       const dw = Math.round(src.width * sc), dh = Math.round(src.height * sc);
       ctx.drawImage(src, Math.round((A4W - dw) / 2), Math.round((A4H - dh) / 2), dw, dh);
-      const url = out.toDataURL("image/png");
-      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) { showSaveOverlay(url); }
-      else {
-        const a = document.createElement("a");
-        a.download = "Poem-Poster-" + (w.title || "Poem").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".png";
-        a.href = url;
-        a.click();
+      const blob = await new Promise(r => out.toBlob(r, "image/png"));
+      const fname = "Poem-Poster-" + (w.title || "Poem").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".png";
+      let delivered = false;
+      try {
+        const res = await fetch("/api/save-file", { method: "POST", headers: { "Content-Type": "image/png", "X-Filename": fname }, body: blob });
+        const d = await res.json();
+        if (d && d.url) { delivered = true; location.href = d.url; }
+      } catch (e) { /* fall through to the fallback below */ }
+      if (!delivered) {
+        const u = URL.createObjectURL(blob);
+        const isAppleTouch = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+        if (isAppleTouch) { showSaveOverlay(u); }
+        else {
+          const a = document.createElement("a");
+          a.download = fname;
+          a.href = u;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(u), 30000);
+        }
       }
     } catch (e) { alert("Could not make the poster. Please check your internet and try again."); }
     pb.disabled = false; pb.textContent = old;
