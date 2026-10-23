@@ -558,6 +558,20 @@ app.post("/api/works", requireStudent, async (req, res) => {
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
 });
 
+// Mentor (guest) writes a work in a student's name → goes to the teacher's approval queue as that student's work
+app.post("/api/guest/works", requireGuest, async (req, res) => {
+  const { student_id, type, language, title, content } = req.body || {};
+  if (!WORK_TYPES.includes(type)) return res.status(400).json({ error: "Invalid writing type." });
+  if (!LANGUAGES.includes(language)) return res.status(400).json({ error: "Invalid language." });
+  if (!title || !title.trim() || !content || !content.trim())
+    return res.status(400).json({ error: "Title and content are required." });
+  const stu = (await db.execute({ sql: "SELECT id FROM users WHERE id=? AND role='student'", args: [student_id] })).rows[0];
+  if (!stu) return res.status(400).json({ error: "Please choose a student." });
+  const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id)
+    VALUES (?,?,?,?,?,NULL)`, args: [stu.id, type, language, title.trim(), content.trim()] });
+  res.json({ ok: true, id: Number(r.lastInsertRowid) });
+});
+
 app.get("/api/works", requireLogin, async (req, res) => {
   const { q, type, language, author, featured } = req.query;
   let sql = `SELECT w.id, w.type, w.language, w.title, w.stars, w.featured, w.created_at,
