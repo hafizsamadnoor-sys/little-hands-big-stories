@@ -29,8 +29,9 @@ async function guard(role) {
   if (!role && user.role === "guest" && !location.pathname.endsWith("/guest.html")) {
     location.href = "/guest.html"; return null;
   }
-  // Parents are viewers only — keep them on the parent page
-  if (!role && user.role === "parent" && !location.pathname.endsWith("/parent.html")) {
+  // Parents are viewers only — keep them on the parent page (certificate page also allowed,
+  // so a parent can view and download their own child's certificate)
+  if (!role && user.role === "parent" && !location.pathname.endsWith("/parent.html") && !location.pathname.endsWith("/certificate.html")) {
     location.href = "/parent.html"; return null;
   }
   return user;

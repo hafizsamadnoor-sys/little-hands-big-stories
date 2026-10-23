@@ -43,8 +43,21 @@
       `<p>${t.done ? "✅" : "⏳"} <b>${esc(t.title)}</b> <span class="muted">(${t.points} pts)</span></p>`).join("") : `<p class="muted">No tasks yet.</p>`}
     <h3>📚 Books completed (${d.books.length})</h3>
     ${d.books.length ? d.books.map(b =>
-      `<p>📕 <a href="/api/books/${b.id}/file" target="_blank">${esc(b.title)}</a></p>`).join("") : `<p class="muted">No books yet.</p>`}`;
+      `<p>📕 <a href="/api/books/${b.id}/file" target="_blank">${esc(b.title)}</a></p>`).join("") : `<p class="muted">No books yet.</p>`}
+    <h3>📊 Marks</h3><div id="pmarks"><p class="muted">Loading…</p></div>
+    <p style="margin-top:16px"><a class="btn" href="/certificate.html">🏅 View / Download Certificate</a></p>`;
   const myId = s.id;
+
+  // Parent's view of child's marks (private)
+  try {
+    const md = await api("GET", "/api/parent/marks");
+    document.getElementById("pmarks").innerHTML = md.marks.length ? `<table style="width:100%;font-size:.88rem">
+      <tr><th style="text-align:left">Subject</th><th>Exam</th><th>Marks</th><th>Grade</th></tr>
+      ${md.marks.map(m => `<tr><td>${esc(m.subject)}</td><td>${esc(m.exam)}</td>
+        <td><b>${m.marks}</b>/${m.max_marks}</td><td>${esc(m.grade)}</td></tr>`).join("")}
+      </table><p class="muted" style="font-size:.8rem">Only you and the teacher can see this.</p>`
+      : `<p class="muted">No marks yet.</p>`;
+  } catch (e) { document.getElementById("pmarks").innerHTML = ""; }
 
   // ---- Class Tasks: own child's % + summary graph (private to this parent) ----
   const L = d.learning || { done: 0, total: 0, pct: 0, cats: [] };

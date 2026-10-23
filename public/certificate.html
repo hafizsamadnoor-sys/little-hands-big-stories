@@ -115,7 +115,11 @@
 <script>
 (async () => {
   const user = await guard(); if (!user) return;
-  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("board.html") : studentNav("board.html");
+  if (user.role === "parent") {
+    document.getElementById("nav").innerHTML = `<div style="padding:10px 0"><a class="btn ghost" href="/parent.html">⬅️ Back to Parent Page</a></div>`;
+  } else {
+    document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("board.html") : studentNav("board.html");
+  }
   const isTeacher = user.role === "teacher";
   const d = await api("GET", "/api/points-board?period=all");
   const board = d.board;
@@ -256,6 +260,22 @@
     };
     rankBox.querySelectorAll("button").forEach(b => b.onclick = () => show(+b.dataset.i));
     show(0);
+  } else if (user.role === "parent") {
+    // Parent: only their own child's certificate
+    document.getElementById("teacherctl").style.display = "none";
+    document.getElementById("studentctl").style.display = "";
+    document.querySelector("#studentctl .muted").textContent = "This is your child's certificate. You can download or print it.";
+    document.getElementById("top10link").style.display = "none";
+    const cd = await api("GET", "/api/parent/child");
+    const myIdx = board.findIndex(r => r.id === cd.student.id);
+    if (myIdx < 0) {
+      document.getElementById("cert").innerHTML = "<p class='muted'>Your child doesn't have any points yet. The certificate will appear here once they start earning points! ✍️</p>";
+      document.getElementById("printbtn").style.display = "none";
+      document.getElementById("dlbtn").style.display = "none";
+      document.getElementById("imgbtn").style.display = "none";
+      return;
+    }
+    showCert(board[myIdx], myIdx);
   } else {
     // Student: only their own certificate
     document.getElementById("teacherctl").style.display = "none";
