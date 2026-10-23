@@ -572,6 +572,54 @@ app.post("/api/guest/works", requireGuest, async (req, res) => {
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
 });
 
+// ── Temporary download files (certificate / poster images & PDFs) ──
+// iPhone/iPad cannot save files from in-page downloads, so the client uploads the
+// generated file here and opens a real page where it can be saved to Photos/Files.
+const dlStore = new Map(); // id -> { buf, type, name, exp }
+function dlClean() {
+  const now = Date.now();
+  for (const [k, v] of dlStore) if (v.exp < now) dlStore.delete(k);
+  while (dlStore.size > 20) dlStore.delete(dlStore.keys().next().value);
+}
+app.post("/api/save-file", requireLogin, express.raw({ type: ["image/png", "application/pdf"], limit: "30mb" }), (req, res) => {
+  if (!req.body || !req.body.length) return res.status(400).json({ error: "Empty file." });
+  dlClean();
+  const id = require("crypto").randomBytes(12).toString("hex");
+  const type = req.headers["content-type"] === "application/pdf" ? "application/pdf" : "image/png";
+  const name = String(req.headers["x-filename"] || (type === "application/pdf" ? "file.pdf" : "image.png")).replace(/[^\w.\- ]+/g, "").slice(0, 80) || "file";
+  dlStore.set(id, { buf: req.body, type, name, exp: Date.now() + 30 * 60 * 1000 });
+  res.json({ ok: true, url: "/api/save-file/" + id });
+});
+app.get("/api/save-file/:id", (req, res) => {
+  dlClean();
+  const f = dlStore.get(req.params.id);
+  if (!f) return res.status(404).send("This file has expired. Please go back and tap the download button again.");
+  if (f.type === "application/pdf") {
+    return res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${f.name}</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:30px;background:#f2f5f7">
+<h2>📄 Your PDF is ready</h2>
+<p><a href="/api/save-file/${req.params.id}/raw?dl=1" style="display:inline-block;background:#0e7c8c;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:1.1rem">⬇️ Download PDF</a></p>
+<p><button onclick="history.back()" style="padding:10px 22px;border-radius:10px;border:2px solid #94a3b8;background:#fff;font-weight:700">⬅️ Back</button></p>
+</body></html>`);
+  }
+  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${f.name}</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:16px;background:#f2f5f7;margin:0">
+<h3 style="margin:8px 0">📥 Your image is ready</h3>
+<p style="color:#475569;margin:4px 0 12px">Press &amp; hold the image, then tap <b>“Save to Photos”</b></p>
+<img src="/api/save-file/${req.params.id}/raw" style="max-width:96vw;height:auto;border-radius:8px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.15)">
+<p style="margin-top:14px"><a href="/api/save-file/${req.params.id}/raw?dl=1" style="display:inline-block;background:#0e7c8c;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700">⬇️ Download Image</a>
+&nbsp;<button onclick="history.back()" style="padding:12px 22px;border-radius:10px;border:2px solid #94a3b8;background:#fff;font-weight:700">⬅️ Back</button></p>
+</body></html>`);
+});
+app.get("/api/save-file/:id/raw", (req, res) => {
+  dlClean();
+  const f = dlStore.get(req.params.id);
+  if (!f) return res.status(404).send("Expired.");
+  res.setHeader("Content-Type", f.type);
+  if (req.query.dl) res.setHeader("Content-Disposition", `attachment; filename="${f.name}"`);
+  res.send(f.buf);
+});
+
 app.get("/api/works", requireLogin, async (req, res) => {
   const { q, type, language, author, featured } = req.query;
   let sql = `SELECT w.id, w.type, w.language, w.title, w.stars, w.featured, w.created_at,
