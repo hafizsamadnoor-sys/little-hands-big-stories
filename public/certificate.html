@@ -25,7 +25,8 @@
   .cert .stat b { font-size: 1.3rem; }
   .cert .cdate { margin-top: 8px; }
   .cert .cfooter { margin-top: 16px; padding-top: 10px; }
-  .cert .cfooter .sigline { margin-top: 16px; }
+  .cert .cfooter .sigline { margin-top: 4px; }
+  .cert .cfooter .sigimg { height: 38px; }
 }
 .cert {
   background: #fff;
@@ -88,7 +89,8 @@
   text-align: left; font-size: .8rem; color: #64748b;
 }
 .cert .cfooter .sig { text-align: center; }
-.cert .cfooter .sigline { border-top: 1px solid #94a3b8; padding-top: 4px; margin-top: 24px; min-width: 140px; }
+.cert .cfooter .sigimg { height: 42px; display: block; margin: 0 auto; }
+.cert .cfooter .sigline { border-top: 1px solid #94a3b8; padding-top: 4px; margin-top: 4px; min-width: 160px; }
 .rank-select { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 .rank-select button {
   border: 2px solid #e2e8f0; background: #fff; border-radius: 8px;
@@ -150,8 +152,8 @@
       </div>
       <div class="cdate">${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</div>
       <div class="cfooter">
-        <div><b>Little Hands, Big Stories</b><br>Noorul Huda Islamic Academy</div>
-        <div class="sig"><div class="sigline">Teacher's Signature</div></div>
+        <div><b>Little Hands, Big Stories</b><br>12th Batch of NHCE</div>
+        <div class="sig"><img class="sigimg" src="/signature.png" alt="Teacher's signature"><div class="sigline">Teacher's Signature</div></div>
       </div>`;
     api("GET", `/api/author/${r.id}`).then(a => {
       const box = document.getElementById("cert_programs");
