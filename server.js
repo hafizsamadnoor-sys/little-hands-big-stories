@@ -1016,7 +1016,7 @@ app.post("/api/teacher/books", requireTeacher, async (req, res) => {
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
 });
 app.get("/api/books", requireLogin, async (req, res) => {
-  const books = (await db.execute({ sql: "SELECT id, title, author_name, pages, created_at FROM books ORDER BY created_at DESC", args: [] })).rows;
+  const books = (await db.execute({ sql: "SELECT id, work_id, title, author_name, pages, created_at FROM books ORDER BY created_at DESC", args: [] })).rows;
   res.json({ books });
 });
 // Teacher preview: get any student's dashboard data (read-only, teacher stays logged in)
