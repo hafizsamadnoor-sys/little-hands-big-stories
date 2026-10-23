@@ -36,7 +36,7 @@
       `<a href="/work.html?id=${w.id}" style="text-decoration:none;color:inherit"><div class="storycard">
         ${w.featured ? `<p><span class="pill">🌟 Featured</span></p>` : ""}
         <h3>${esc(w.title)}</h3>
-        <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span></p>
+        <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>${w.type === "poem" ? `<span class="tag">🖼️ Poster</span>` : ""}</p>
         <p class="muted" style="font-size:.85rem">by ${esc(w.author)} · ❤️ ${w.likes} · 👁️ ${w.reads} ${w.stars ? `· ⭐ ${w.stars}` : ""}</p>
       </div></a>`).join("") : `<p class="muted">No stories found yet.</p>`;
   }

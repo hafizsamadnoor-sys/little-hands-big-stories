@@ -111,7 +111,7 @@
   </div>
   <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
     <button class="btn" id="printbtn">🖨️ Print Certificate</button>
-    <button class="btn ghost" id="dlbtn">⬇️ Download</button>
+    <button class="btn ghost" id="dlbtn">⬇️ Download PDF</button>
     <a class="btn ghost" href="/top10.html" id="top10link">← Top 10 Poster</a>
   </div>
 </div>
@@ -133,10 +133,49 @@
   const labels = { story: "📖 Story", diary: "📔 Diary", letter: "✉️ Letter", poem: "🎭 Poem", manifesto: "📜 Manifesto", anything: "✨ Write Anything", review: "⭐ Book Review" };
   const rankBox = document.getElementById("ranks");
 
+  let certName = "";
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  let libsPromise = null;
+  function loadPdfLibs() {
+    if (!libsPromise) {
+      libsPromise = (async () => {
+        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+      })();
+    }
+    return libsPromise;
+  }
   document.getElementById("printbtn").onclick = () => window.print();
-  document.getElementById("dlbtn").onclick = () => window.print(); // Save as PDF from the print dialog
+  document.getElementById("dlbtn").onclick = async () => {
+    const btn = document.getElementById("dlbtn");
+    const el = document.getElementById("cert");
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = "⏳ Preparing PDF…";
+    try {
+      await loadPdfLibs();
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const pw = 210, ph = 297;
+      let w = pw, h = canvas.height * pw / canvas.width;
+      if (h > ph) { h = ph; w = canvas.width * ph / canvas.height; }
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.98), "JPEG", (pw - w) / 2, (ph - h) / 2, w, h);
+      const safe = (certName || "Winner").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-");
+      pdf.save(`Certificate-${safe}.pdf`);
+    } catch (e) {
+      window.print(); // fallback: save as PDF from the print dialog
+    }
+    btn.disabled = false; btn.textContent = old;
+  };
 
   function showCert(r, rankIdx) {
+    certName = r.display_name;
     document.getElementById("cert").innerHTML = `
       <div class="inst">Noorul Huda Centre for Excellence</div>
       <div class="trophy">${medals[rankIdx] || "🏅"}</div>
