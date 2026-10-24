@@ -466,6 +466,19 @@ app.get("/api/parent/child", requireParent, async (req, res) => {
 });
 
 // Teacher: list parent logins (PINs visible to teacher only).
+// Teacher: parent visit history — every parent login is recorded in
+// activity_log, so this list updates by itself whenever a parent enters.
+app.get("/api/teacher/parent-visits", requireTeacher, async (req, res) => {
+  const rows = (await db.execute({ sql: `SELECT u.id AS student_id, u.display_name, u.ad_no,
+      COUNT(a.id) AS visits, MIN(a.created_at) AS first_login, MAX(a.created_at) AS last_login
+    FROM users u
+    JOIN users p ON p.parent_of = u.id AND p.role='parent'
+    LEFT JOIN activity_log a ON a.user_id = p.id AND a.role='parent' AND a.action='login'
+    WHERE u.role='student'
+    GROUP BY u.id
+    ORDER BY (last_login IS NULL), last_login DESC, u.display_name`, args: [] })).rows;
+  res.json({ visits: rows });
+});
 app.get("/api/teacher/parents", requireTeacher, async (req, res) => {
   const rows = (await db.execute({ sql: `SELECT u.id AS student_id, u.display_name, u.ad_no,
       p.username AS parent_username, p.pin AS parent_pin
