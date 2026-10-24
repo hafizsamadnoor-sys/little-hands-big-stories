@@ -242,9 +242,20 @@ async function vStudents(p) {
 
 async function vParents(p) {
   const d = await api("GET", "/api/teacher/parents");
+  const v = await api("GET", "/api/teacher/parent-visits");
+  const fmtT = ts => ts ? new Date(String(ts).replace(" ", "T") + "Z").toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) : "—";
+  const seen = v.visits.filter(r => r.visits > 0).length;
   p.innerHTML = `
     <div class="card"><h2>👪 Parent logins</h2>
       <p class="muted">Each parent logs in by choosing their child's name and entering the 4-digit parent PIN. Parents can only <b>view</b> — their child's full progress plus every child's scoreboard, books and writings. They cannot write, edit, like or complete anything, and see only their own child's task progress. PINs are shown only here — share each privately with the parent.</p></div>
+    <div class="card"><h2>👀 Parent Visits — who has entered the site</h2>
+      <p class="muted"><b>${seen} of ${v.visits.length}</b> parents have visited at least once. Every time a parent logs in, this history updates by itself.</p>
+      <p class="muted">Note: on 23 Oct at 3:28 PM every parent PIN was checked once from the teacher's side — a single visit at exactly that time is that check, not the parent.</p>
+      <div style="overflow-x:auto"><table>
+      <thead><tr><th>Student</th><th>Ad No</th><th>Visits</th><th>First visit</th><th>Last visit</th></tr></thead><tbody>
+      ${v.visits.map(r => `<tr${r.visits ? "" : ` style="color:#94a3b8"`}><td>${esc(r.display_name)}</td><td>${esc(r.ad_no || "")}</td>
+        <td>${r.visits ? `<b>${r.visits}</b>` : "0"}</td><td>${r.visits ? fmtT(r.first_login) : "—"}</td><td>${r.visits ? fmtT(r.last_login) : "Never visited yet"}</td></tr>`).join("")}
+      </tbody></table></div></div>
     <h2>👪 Parents (${d.parents.length})</h2>
     <div class="card" style="padding:6px 14px;overflow-x:auto"><table>
     <thead><tr><th>Student</th><th>Ad No</th><th>Parent username</th><th>Parent PIN</th><th></th></tr></thead><tbody>
