@@ -14,6 +14,7 @@
 <div class="card"><h2>📊 My Total Progress</h2><div id="totalprog"><p class="muted">Loading…</p></div></div>
 <div id="taskcard"></div>
 <div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
+<div class="card"><h2>📊 My Marks</h2><div id="mymarks"><p class="muted">Loading…</p></div></div>
 <div class="card">
   <h2>✍️ Start creating</h2>
   <a class="btn" href="/write.html">✍️ Write now</a>
@@ -23,7 +24,7 @@
 </div>
 <div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
 <div class="card"><h2>🏅 My badges</h2><div id="badges"></div></div>
-<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Islamic Academy · S1 — 12th Batch</div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
 </div>
 <script>
 (async () => {
@@ -125,6 +126,16 @@
       const f = document.getElementById("learnfill"); if (f) f.style.width = f.dataset.w + "%";
     }));
   } catch (e) { document.getElementById("learnprog").innerHTML = ""; }
+  // My marks
+  try {
+    const md = await api("GET", "/api/my/marks");
+    const el = document.getElementById("mymarks");
+    if (md.marks.length) {
+      el.innerHTML = `<table><tr><th>Subject</th><th>Exam</th><th>Marks</th><th>Grade</th></tr>` + md.marks.map(m => `<tr><td>${esc(m.subject)}</td><td>${esc(m.exam)}</td><td><b>${m.marks}</b>/${m.max_marks}</td><td>${esc(m.grade)}</td></tr>`).join("") + `</table>`;
+    } else {
+      el.innerHTML = `<p class="muted">No marks yet.</p>`;
+    }
+  } catch (e) { document.getElementById("mymarks").innerHTML = ""; }
 })();
 </script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
 </body></html>
