@@ -1,4 +1,4 @@
-// Exact S1 — 12th Batch roster, Noorul Huda Islamic Academy.
+// Exact S1 — 12th Batch roster, Noorul Huda Centre for Excellence.
 // Source: NHCE portal class list (Ad No, Name). Usernames are auto-made
 // as lowercase-first-token + AdNo (e.g. hashim488).
 module.exports = [
