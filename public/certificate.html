@@ -45,6 +45,13 @@
   margin: .1em 0; font-weight: 700;
 }
 .cert .trophy { font-size: 3.4em; margin: 0; line-height: 1.15; }
+.cert .cphoto {
+  width: 4.6em; height: 4.6em; border-radius: 50%; overflow: hidden;
+  margin: .1em auto; border: 3px solid #1e3a8a; background: #e0f2f7;
+  color: #1e3a8a; font-weight: 800; font-size: 1.4em;
+  display: flex; align-items: center; justify-content: center;
+}
+.cert .cphoto img { width: 100%; height: 100%; object-fit: cover; }
 .cert .cname {
   font-family: Georgia, serif; font-size: 1.95em; color: #1e3a8a;
   margin: .2em 0 .1em; font-weight: 700;
@@ -224,6 +231,7 @@
     document.getElementById("cert").innerHTML = `
       <div class="inst">Noorul Huda Centre for Excellence</div>
       <div class="trophy">${medals[rankIdx] || "🏅"}</div>
+      <div class="cphoto">${avatar(r.display_name, r.photo)}</div>
       <div class="congrats">Congratulations!</div>
       <div class="cname">${esc(r.display_name)}</div>
       <div><span class="rank-badge ${badgeCls[rankIdx] || ""}">${ordFull(rankIdx + 1)} Position</span></div>
