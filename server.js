@@ -863,14 +863,14 @@ app.post("/api/teacher/work/:id/review", requireTeacher, async (req, res) => {
       const t = (await db.execute({ sql: "SELECT * FROM weekly_tasks WHERE id=?", args: [w.weekly_task_id] })).rows[0];
       if (t && t.kind !== "quiz") await awardPoints(w.student_id, t.points, `Weekly task: ${t.title}`, "task", t.id);
     }
-    // Auto-generate an illustrated 8+ page book for approved stories (async, non-blocking).
+    // Auto-generate an illustrated exactly 8-page book (cover + 7 story pages, no blank pages) for approved stories (async, non-blocking).
     if (w.type === "story") {
       setImmediate(async () => {
         try {
           const { generateBookPDF } = require("./bookgen");
           const student = (await db.execute({ sql: "SELECT display_name, ad_no, bio FROM users WHERE id=?", args: [w.student_id] })).rows[0];
           const pdf = await generateBookPDF(w, student || {});
-          const pages = 8; // minimum guaranteed by generator
+          const pages = 8; // exactly 8 pages, per new format
           await db.execute({ sql: "INSERT INTO books (title, author_name, work_id, pdf_data, pages) VALUES (?,?,?,?,?)", args: [w.title, student ? student.display_name : "", w.id, pdf.toString("base64"), pages] });
           console.log(`Auto-book created for work ${w.id}`);
         } catch (e) { console.error("Auto-book failed for work " + w.id + ":", e.message); }
@@ -1068,11 +1068,14 @@ app.post("/api/teacher/student/:id", requireTeacher, async (req, res) => {
   await db.execute({ sql: "UPDATE users SET display_name=COALESCE(?,display_name), bio=?, photo=? WHERE id=?", args: [display_name && display_name.trim() ? display_name.trim() : null, bio || null, photo || null, s.id] });
   res.json({ ok: true });
 });
-// Puzzle game score: students earn points for solving word puzzles.
-app.post("/api/puzzle/score", requireStudent, async (req, res) => {
-  const p = Math.min(Math.max(parseInt(req.body.points) || 0, 0), 10);
-  if (p > 0) await awardPoints(req.user.id, p, "Word puzzle solved 🧩", "puzzle", null);
-  res.json({ ok: true, total: await totalPoints(req.user.id) });
+// Puzzle game REMOVED 2026-10-29 per Samad — no puzzles on the site hereafter.
+// One-time teacher cleanup: delete every puzzle point and re-check auto badges.
+app.post("/api/teacher/purge-puzzle", requireTeacher, async (req, res) => {
+  const del = await db.execute("DELETE FROM points_log WHERE ref_type='puzzle'");
+  await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion')");
+  const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
+  for (const s of students) await checkBadges(s.id);
+  res.json({ ok: true, deleted_puzzle_entries: del.rowsAffected || 0 });
 });
 app.post("/api/teacher/adjust-points", requireTeacher, async (req, res) => {
   const { student_id, points, reason } = req.body || {};
