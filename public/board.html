@@ -16,6 +16,11 @@
   <button id="t_all" class="on">All-time</button>
   <button id="t_month">This month</button>
 </div>
+<style>
+.bavatar { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; background:#e0f2f7; color:#0b3c46; font-weight:800; margin-right:8px; overflow:hidden; vertical-align:middle; flex:none; }
+.bavatar img { width:100%; height:100%; object-fit:cover; }
+.authorcell { display:flex; align-items:center; }
+</style>
 <div class="card" style="padding:6px 14px"><table>
 <thead><tr><th>#</th><th>Author</th><th>Points</th><th>⭐</th><th>Works</th></tr></thead>
 <tbody id="rows"></tbody></table></div>
@@ -30,7 +35,7 @@
     document.getElementById("rows").innerHTML = d.board.map((r, i) =>
       `<tr class="${i === 0 ? "rank1" : ""}">
         <td>${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</td>
-        <td><a href="/author.html?id=${r.id}" style="color:inherit;font-weight:700">${esc(r.display_name)}</a>${r.id === user.id ? " 👈 you" : ""}</td>
+        <td class="authorcell"><span class="bavatar">${avatar(r.display_name, r.photo)}</span><span><a href="/author.html?id=${r.id}" style="color:inherit;font-weight:700">${esc(r.display_name)}</a>${r.id === user.id ? " 👈 you" : ""}</span></td>
         <td><b>${r.points}</b></td><td>${r.stars}⭐</td><td>${r.works}</td></tr>`).join("");
   }
   const ta = document.getElementById("t_all"), tm = document.getElementById("t_month");
