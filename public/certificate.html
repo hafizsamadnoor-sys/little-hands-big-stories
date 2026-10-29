@@ -2,7 +2,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Winner Certificate · Little Hands, Big Stories</title>
 <link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#1e3a8a">
+<meta name="theme-color" content="#b8860b">
 <link rel="apple-touch-icon" href="/icons/flower-180.png">
 <style>
 @media print {
@@ -13,97 +13,72 @@
   .cert {
     box-shadow: none; margin: 0; width: 210mm; height: 297mm;
     max-height: none; page-break-inside: avoid; break-inside: avoid;
+    border-radius: 0;
   }
 }
 .cert {
-  background: #fff;
-  border: 4px double #1e3a8a;
-  border-radius: 4px;
+  background: #fff url("/cert-gold-bg.jpg") no-repeat center top / 100% 100%;
   width: min(94vw, 780px);
   aspect-ratio: 210 / 297;
   margin: 20px auto;
-  padding: 2.9em 2.5em;
-  text-align: center;
-  box-shadow: 0 4px 20px rgba(30,58,138,.12);
+  box-shadow: 0 4px 20px rgba(120,80,0,.18);
   position: relative;
   box-sizing: border-box;
-  display: flex; flex-direction: column; justify-content: space-between;
   font-size: 16px;
+  overflow: hidden;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.cert::before {
-  content: ""; position: absolute; inset: .6em;
-  border: 2px solid #b45309; border-radius: 2px;
-  pointer-events: none;
+.cert .ov { position: absolute; text-align: center; }
+.cert .ov-inst {
+  top: 7.4%; left: 5%; width: 90%;
+  font-size: 1.02em; font-weight: 700; letter-spacing: .18em;
+  color: #2e2000; text-transform: uppercase;
 }
-.cert .inst {
-  font-size: .8em; font-weight: 700; letter-spacing: .16em;
-  color: #1e3a8a; text-transform: uppercase;
+.cert .ov-name {
+  top: 55.6%; left: 5%; width: 90%;
+  font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
+  font-size: 2.5em; font-weight: 400; color: #4a4a4a;
+  white-space: nowrap;
 }
-.cert .congrats {
-  font-family: Georgia, serif; font-size: 2.5em; color: #b45309;
-  margin: .1em 0; font-weight: 700;
+.cert .ov-msg {
+  top: 64.1%; left: 18%; width: 64%;
+  font-size: .85em; color: #8a8a8a; line-height: 1.65;
 }
-.cert .trophy { font-size: 3.4em; margin: 0; line-height: 1.15; }
-.cert .cphoto {
-  width: 4.6em; height: 4.6em; border-radius: 50%; overflow: hidden;
-  margin: .1em auto; border: 3px solid #1e3a8a; background: #e0f2f7;
-  color: #1e3a8a; font-weight: 800; font-size: 1.4em;
-  display: flex; align-items: center; justify-content: center;
+.cert .ov-msg b { color: #6a6a6a; }
+.cert .ov-best, .cert .ov-writer {
+  left: 0; width: 100%;
+  font-family: Georgia, serif; font-weight: 800;
+  font-size: 1.6em; letter-spacing: .08em; color: #f2d06b;
+  text-shadow: 0 1px 2px rgba(0,0,0,.4);
 }
-.cert .cphoto img { width: 100%; height: 100%; object-fit: cover; }
-.cert .cname {
-  font-family: Georgia, serif; font-size: 1.95em; color: #1e3a8a;
-  margin: .2em 0 .1em; font-weight: 700;
-  border-bottom: 2px solid #e2e8f0; display: inline-block; padding: 0 .8em .25em;
+.cert .ov-best { top: 80.7%; }
+.cert .ov-writer { top: 83.4%; }
+.cert .ov-sigimg {
+  left: 12%; width: 23%; bottom: 13.6%;
+  display: flex; align-items: flex-end; justify-content: center;
 }
-.cert .rank-badge {
-  display: inline-block; margin: .25em 0;
-  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
-  color: #fff; font-weight: 800; font-size: 1.2em;
-  padding: .55em 1.9em; border-radius: 999px; letter-spacing: 1px;
+.cert .ov-sigimg img { width: 82%; display: block; }
+.cert .ov-siglabel {
+  top: 88.5%; left: 9%; width: 29%;
+  font-size: .9em; color: #9a9a9a;
 }
-.cert .rank-badge.gold { background: linear-gradient(135deg, #b45309, #f59e0b); }
-.cert .rank-badge.silver { background: linear-gradient(135deg, #64748b, #94a3b8); }
-.cert .rank-badge.bronze { background: linear-gradient(135deg, #9a3412, #ea580c); }
-.cert .stats {
-  display: flex; justify-content: center; gap: 1.6em; margin: .5em 0;
-  flex-wrap: wrap;
+.cert .ov-date {
+  top: 88.5%; right: 9%; width: 29%;
+  font-size: .9em; color: #9a9a9a;
 }
-.cert .stat { text-align: center; }
-.cert .stat b { font-size: 1.55em; color: #1e3a8a; display: block; }
-.cert .stat span { font-size: .75em; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
-.cert .cmsg { color: #475569; font-size: 1em; margin: .4em auto; max-width: 30em; line-height: 1.7; }
-.cert .programs {
-  margin: .3em auto 0; max-width: 34em;
-  font-size: .9em; color: #475569;
-  background: #f8fafc;
-  border: 1px dashed #94a3b8; border-radius: 8px;
-  padding: .6em 1em; line-height: 1.8;
-}
-.cert .programs b { color: #1e3a8a; }
-.cert .cdate { color: #64748b; font-size: .85em; margin-top: .3em; }
-.cert .cfooter {
-  margin-top: .6em; padding-top: .9em; border-top: 2px solid #1e3a8a;
-  display: flex; justify-content: space-between; align-items: flex-end;
-  text-align: left; font-size: .8em; color: #64748b;
-}
-.cert .cfooter .sig { text-align: center; }
-.cert .cfooter .sigimg { height: 2.7em; display: block; margin: 0 auto; }
-.cert .cfooter .sigline { border-top: 1px solid #94a3b8; padding-top: .25em; margin-top: .25em; min-width: 10em; }
 .rank-select { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
 .rank-select button {
   border: 2px solid #e2e8f0; background: #fff; border-radius: 8px;
   padding: 10px 16px; font-weight: 700; cursor: pointer; font-size: .95rem;
 }
-.rank-select button.on { border-color: #1e3a8a; background: #eff6ff; color: #1e3a8a; }
+.rank-select button.on { border-color: #b8860b; background: #fdf6e3; color: #a5760a; }
 </style>
 </head>
 <body><div id="nav"></div><div class="wrap">
 <div class="no-print" style="margin:16px 0;" id="controls">
-  <h1>🏅 Winner Certificate</h1>
+  <h1>🏅 100 Points Certificate</h1>
   <div id="teacherctl">
-    <p class="muted">Select a rank, then print the certificate.</p>
+    <p class="muted">Writers who reached 100 points. Select one, then print the certificate.</p>
     <div class="rank-select" id="ranks"></div>
   </div>
   <div id="studentctl" style="display:none">
@@ -130,12 +105,9 @@
   const isTeacher = user.role === "teacher";
   const d = await api("GET", "/api/points-board?period=all");
   const board = d.board;
-  const top10 = board.slice(0, 10);
-  if (!top10.length) { document.getElementById("cert").innerHTML = "<p class='muted'>No ranked writers yet.</p>"; return; }
-  const ordFull = n => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th";
-  const badgeCls = ["gold", "silver", "bronze"];
+  const club100 = board.filter(r => r.points >= 100);
+  if (!club100.length) { document.getElementById("cert").innerHTML = "<p class='muted'>No one has reached 100 points yet. Keep writing! ✍️</p>"; document.getElementById("controls").querySelectorAll("button").forEach(b => b.style.display = "none"); return; }
   const medals = ["🥇", "🥈", "🥉"];
-  const labels = { story: "📖 Story", diary: "📔 Diary", letter: "✉️ Letter", poem: "🎭 Poem", manifesto: "📜 Manifesto", anything: "✨ Write Anything", review: "⭐ Book Review" };
   const rankBox = document.getElementById("ranks");
 
   let certName = "";
@@ -175,7 +147,6 @@
     ov.style.display = "flex";
   }
   async function deliverFile(blob, filename) {
-    // Best path (works on iPhone/iPad): upload to the app and open a real save page
     try {
       const res = await fetch("/api/save-file", { method: "POST", headers: { "Content-Type": blob.type || "application/octet-stream", "X-Filename": filename }, body: blob });
       const d = await res.json();
@@ -210,13 +181,11 @@
     const src = await captureCert();
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-    // The certificate design is itself a full A4 page — fill the whole PDF page with it
     pdf.addImage(src.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 210, 297);
     await deliverFile(pdf.output("blob"), certFileBase() + ".pdf");
   });
   document.getElementById("imgbtn").onclick = (e) => withBusy(e.currentTarget, async () => {
     const src = await captureCert();
-    // Exact A4 image (2480 x 3508 px = A4 at 300 dpi), design filling the whole page
     const out = document.createElement("canvas");
     out.width = 2480; out.height = 3508;
     const ctx = out.getContext("2d");
@@ -226,78 +195,59 @@
     await deliverFile(blob, certFileBase() + ".png");
   });
 
-  function showCert(r, rankIdx) {
+  function showCert(r) {
     certName = r.display_name;
+    const cdate = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
     document.getElementById("cert").innerHTML = `
-      <div class="inst">Noorul Huda Centre for Excellence</div>
-      <div class="trophy">${medals[rankIdx] || "🏅"}</div>
-      <div class="cphoto">${avatar(r.display_name, r.photo)}</div>
-      <div class="congrats">Congratulations!</div>
-      <div class="cname">${esc(r.display_name)}</div>
-      <div><span class="rank-badge ${badgeCls[rankIdx] || ""}">${ordFull(rankIdx + 1)} Position</span></div>
-      <div class="cmsg">For outstanding creativity and dedication in <b>Little Hands, Big Stories</b> — the young writers' platform of Noorul Huda Centre for Excellence, S1 — 12th Batch.</div>
-      <div class="programs" id="cert_programs">Loading programs…</div>
-      <div class="stats">
-        <div class="stat"><b>${r.points}</b><span>Points</span></div>
-        <div class="stat"><b>${r.works}</b><span>Works</span></div>
-        <div class="stat"><b>${r.stars}⭐</b><span>Stars</span></div>
-      </div>
-      <div class="cdate">${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</div>
-      <div class="cfooter">
-        <div><b>Little Hands, Big Stories</b><br>12th Batch of NHCE</div>
-        <div class="sig"><img class="sigimg" src="/signature.png" alt="Teacher's signature"><div class="sigline">Teacher's Signature</div></div>
-      </div>`;
+      <div class="ov ov-inst">Noorul Huda Centre for Excellence</div>
+      <div class="ov ov-name">${esc(r.display_name)}</div>
+      <div class="ov ov-msg">For reaching <b>100 points</b> in <b>Little Hands, Big Stories</b> — the young writers' platform of Noorul Huda Centre for Excellence, S1 — 12th Batch. A true star writer! ⭐</div>
+      <div class="ov ov-best">BEST</div>
+      <div class="ov ov-writer">WRITER</div>
+      <div class="ov ov-sigimg"><img src="/signature.png" alt=""></div>
+      <div class="ov ov-siglabel">Teacher's Signature</div>
+      <div class="ov ov-date">Date: ${cdate}</div>`;
     fitCert();
-    api("GET", `/api/author/${r.id}`).then(a => {
-      const box = document.getElementById("cert_programs");
-      if (!box) return;
-      const counts = {};
-      (a.works || []).forEach(w => { counts[w.type] = (counts[w.type] || 0) + 1; });
-      const parts = Object.entries(counts).map(([t, c]) => `<b>${labels[t] || t}</b> × ${c}`);
-      box.innerHTML = parts.length ? `📚 Programs: ${parts.join(" &nbsp;·&nbsp; ")}` : "";
-    }).catch(() => {});
   }
 
   if (isTeacher) {
-    // Teacher: full access — pick any rank, print any certificate
-    rankBox.innerHTML = top10.map((r, i) =>
-      `<button data-i="${i}" class="${i === 0 ? "on" : ""}">${medals[i] || ""} ${ordFull(i + 1)} — ${esc(r.display_name.split(" ")[0])}</button>`).join("");
+    // Teacher: pick any student who reached 100 points
+    rankBox.innerHTML = club100.map((r, i) =>
+      `<button data-i="${i}" class="${i === 0 ? "on" : ""}">${medals[i] || "⭐"} ${esc(r.display_name.split(" ")[0])} — ${r.points} pts</button>`).join("");
     const show = i => {
       rankBox.querySelectorAll("button").forEach((b, j) => b.classList.toggle("on", j === i));
-      showCert(top10[i], i);
+      showCert(club100[i]);
     };
     rankBox.querySelectorAll("button").forEach(b => b.onclick = () => show(+b.dataset.i));
     show(0);
   } else if (user.role === "parent") {
-    // Parent: only their own child's certificate
     document.getElementById("teacherctl").style.display = "none";
     document.getElementById("studentctl").style.display = "";
     document.querySelector("#studentctl .muted").textContent = "This is your child's certificate. You can download or print it.";
     document.getElementById("top10link").style.display = "none";
     const cd = await api("GET", "/api/parent/child");
-    const myIdx = board.findIndex(r => r.id === cd.student.id);
+    const myIdx = club100.findIndex(r => r.id === cd.student.id);
     if (myIdx < 0) {
-      document.getElementById("cert").innerHTML = "<p class='muted'>Your child doesn't have any points yet. The certificate will appear here once they start earning points! ✍️</p>";
+      document.getElementById("cert").innerHTML = "<p class='muted'>Your child hasn't reached 100 points yet. The gold certificate will appear here once they do! ✍️</p>";
       document.getElementById("printbtn").style.display = "none";
       document.getElementById("dlbtn").style.display = "none";
       document.getElementById("imgbtn").style.display = "none";
       return;
     }
-    showCert(board[myIdx], myIdx);
+    showCert(club100[myIdx]);
   } else {
-    // Student: only their own certificate
     document.getElementById("teacherctl").style.display = "none";
     document.getElementById("studentctl").style.display = "";
     document.getElementById("top10link").style.display = "none";
-    const myIdx = board.findIndex(r => r.id === user.id);
+    const myIdx = club100.findIndex(r => r.id === user.id);
     if (myIdx < 0) {
-      document.getElementById("cert").innerHTML = "<p class='muted'>You don't have any points yet. Keep writing to earn your certificate! ✍️</p>";
+      document.getElementById("cert").innerHTML = "<p class='muted'>You haven't reached 100 points yet. Keep writing to earn the gold certificate! ✍️</p>";
       document.getElementById("printbtn").style.display = "none";
       document.getElementById("dlbtn").style.display = "none";
       document.getElementById("imgbtn").style.display = "none";
       return;
     }
-    showCert(board[myIdx], myIdx);
+    showCert(club100[myIdx]);
   }
 })();
 </script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
