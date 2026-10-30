@@ -68,7 +68,7 @@
     ${d.books.length ? d.books.map(b =>
       `<p>📕 <a href="/api/books/${b.id}/file" target="_blank">${esc(b.title)}</a></p>`).join("") : `<p class="muted">No books yet.</p>`}
     <h3>📊 Marks</h3><div id="pmarks"><p class="muted">Loading…</p></div>
-    <p style="margin-top:16px"><a class="btn" href="/certificate.html">🏅 View / Download Certificate</a></p>`;
+    <p style="margin-top:16px"><a class="btn" href="/certificate.html">🏅 View / Download Certificate</a></p><p style="margin-top:8px" id="compcertlink"></p><p style="margin-top:8px"><a class="btn ghost" href="/top10-learning.html">🏆 Top 10 Learning Completers</a></p>`;
   const myId = s.id;
 
   // Parent's view of child's marks (private)
@@ -81,6 +81,13 @@
       </table><p class="muted" style="font-size:.8rem">Only you and the teacher can see this.</p>`
       : `<p class="muted">No marks yet.</p>`;
   } catch (e) { document.getElementById("pmarks").innerHTML = ""; }
+
+  // Completion certificate (own child only, if issued)
+  try {
+    const cc = await api("GET", "/api/parent/completion-cert");
+    if (cc.issued) document.getElementById("compcertlink").innerHTML =
+      `<a class="btn" href="/completion-cert.html">🎓 Completion Certificate</a>`;
+  } catch (e) {}
 
   // ---- Class Tasks: own child's % + summary graph (private to this parent) ----
   const L = d.learning || { done: 0, total: 0, pct: 0, cats: [] };
