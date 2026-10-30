@@ -18,7 +18,7 @@
 <script>
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
-  ["learning","📋 Learning Tasks"],["marks","📊 Marks"],
+  ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"]];
 let cur = "approvals";
 (async () => {
@@ -40,7 +40,7 @@ async function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
   ({ approvals: vApprovals, tasks: vTasks, challenges: vChallenges,
-     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks })[cur](p);
+     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks })[cur](p);
 }
 
 async function vApprovals(p) {
@@ -341,6 +341,7 @@ async function vPoints(p) {
 async function vLearning(p) {
   const cats = { dua5: "🕌 5 Daily Duas", dua: "🤲 General Dua", quran: "📖 Quran Hifz", speech: "🎤 Speech", other: "📌 Other" };
   p.innerHTML = `<div class="card" id="lt_banner" style="background:linear-gradient(135deg,#0b3c46 0%,#0e7c8c 100%);color:#fff;border:none"><p style="color:#c9e8ee">Loading…</p></div>
+  <p style="margin-bottom:10px"><a class="btn ghost" href="/top10-learning.html" target="_blank">🏆 Top 10 Learning Completers Poster</a></p>
   <div class="card"><h2>📊 Total Summary</h2><div id="lt_class"><p class="muted">Loading…</p></div></div>
   <div class="card"><h2>✅ Tick Completed — per student</h2>
     <p class="muted">Select a student, tick what they've completed.</p>
@@ -540,6 +541,34 @@ async function vLearning(p) {
     } catch (e) { document.getElementById("sb_rows").innerHTML = `<tr><td colspan="5" class="muted">Could not load summary.</td></tr>`; }
   }
   await loadTasks(); await loadStudents(); await loadClass(); await loadGuests(); await loadSummary();
+}
+
+async function vCompletion(p) {
+  const d = await api("GET", "/api/teacher/completion-eligible");
+  const rows = d.students || [];
+  p.innerHTML = `<h2>🎓 Completion Certificates</h2>
+    <p class="muted">Boys who completed 100% of the Learning Tasks. The teacher issues the certificate — nothing is issued automatically.</p>
+    ${rows.length ? `<table style="width:100%;font-size:.9rem">
+      <tr><th style="text-align:left">Student</th><th>Status</th><th>Action</th></tr>
+      ${rows.map(r => `<tr>
+        <td><a href="/completion-cert.html?student=${r.id}" target="_blank">${esc(r.display_name)}</a></td>
+        <td>${r.issued ? `✅ Issued (${new Date(r.issued_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not issued"}</td>
+        <td>${r.issued
+          ? `<button class="btn small ghost" data-revoke="${r.id}">Revoke</button>`
+          : `<button class="btn small" data-issue="${r.id}">Issue certificate</button>`}</td>
+      </tr>`).join("")}
+    </table>` : `<p class="muted">No boy is at 100% yet.</p>`}`;
+  p.querySelectorAll("[data-issue]").forEach(b => b.onclick = async () => {
+    if (!confirm("Issue the completion certificate for this boy?")) return;
+    const r = await api("POST", "/api/teacher/completion-cert/" + b.dataset.issue + "/issue");
+    if (r.error) return alert(r.error);
+    toast("Certificate issued ✔"); vCompletion(p);
+  });
+  p.querySelectorAll("[data-revoke]").forEach(b => b.onclick = async () => {
+    if (!confirm("Revoke this completion certificate?")) return;
+    await api("POST", "/api/teacher/completion-cert/" + b.dataset.revoke + "/revoke");
+    toast("Certificate revoked"); vCompletion(p);
+  });
 }
 
 async function vMarks(p) {
