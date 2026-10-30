@@ -16,7 +16,7 @@
 <div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
 </div>
 <script>
-const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["mysteries","🕵️ Mysteries"],
+const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"]];
@@ -39,7 +39,7 @@ let cur = "approvals";
 async function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, mysteries: vMysteries, challenges: vChallenges,
+  ({ approvals: vApprovals, tasks: vTasks, challenges: vChallenges,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks })[cur](p);
 }
 
@@ -135,31 +135,6 @@ async function vTasks(p) {
       d.attempts.map(a => `<tr><td>${esc(a.display_name)}</td><td>${a.score}/${a.total}</td><td>${a.points_awarded}</td>
         <td style="font-size:.8rem">${a.answers.map(x => `${x.correct ? "✅" : "❌"} ${esc(x.given || "—")}`).join("<br>")}</td></tr>`).join("")
       + `</tbody></table>` : `<p class="muted">No attempts yet.</p>`;
-  });
-}
-
-async function vMysteries(p) {
-  const d = await api("GET", "/api/mysteries");
-  p.innerHTML = `
-    <div class="card"><h2>➕ New mystery</h2>
-      <label>Title</label><input id="m_title">
-      <label>Description / riddle</label><textarea id="m_desc" style="min-height:100px"></textarea>
-      <label>Correct solution</label><input id="m_sol">
-      <label>Points</label><input id="m_pts" type="number" value="3" min="0">
-      <button class="btn" id="m_go">Add mystery 🕵️</button></div>
-    <h2>🕵️ Mysteries</h2>` + d.mysteries.map(m => `
-    <div class="card"><h3>${esc(m.title)}</h3><p class="muted" style="font-size:.85rem">Solution: ${esc(m.solution)} · +${m.points} pts</p>
-      <button class="btn small danger" data-md="${m.id}">Delete</button></div>`).join("");
-  document.getElementById("m_go").onclick = async () => {
-    try {
-      await api("POST", "/api/teacher/mystery", { title: document.getElementById("m_title").value,
-        description: document.getElementById("m_desc").value, solution: document.getElementById("m_sol").value,
-        points: document.getElementById("m_pts").value });
-      toast("Mystery added!"); render();
-    } catch (e) { toast(e.message, false); }
-  };
-  p.querySelectorAll("[data-md]").forEach(b => b.onclick = async () => {
-    if (confirm("Delete?")) { await api("POST", `/api/teacher/mystery/${b.dataset.md}/delete`); render(); }
   });
 }
 
@@ -644,7 +619,7 @@ async function vWow(p) {
 async function vSettings(p) {
   const d = await api("GET", "/api/teacher/point-settings");
   const labels = { per_star: "⭐ Per star", read: "👁️ Reading a story", like_received: "❤️ Receiving a like",
-    mystery: "🕵️ Solving a mystery", challenge: "🎯 Challenge", quiz_correct: "🧠 Quiz (per correct)", featured: "🌟 Featured bonus" };
+    challenge: "🎯 Challenge", quiz_correct: "🧠 Quiz (per correct)", featured: "🌟 Featured bonus" };
   p.innerHTML = `<div class="card"><h2>⚙️ Point values</h2>
     ${Object.keys(labels).map(k => `<label>${labels[k]}</label><input type="number" min="0" id="ps_${k}" value="${d.settings[k] ?? 0}">`).join("")}
     <button class="btn" id="ps_go">Save</button></div>`;
