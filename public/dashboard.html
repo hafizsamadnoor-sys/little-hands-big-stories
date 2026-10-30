@@ -14,6 +14,7 @@
 <div class="card"><h2>📊 My Total Progress</h2><div id="totalprog"><p class="muted">Loading…</p></div></div>
 <div id="taskcard"></div>
 <div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
+<div id="compcert"></div>
 <div class="card"><h2>📊 My Marks</h2><div id="mymarks"><p class="muted">Loading…</p></div></div>
 <div class="card">
   <h2>✍️ Start creating</h2>
@@ -126,6 +127,14 @@
       const f = document.getElementById("learnfill"); if (f) f.style.width = f.dataset.w + "%";
     }));
   } catch (e) { document.getElementById("learnprog").innerHTML = ""; }
+  // Completion certificate (own, if issued)
+  try {
+    const cc = await api("GET", "/api/my/completion-cert");
+    if (cc.issued) document.getElementById("compcert").innerHTML =
+      `<div class="card" style="border:2px solid #b45309"><h2>🎓 Certificate of Completion</h2>
+       <p>You completed 100% of the Learning Tasks! 🎉</p>
+       <a class="btn" href="/completion-cert.html">🎓 View / Download Certificate</a></div>`;
+  } catch (e) {}
   // My marks
   try {
     const md = await api("GET", "/api/my/marks");
