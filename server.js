@@ -238,7 +238,7 @@ CREATE TABLE IF NOT EXISTS books (
 // No fixed per-type points since 2026-10-30 (teacher enters points at approval).
 const DEFAULT_POINTS = {
     per_star: 1, read: 0, like_received: 0,
-  mystery: 3, challenge: 4, quiz_correct: 1, featured: 5,
+  challenge: 4, quiz_correct: 1, featured: 5,
 };
 const getSetting = async (k) => {
   const row = (await db.execute({ sql: "SELECT value FROM point_settings WHERE key=?", args: [k] })).rows[0];
@@ -306,10 +306,9 @@ async function totalPoints(student_id) {
 async function studentStats(student_id) {
   const approved = (await db.execute({ sql: "SELECT COUNT(*) c FROM works WHERE student_id=? AND status='approved'", args: [student_id] })).rows[0].c;
   const reads = (await db.execute({ sql: "SELECT COUNT(*) c FROM reads WHERE student_id=?", args: [student_id] })).rows[0].c;
-  const solves = (await db.execute({ sql: "SELECT COUNT(*) c FROM mystery_solves WHERE student_id=?", args: [student_id] })).rows[0].c;
   const chall = (await db.execute({ sql: "SELECT COUNT(*) c FROM challenge_entries WHERE student_id=? AND status='done'", args: [student_id] })).rows[0].c;
   const stars = (await db.execute({ sql: "SELECT COALESCE(SUM(stars),0) s FROM works WHERE student_id=? AND status='approved'", args: [student_id] })).rows[0].s;
-  return { approved, reads, solves, chall, stars, points: await totalPoints(student_id) };
+  return { approved, reads, chall, stars, points: await totalPoints(student_id) };
 }
 async function checkBadges(student_id) {
   // Auto-awarded badges only: Rising Author (50 points) and Story Champion (#1).
@@ -738,25 +737,7 @@ app.post("/api/quiz/:id/attempt", requireStudent, async (req, res) => {
 });
 
 // ── Mystery room ──────────────────────────────────────────────
-app.get("/api/mysteries", requireLogin, async (req, res) => {
-  const rows = (await db.execute({ sql: "SELECT id, title, description, points, created_at FROM mysteries ORDER BY created_at DESC", args: [] })).rows;
-  const solved = req.user.role === "student"
-    ? new Set((await db.execute({ sql: "SELECT mystery_id FROM mystery_solves WHERE student_id=?", args: [req.user.id] })).rows.map(r => r.mystery_id))
-    : new Set();
-  res.json({ mysteries: rows.map(m => ({ ...m, solved: solved.has(m.id) })) });
-});
-app.post("/api/mystery/:id/solve", requireStudent, async (req, res) => {
-  const m = (await db.execute({ sql: "SELECT * FROM mysteries WHERE id=?", args: [req.params.id] })).rows[0];
-  if (!m) return res.status(404).json({ error: "Not found." });
-  const dup = (await db.execute({ sql: "SELECT 1 FROM mystery_solves WHERE mystery_id=? AND student_id=?", args: [m.id, req.user.id] })).rows[0];
-  if (dup) return res.json({ ok: true, correct: true, already: true });
-  if (norm(req.body && req.body.answer) === norm(m.solution) && norm(m.solution) !== "") {
-    await db.execute({ sql: "INSERT INTO mystery_solves (mystery_id, student_id) VALUES (?,?)", args: [m.id, req.user.id] });
-    await awardPoints(req.user.id, m.points, `Solved mystery: ${m.title}`, "mystery", m.id);
-    return res.json({ ok: true, correct: true, points: m.points });
-  }
-  res.json({ ok: true, correct: false });
-});
+
 
 // ── Challenges ────────────────────────────────────────────────
 app.get("/api/challenges", requireLogin, async (req, res) => {
@@ -1087,6 +1068,16 @@ app.post("/api/teacher/purge-puzzle", requireTeacher, async (req, res) => {
   for (const s of students) await checkBadges(s.id);
   res.json({ ok: true, deleted_puzzle_entries: del.rowsAffected || 0 });
 });
+// Mysteries REMOVED 2026-10-30 per Samad — no mysteries on the site hereafter.
+// One-time teacher cleanup: delete every mystery point and re-check auto badges.
+app.post("/api/teacher/purge-mystery", requireTeacher, async (req, res) => {
+    const del = await db.execute("DELETE FROM points_log WHERE ref_type='mystery'");
+    await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion')");
+    const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
+    for (const st of students) await checkBadges(st.id);
+    res.json({ ok: true, deleted_mystery_entries: del.rowsAffected || 0 });
+});
+
 app.post("/api/teacher/adjust-points", requireTeacher, async (req, res) => {
   const { student_id, points, reason } = req.body || {};
   const s = (await db.execute({ sql: "SELECT id FROM users WHERE id=? AND role='student'", args: [student_id] })).rows[0];
@@ -1336,18 +1327,7 @@ app.get("/api/teacher/quiz/:id/attempts", requireTeacher, async (req, res) => {
 });
 
 // Mysteries
-app.post("/api/teacher/mystery", requireTeacher, async (req, res) => {
-  const { title, description, solution, points } = req.body || {};
-  if (!title || !title.trim() || !solution || !solution.trim())
-    return res.status(400).json({ error: "Title and solution are required." });
-  const r = await db.execute({ sql: "INSERT INTO mysteries (title, description, solution, points) VALUES (?,?,?,?)", args: [title.trim(), (description || "").trim(), solution.trim(), Math.max(0, parseInt(points) || await getSetting("mystery"))] });
-  res.json({ ok: true, id: Number(r.lastInsertRowid) });
-});
-app.post("/api/teacher/mystery/:id/delete", requireTeacher, async (req, res) => {
-  await db.execute({ sql: "DELETE FROM mystery_solves WHERE mystery_id=?", args: [req.params.id] });
-  await db.execute({ sql: "DELETE FROM mysteries WHERE id=?", args: [req.params.id] });
-  res.json({ ok: true });
-});
+
 
 // Challenges
 app.post("/api/teacher/challenge", requireTeacher, async (req, res) => {
