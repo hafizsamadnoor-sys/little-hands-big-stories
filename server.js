@@ -961,10 +961,14 @@ app.post("/api/teacher/profile", requireTeacher, async (req, res) => {
 // restore it via POST /api/teacher/restore).
 app.get("/api/teacher/backup", requireTeacher, async (req, res) => {
   const dump = {};
+  const noPdf = req.query.nopdf === "1"; // watchdog: skip heavy book PDFs, fetch them per-book
   for (const t of RESTORE_TABLES) {
     try { dump[t] = (await db.execute({ sql: `SELECT * FROM ${t}`, args: [] })).rows; }
     catch (e) { dump[t] = []; }
   }
+    if (noPdf && Array.isArray(dump.books)) {
+          dump.books = dump.books.map(b => ( ...b, pdf_bytes: (b.pdf_data || "").length, pdf_data: null }));
+}
   res.setHeader("Content-Disposition", 'attachment; filename="lhbs-backup.json"');
   res.json({ backup: dump, exported_at: new Date().toISOString() });
 });
