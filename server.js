@@ -112,6 +112,11 @@ CREATE TABLE IF NOT EXISTS learning_task_done (
   done_at TEXT DEFAULT (datetime('now')),
   UNIQUE(task_id, student_id)
 );`);
+await db.execute(`
+CREATE TABLE IF NOT EXISTS completion_certs (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  issued_at TEXT NOT NULL DEFAULT (datetime('now'))
+);`);
   await db.execute(`
 CREATE TABLE IF NOT EXISTS student_marks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,6 +166,11 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
   answers_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(task_id, student_id)
+);`);
+await db.execute(`
+CREATE TABLE IF NOT EXISTS completion_certs (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  issued_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
   await db.execute(`
 CREATE TABLE IF NOT EXISTS mysteries (
@@ -954,7 +964,7 @@ app.get("/api/teacher/backup", requireTeacher, async (req, res) => {
 // after the hosting wipes the disk). Replaces all content tables atomically.
 const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log","activity_log","student_badges",
   "weekly_tasks","quiz_questions","quiz_attempts","mysteries","mystery_solves",
-  "challenges","challenge_entries","writer_of_week","point_settings","books","student_marks"];
+  "challenges","challenge_entries","writer_of_week","point_settings","books","completion_certs","student_marks"];
 app.post("/api/teacher/restore", requireTeacher, async (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -1251,6 +1261,56 @@ app.get("/api/teacher/learning-summary", requireTeacherOrGuest, async (req, res)
 app.get("/api/teacher/learning-ticks/:id", requireTeacherOrGuest, async (req, res) => {
   const rows = (await db.execute({ sql: "SELECT task_id FROM learning_task_done WHERE student_id=?", args: [req.params.id] })).rows;
   res.json({ done: rows.map(r => r.task_id), progress: await learningProgress(req.params.id) });
+// ── Completion Certificates (100% of Learning Tasks) ──
+app.get("/api/teacher/completion-eligible", requireTeacher, async (req, res) => {
+  const students = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE role='student' ORDER BY display_name", args: [] })).rows;
+  const certs = (await db.execute({ sql: "SELECT student_id, issued_at FROM completion_certs", args: [] })).rows;
+  const issuedAt = Object.fromEntries(certs.map(r => [r.student_id, r.issued_at]));
+  const list = [];
+  for (const st of students) {
+    const pg = await learningProgress(st.id);
+    list.push({ ...st, ...pg, issued: !!issuedAt[st.id], issued_at: issuedAt[st.id] || null });
+  }
+  res.json({ students: list.filter(x => x.pct === 100) });
+});
+app.post("/api/teacher/completion-cert/:id/issue", requireTeacher, async (req, res) => {
+  const s2 = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [req.params.id] })).rows[0];
+  if (!s2) return res.status(404).json({ error: "Student not found." });
+  if ((await learningProgress(s2.id)).pct !== 100) return res.status(400).json({ error: "Not at 100% yet." });
+  await db.execute({ sql: "INSERT OR IGNORE INTO completion_certs (student_id) VALUES (?)", args: [s2.id] });
+  await logActivity(req.user.id, req.user.role, "completion_cert", `Issued completion certificate to ${s2.display_name}`, "completion_cert", s2.id);
+  res.json({ ok: true });
+});
+app.post("/api/teacher/completion-cert/:id/revoke", requireTeacher, async (req, res) => {
+  await db.execute({ sql: "DELETE FROM completion_certs WHERE student_id=?", args: [req.params.id] });
+  res.json({ ok: true });
+});
+app.get("/api/my/completion-cert", requireStudent, async (req, res) => {
+  const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [req.user.id] })).rows[0];
+  res.json(c ? { issued: true, issued_at: c.issued_at } : { issued: false });
+});
+app.get("/api/parent/completion-cert", requireParent, async (req, res) => {
+  const me = (await db.execute({ sql: "SELECT parent_of FROM users WHERE id=?", args: [req.user.id] })).rows[0];
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const st = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE id=? AND role='student'", args: [me.parent_of] })).rows[0];
+  if (!st) return res.status(404).json({ error: "Linked student not found." });
+  const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [st.id] })).rows[0];
+  res.json({ student: st, issued: !!c, issued_at: c ? c.issued_at : null });
+});
+// Top 10 boys by Learning Tasks completion % (all logged-in users — a public ranking like the points board).
+app.get("/api/learning-top10", requireLogin, async (req, res) => {
+  const students = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE role='student'", args: [] })).rows;
+  const total = (await db.execute({ sql: "SELECT COUNT(*) c FROM learning_tasks", args: [] })).rows[0].c;
+  const doneRows = (await db.execute({ sql: "SELECT student_id, task_id FROM learning_task_done", args: [] })).rows;
+  const doneMap = {};
+  doneRows.forEach(r => { (doneMap[r.student_id] = doneMap[r.student_id] || new Set()).add(r.task_id); });
+  const list = students.map(st => {
+    const done = doneMap[st.id] ? doneMap[st.id].size : 0;
+    return { id: st.id, display_name: st.display_name, ad_no: st.ad_no, photo: st.photo, done, total, pct: total ? Math.round(done / total * 100) : 0 };
+  });
+  list.sort((a, b) => b.pct - a.pct || b.done - a.done || a.display_name.localeCompare(b.display_name));
+  res.json({ top: list.slice(0, 10), total });
+});
 });
 // Student's own progress + checklist.
 app.get("/api/my/learning-progress", requireStudent, async (req, res) => {
