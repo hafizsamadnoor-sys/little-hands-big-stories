@@ -1,0 +1,207 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>100 Points Club · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#b45309">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<style>
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  #nav, .no-print, .footer { display: none !important; }
+  html, body { background: #fff; margin: 0; padding: 0; }
+  .wrap { max-width: 100%; padding: 0; margin: 0; }
+  .club-poster {
+    box-shadow: none; margin: 0; width: 210mm; height: 297mm;
+    max-height: none; page-break-inside: avoid; break-inside: avoid;
+    border-radius: 0;
+  }
+}
+.club-poster {
+  background: linear-gradient(170deg, #fffdf5 0%, #fff 55%, #fdf6e3 100%);
+  border: 5px double #b45309;
+  border-radius: 4px;
+  width: min(94vw, 780px);
+  aspect-ratio: 210 / 297;
+  margin: 20px auto;
+  padding: 2.6em 2.3em;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(180,83,9,.15);
+  position: relative;
+  box-sizing: border-box;
+  display: flex; flex-direction: column;
+  font-size: 16px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.club-poster::before {
+  content: ""; position: absolute; inset: .6em;
+  border: 2px solid #1e3a8a; border-radius: 2px;
+  pointer-events: none;
+}
+.club-poster .inst {
+  font-size: .8em; font-weight: 700; letter-spacing: .16em;
+  color: #1e3a8a; text-transform: uppercase;
+}
+.club-poster .bigtrophy { font-size: 3.6em; margin: .15em 0 0; line-height: 1.1; }
+.club-poster h1 {
+  font-family: Georgia, serif; color: #b45309;
+  font-size: 2.3em; margin: .1em 0; border: none; padding: 0; font-weight: 800;
+}
+.club-poster .subtitle { color: #64748b; font-size: .95em; margin-bottom: 1em; line-height: 1.6; }
+.club-poster .subtitle b { color: #1e3a8a; }
+#rows { display: flex; flex-direction: column; gap: .6em; flex: 1; justify-content: center; }
+.club-row {
+  display: flex; align-items: center; gap: .8em;
+  padding: .85em 1em;
+  border: 2px solid #f59e0b; border-radius: 10px;
+  background: linear-gradient(135deg, #fffbeb, #fef3c7); text-align: left;
+}
+.club-row .cstar { font-size: 2em; min-width: 1.6em; text-align: center; }
+.club-row .cphoto { width: 3em; height: 3em; border-radius: 50%; overflow: hidden; background: #fff; color: #b45309; font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 1.1em; flex: none; border: 2px solid #f59e0b; }
+.club-row .cphoto img { width: 100%; height: 100%; object-fit: cover; }
+.club-row .cname { flex: 1; font-weight: 800; font-size: 1.15em; color: #1f2937; }
+.club-row .cworks { font-size: .78em; color: #92400e; font-weight: 400; }
+.club-row .cpts {
+  font-weight: 800; font-size: 1.1em; color: #fff;
+  background: linear-gradient(135deg, #b45309, #f59e0b); padding: .4em .9em; border-radius: 999px; white-space: nowrap;
+}
+.club-empty { color: #64748b; font-size: 1.05em; line-height: 1.8; padding: 2em 1em; }
+.club-footer {
+  margin-top: 1.1em; padding-top: .9em;
+  border-top: 2px solid #b45309;
+  font-size: .8em; color: #64748b; line-height: 1.7;
+}
+.club-footer .finst { font-weight: 700; color: #1e3a8a; letter-spacing: 1px; }
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div class="no-print" style="margin:16px 0;">
+  <h1>⭐ 100 Points Club</h1>
+  <p class="muted">A special A4 poster for the writers who crossed 100 points. Print it or download it below.</p>
+  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+    <button class="btn" id="printbtn">🖨️ Print Poster</button>
+    <button class="btn ghost" id="dlbtn">⬇️ Download PDF</button>
+    <button class="btn ghost" id="imgbtn">🖼️ Download Image</button>
+    <a class="btn ghost" href="/board.html">← Back to Points Board</a>
+  </div>
+</div>
+<div class="club-poster" id="poster">
+  <div class="inst">Noorul Huda Centre for Excellence</div>
+  <div class="bigtrophy">🌟</div>
+  <h1>100 Points Club</h1>
+  <div class="subtitle"><b>Little Hands, Big Stories</b> · S1 — 12th Batch<br>Our star writers who crossed 100 points<br><span id="pdate"></span></div>
+  <div id="rows"><p class="muted">Loading…</p></div>
+  <div class="club-footer">
+    <div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>
+    Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch
+  </div>
+</div>
+<div class="footer no-print"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
+</div>
+<script>
+(async () => {
+  const user = await guard(); if (!user) return;
+  document.getElementById("nav").innerHTML = user.role === "teacher" ? teacherNav("board.html") : studentNav("board.html");
+  document.getElementById("pdate").textContent = "As of " + new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  const d = await api("GET", "/api/points-board?period=all");
+  const club = d.board.filter(r => r.points >= 100);
+  const rows = document.getElementById("rows");
+  if (!club.length) {
+    rows.innerHTML = `<div class="club-empty">No one has crossed 100 points yet.<br>Keep writing — the next star could be you! ✍️</div>`;
+  } else {
+    rows.innerHTML = club.map(r => `
+      <div class="club-row">
+        <div class="cstar">🌟</div>
+        <div class="cphoto">${avatar(r.display_name, r.photo)}</div>
+        <div class="cname">${esc(r.display_name)}<div class="cworks">${r.works} works · ${r.stars} stars</div></div>
+        <div class="cpts">${r.points} pts</div>
+      </div>`).join("");
+  }
+  fitPoster();
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  let libsPromise = null;
+  function loadPdfLibs() {
+    if (!libsPromise) {
+      libsPromise = (async () => {
+        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+      })();
+    }
+    return libsPromise;
+  }
+  function fitPoster() {
+    const c = document.getElementById("poster");
+    if (c && c.clientWidth) c.style.fontSize = Math.max(7, c.clientWidth / 48.75) + "px";
+  }
+  window.addEventListener("resize", fitPoster);
+  function showSaveOverlay(dataUrl) {
+    let ov = document.getElementById("saveOverlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "saveOverlay";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(2,20,26,.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;gap:12px";
+      ov.innerHTML = `<div style="color:#fff;font-weight:700;text-align:center">📥 Your image is ready!<br><span style="font-weight:400;font-size:.85rem">Press &amp; hold the image, then tap “Save to Photos”</span></div><img id="saveOverlayImg" style="max-width:94vw;max-height:74vh;border-radius:8px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.5)"><button class="btn" id="saveOverlayClose">✖ Close</button>`;
+      document.body.appendChild(ov);
+      ov.querySelector("#saveOverlayClose").onclick = () => { ov.style.display = "none"; };
+    }
+    ov.querySelector("#saveOverlayImg").src = dataUrl;
+    ov.style.display = "flex";
+  }
+  async function deliverFile(blob, filename) {
+    try {
+      const res = await fetch("/api/save-file", { method: "POST", headers: { "Content-Type": blob.type || "application/octet-stream", "X-Filename": filename }, body: blob });
+      const d = await res.json();
+      if (d && d.url) { location.href = d.url; return; }
+      throw new Error("no url");
+    } catch (e) {
+      const u = URL.createObjectURL(blob);
+      const isAppleTouch = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+      if (isAppleTouch) { showSaveOverlay(u); return; }
+      const a = document.createElement("a");
+      a.download = filename; a.href = u; a.click();
+      setTimeout(() => URL.revokeObjectURL(u), 30000);
+    }
+  }
+  async function capturePoster() {
+    await loadPdfLibs();
+    const el = document.getElementById("poster");
+    const sc = Math.min(4, Math.max(2, Math.ceil(2480 / el.offsetWidth)));
+    return html2canvas(el, { scale: sc, backgroundColor: "#ffffff", useCORS: true });
+  }
+  function posterFileBase() {
+    const dt = new Date().toISOString().slice(0, 10);
+    return "100-Points-Club-" + dt;
+  }
+  async function withBusy(btn, fn) {
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = "⏳ Preparing…";
+    try { await fn(); } catch (e) { window.print(); }
+    btn.disabled = false; btn.textContent = old;
+  }
+  document.getElementById("printbtn").onclick = () => window.print();
+  document.getElementById("dlbtn").onclick = (e) => withBusy(e.currentTarget, async () => {
+    const src = await capturePoster();
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    pdf.addImage(src.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, 210, 297);
+    await deliverFile(pdf.output("blob"), posterFileBase() + ".pdf");
+  });
+  document.getElementById("imgbtn").onclick = (e) => withBusy(e.currentTarget, async () => {
+    const src = await capturePoster();
+    const out = document.createElement("canvas");
+    out.width = 2480; out.height = 3508;
+    const ctx = out.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 2480, 3508);
+    ctx.drawImage(src, 0, 0, 2480, 3508);
+    const blob = await new Promise(r => out.toBlob(r, "image/png"));
+    await deliverFile(blob, posterFileBase() + ".png");
+  });
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
