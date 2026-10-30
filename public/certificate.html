@@ -101,9 +101,9 @@
 </head>
 <body><div id="nav"></div><div class="wrap">
 <div class="no-print" style="margin:16px 0;" id="controls">
-  <h1>🏅 100 Points Club Certificate</h1>
+  <h1>🏅 Winner Certificate</h1>
   <div id="teacherctl">
-    <p class="muted">Writers who crossed 100 points. Select one, then print the certificate.</p>
+    <p class="muted">Select a rank, then print the certificate.</p>
     <div class="rank-select" id="ranks"></div>
   </div>
   <div id="studentctl" style="display:none">
@@ -131,8 +131,10 @@
   const isTeacher = user.role === "teacher";
   const d = await api("GET", "/api/points-board?period=all");
   const board = d.board;
-  const club100 = board.filter(r => r.points >= 100);
-  if (!club100.length) { document.getElementById("cert").innerHTML = "<p class='muted'>No one has crossed 100 points yet. Keep writing! ✍️</p>"; document.getElementById("controls").querySelectorAll("button").forEach(b => b.style.display = "none"); return; }
+  const top10 = board.slice(0, 10);
+  if (!top10.length) { document.getElementById("cert").innerHTML = "<p class='muted'>No ranked writers yet.</p>"; return; }
+  const ordFull = n => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th";
+  const badgeCls = ["gold", "silver", "bronze"];
   const medals = ["🥇", "🥈", "🥉"];
   const labels = { story: "📖 Story", diary: "📔 Diary", letter: "✉️ Letter", poem: "🎭 Poem", manifesto: "📜 Manifesto", anything: "✨ Write Anything", review: "⭐ Book Review" };
   const rankBox = document.getElementById("ranks");
@@ -222,16 +224,16 @@
     await deliverFile(blob, certFileBase() + ".png");
   });
 
-  function showCert(r) {
+  function showCert(r, rankIdx) {
     certName = r.display_name;
     document.getElementById("cert").innerHTML = `
       <div class="inst">Noorul Huda Centre for Excellence</div>
-      <div class="trophy">🏅</div>
+      <div class="trophy">${medals[rankIdx] || "🏅"}</div>
       <div class="cphoto">${avatar(r.display_name, r.photo)}</div>
       <div class="congrats">Congratulations!</div>
       <div class="cname">${esc(r.display_name)}</div>
-      <div><span class="rank-badge">100 POINTS CLUB</span></div>
-      <div class="cmsg">For crossing <b>100 points</b> in <b>Little Hands, Big Stories</b> — the young writers' platform of Noorul Huda Centre for Excellence, S1 — 12th Batch. A true star writer!</div>
+      <div><span class="rank-badge ${badgeCls[rankIdx] || ""}">${ordFull(rankIdx + 1)} Position</span></div>
+      <div class="cmsg">For outstanding creativity and dedication in <b>Little Hands, Big Stories</b> — the young writers' platform of Noorul Huda Centre for Excellence, S1 — 12th Batch.</div>
       <div class="programs" id="cert_programs">Loading programs…</div>
       <div class="stats">
         <div class="stat"><b>${r.points}</b><span>Points</span></div>
@@ -255,11 +257,11 @@
   }
 
   if (isTeacher) {
-    rankBox.innerHTML = club100.map((r, i) =>
-      `<button data-i="${i}" class="${i === 0 ? "on" : ""}">${medals[i] || "⭐"} ${esc(r.display_name.split(" ")[0])} — ${r.points} pts</button>`).join("");
+    rankBox.innerHTML = top10.map((r, i) =>
+      `<button data-i="${i}" class="${i === 0 ? "on" : ""}">${medals[i] || ""} ${ordFull(i + 1)} — ${esc(r.display_name.split(" ")[0])}</button>`).join("");
     const show = i => {
       rankBox.querySelectorAll("button").forEach((b, j) => b.classList.toggle("on", j === i));
-      showCert(club100[i]);
+      showCert(top10[i], i);
     };
     rankBox.querySelectorAll("button").forEach(b => b.onclick = () => show(+b.dataset.i));
     show(0);
@@ -270,21 +272,21 @@
     document.getElementById("top10link").style.display = "none";
     document.getElementById("club100link").style.display = "none";
     const cd = await api("GET", "/api/parent/child");
-    const myIdx = club100.findIndex(r => r.id === cd.student.id);
+    const myIdx = board.findIndex(r => r.id === cd.student.id);
     if (myIdx < 0) {
-      document.getElementById("cert").innerHTML = "<p class='muted'>Your child hasn't crossed 100 points yet. The certificate will appear here once they do! ✍️</p>";
+      document.getElementById("cert").innerHTML = "<p class='muted'>Your child doesn't have any points yet. The certificate will appear here once they start earning points! ✍️</p>";
       document.getElementById("printbtn").style.display = "none";
       document.getElementById("dlbtn").style.display = "none";
       document.getElementById("imgbtn").style.display = "none";
       return;
     }
-    showCert(club100[myIdx]);
+    showCert(board[myIdx], myIdx);
   } else {
     document.getElementById("teacherctl").style.display = "none";
     document.getElementById("studentctl").style.display = "";
     document.getElementById("top10link").style.display = "none";
     document.getElementById("club100link").style.display = "none";
-    const myIdx = club100.findIndex(r => r.id === user.id);
+    const myIdx = board.findIndex(r => r.id === user.id);
     if (myIdx < 0) {
       document.getElementById("cert").innerHTML = "<p class='muted'>You haven't crossed 100 points yet. Keep writing to earn your certificate! ✍️</p>";
       document.getElementById("printbtn").style.display = "none";
@@ -292,7 +294,7 @@
       document.getElementById("imgbtn").style.display = "none";
       return;
     }
-    showCert(club100[myIdx]);
+    showCert(board[myIdx], myIdx);
   }
 })();
 </script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
