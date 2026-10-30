@@ -238,7 +238,7 @@ CREATE TABLE IF NOT EXISTS books (
 // ── Point settings defaults ───────────────────────────────────
 const DEFAULT_POINTS = {
   story: 5, diary: 2, letter: 3, poem: 3, manifesto: 4, review: 4, anything: 2,
-  per_star: 1, read: 1, like_received: 1,
+    per_star: 1, read: 0, like_received: 0,
   mystery: 3, challenge: 4, quiz_correct: 1, featured: 5,
 };
 const getSetting = async (k) => {
@@ -1068,7 +1068,16 @@ app.post("/api/teacher/student/:id", requireTeacher, async (req, res) => {
   await db.execute({ sql: "UPDATE users SET display_name=COALESCE(?,display_name), bio=?, photo=? WHERE id=?", args: [display_name && display_name.trim() ? display_name.trim() : null, bio || null, photo || null, s.id] });
   res.json({ ok: true });
 });
-// Puzzle game REMOVED 2026-10-29 per Samad — no puzzles on the site hereafter.
+// Likes/reads points REMOVED 2026-10-30 per Samad — only works earn points hereafter.
+// One-time teacher cleanup: delete every like/read point and re-check auto badges.
+app.post("/api/teacher/purge-like-read", requireTeacher, async (req, res) => {
+    const del = await db.execute("DELETE FROM points_log WHERE ref_type IN ('like','read')");
+    await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion')");
+    const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
+    for (const s of students) await checkBadges(s.id);
+    res.json({ ok: true, deleted_entries: del.rowsAffected || 0 });
+});
+  // Puzzle game REMOVED 2026-10-29 per Samad — no puzzles on the site hereafter.
 // One-time teacher cleanup: delete every puzzle point and re-check auto badges.
 app.post("/api/teacher/purge-puzzle", requireTeacher, async (req, res) => {
   const del = await db.execute("DELETE FROM points_log WHERE ref_type='puzzle'");
