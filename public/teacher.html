@@ -51,13 +51,24 @@ async function vApprovals(p) {
       <span class="muted" style="font-size:.85rem">by ${esc(w.author)} · ${fmtDate(w.created_at)}</span></p>
       <div class="card" style="white-space:pre-wrap;box-shadow:none">${esc(w.content)}</div>
       <label>Stars (0–5)</label>
-      <select id="st${w.id}" onchange="document.getElementById('pt${w.id}').value = (parseInt(document.getElementById('pt${w.id}').dataset.base)||0) + parseInt(this.value)"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
-      <label>Points (marks)</label>
-      <input id="pt${w.id}" type="number" min="0" style="width:90px" data-base="${w.base_points || 0}" value="${(w.base_points || 0) + 5}">
+      <select id="st${w.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
+      <label>Points (your choice)</label>
+      <input id="pt${w.id}" type="number" min="0" style="width:90px" placeholder="0">
+      <div class="muted" id="tot${w.id}" style="font-size:.85rem;margin:4px 0"></div>
       <button class="btn small" data-a="${w.id}">✅ Approve</button>
       <button class="btn small ghost" data-r="${w.id}">❌ Reject</button>
       <button class="btn small danger" data-d="${w.id}">🗑 Delete</button></div>`).join("")
     : `<div class="card"><p class="muted">Nothing waiting. 🎉</p></div>`);
+  d.works.forEach(w => {
+    const upd = () => {
+      const s = parseInt(document.getElementById("st" + w.id).value || 0);
+      const q = parseInt(document.getElementById("pt" + w.id).value || 0);
+      document.getElementById("tot" + w.id).textContent = `Total on approval: ${q} + ${s}★ = ${q + s} points`;
+    };
+    document.getElementById("st" + w.id).onchange = upd;
+    document.getElementById("pt" + w.id).oninput = upd;
+    upd();
+  });
   p.querySelectorAll("[data-a]").forEach(b => b.onclick = () => review(b.dataset.a, "approve"));
   p.querySelectorAll("[data-r]").forEach(b => b.onclick = () => review(b.dataset.r, "reject"));
   p.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
@@ -66,7 +77,7 @@ async function vApprovals(p) {
   async function review(id, decision) {
     try {
       const body = { decision, stars: document.getElementById("st" + id).value };
-      if (decision === "approve") body.points = document.getElementById("pt" + id).value;
+      if (decision === "approve") body.points = document.getElementById("pt" + id).value || 0;
       await api("POST", `/api/teacher/work/${id}/review`, body);
       toast(decision === "approve" ? "Published! ⭐" : "Rejected."); render();
     } catch (e) { toast(e.message, false); }
@@ -632,8 +643,7 @@ async function vWow(p) {
 
 async function vSettings(p) {
   const d = await api("GET", "/api/teacher/point-settings");
-  const labels = { story: "📖 Story", diary: "📔 Diary", letter: "💌 Letter", poem: "🎵 Poem", manifesto: "📜 Manifesto", review: "⭐ Book Review", anything: "✨ Write Anything",
-    per_star: "⭐ Per star", read: "👁️ Reading a story", like_received: "❤️ Receiving a like",
+  const labels = { per_star: "⭐ Per star", read: "👁️ Reading a story", like_received: "❤️ Receiving a like",
     mystery: "🕵️ Solving a mystery", challenge: "🎯 Challenge", quiz_correct: "🧠 Quiz (per correct)", featured: "🌟 Featured bonus" };
   p.innerHTML = `<div class="card"><h2>⚙️ Point values</h2>
     ${Object.keys(labels).map(k => `<label>${labels[k]}</label><input type="number" min="0" id="ps_${k}" value="${d.settings[k] ?? 0}">`).join("")}
