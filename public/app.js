@@ -39,7 +39,7 @@ async function guard(role) {
 function studentNav(active) {
   const links = [
     ["dashboard.html", "🏠 Home"], ["write.html", "✍️ Write"], ["works.html", "📖 Stories"],
-    ["tasks.html", "📅 Tasks"], ["mystery.html", "🕵️ Mystery"], ["challenges.html", "🎯 Challenges"],
+    ["tasks.html", "📅 Tasks"], ["challenges.html", "🎯 Challenges"],
     ["board.html", "🏆 Board"], ["certificate.html", "🏅 Certificate"], ["books.html", "📚 Books"], ["authors.html", "👥 Authors"], ["about.html", "ℹ️ About"],
   ];
   return navHtml(links, active);
@@ -50,7 +50,7 @@ function teacherNav(active) {
     ["board.html", "🏆 Board"], ["certificate.html", "🏅 Certificate"], ["books.html", "📚 Books"], ["authors.html", "👥 Authors"], ["about.html", "ℹ️ About"],
   ];
   return `<header class="top"><div class="top-in">
-    <div class="brand-logo">🎓</div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
+    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:12px;object-fit:cover;display:block"></div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
     <div style="flex:1"></div>
     <button class="btn small ghost" id="stulogin" style="margin:0 6px 0 0">🧑‍🎓 Student Login</button>
     <a href="/api/logout" class="btn small ghost" style="margin:0">Logout</a>
@@ -69,7 +69,7 @@ function teacherNav(active) {
 }
 function navHtml(links, active) {
   return `<header class="top"><div class="top-in">
-    <div class="brand-logo">🎓</div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
+    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:12px;object-fit:cover;display:block"></div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
     <div style="flex:1"></div>
     <a href="/api/logout" class="btn small ghost" style="margin:0">Logout</a>
   </div><nav class="main">${links.map(([h, t]) =>
