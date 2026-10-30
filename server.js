@@ -839,7 +839,6 @@ app.get("/api/teacher/overview", requireTeacher, async (req, res) => {
 app.get("/api/teacher/pending", requireTeacher, async (req, res) => {
   const rows = (await db.execute({ sql: `SELECT w.*, u.display_name AS author FROM works w
     JOIN users u ON u.id=w.student_id WHERE w.status='pending' ORDER BY w.created_at`, args: [] })).rows;
-
   res.json({ works: rows });
 });
 
