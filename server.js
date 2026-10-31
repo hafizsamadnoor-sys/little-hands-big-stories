@@ -66,6 +66,20 @@ CREATE TABLE IF NOT EXISTS works (
   try { await db.execute("ALTER TABLE works ADD COLUMN edited_by_class TEXT DEFAULT ''"); } catch (e) { /* already there */ }
   try { await db.execute("ALTER TABLE works ADD COLUMN content_original TEXT"); } catch (e) { /* already there */ }
   try { await db.execute("ALTER TABLE works ADD COLUMN proofread_at TEXT"); } catch (e) { /* already there */ }
+  try { await db.execute("ALTER TABLE works ADD COLUMN reject_reason TEXT"); } catch (e) { /* already there */ }
+  await db.execute(`CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    read_at TEXT
+  )`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS notices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL DEFAULT '',
+    text TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
   await db.execute(`
 CREATE TABLE IF NOT EXISTS reads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
