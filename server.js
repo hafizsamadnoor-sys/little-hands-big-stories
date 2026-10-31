@@ -56,8 +56,12 @@ CREATE TABLE IF NOT EXISTS works (
   featured INTEGER NOT NULL DEFAULT 0,
   weekly_task_id INTEGER,
   created_at TEXT DEFAULT (datetime('now')),
-  reviewed_at TEXT
+  reviewed_at TEXT,
+  edited_by TEXT DEFAULT '',
+  edited_by_class TEXT DEFAULT ''
 );`);
+  try { await db.execute("ALTER TABLE works ADD COLUMN edited_by TEXT DEFAULT ''"); } catch (e) { /* already there */ }
+  try { await db.execute("ALTER TABLE works ADD COLUMN edited_by_class TEXT DEFAULT ''"); } catch (e) { /* already there */ }
   await db.execute(`
 CREATE TABLE IF NOT EXISTS reads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,17 +116,16 @@ CREATE TABLE IF NOT EXISTS learning_task_done (
   done_at TEXT DEFAULT (datetime('now')),
   UNIQUE(task_id, student_id)
 );`);
-await db.execute(`
+  await db.execute(`
 CREATE TABLE IF NOT EXISTS completion_certs (
   student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   issued_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
   await db.execute(`
-  CREATE TABLE IF NOT EXISTS completion_exams (
-    student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      passed_at TEXT NOT NULL DEFAULT (datetime('now'))
-      );
-      `);
+CREATE TABLE IF NOT EXISTS completion_exams (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  passed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);`);
   await db.execute(`
 CREATE TABLE IF NOT EXISTS student_marks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,11 +175,6 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
   answers_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(task_id, student_id)
-);`);
-await db.execute(`
-CREATE TABLE IF NOT EXISTS completion_certs (
-  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  issued_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
   await db.execute(`
 CREATE TABLE IF NOT EXISTS mysteries (
@@ -251,9 +249,10 @@ CREATE TABLE IF NOT EXISTS books (
   await seedParentUsers();
 }
 
+// ── Point settings defaults ───────────────────────────────────
 // No fixed per-type points since 2026-10-30 (teacher enters points at approval).
 const DEFAULT_POINTS = {
-    per_star: 1, read: 0, like_received: 0,
+  per_star: 1, read: 0, like_received: 0,
   challenge: 4, quiz_correct: 1, featured: 5,
 };
 const getSetting = async (k) => {
@@ -313,7 +312,18 @@ async function seedParentUsers() {
 const BADGES = [
   { key: "best_story", name: "Best Story", icon: "🏆", desc: "Awarded by the teacher for the best story." },
   { key: "rising_author", name: "Rising Author", icon: "🌟", desc: "Reached 50 points." },
+  { key: "club_100", name: "100 Points Club", icon: "⭐", desc: "Reached 100 points — Rising Star." },
+  { key: "club_200", name: "200 Points Club", icon: "🌟", desc: "Reached 200 points — Super Star." },
+  { key: "club_500", name: "500 Points Club", icon: "💎", desc: "Reached 500 points — Diamond Star." },
+  { key: "club_1000", name: "1000 Points Club", icon: "👑", desc: "Reached 1000 points — Legend." },
   { key: "story_champion", name: "Story Champion", icon: "👑", desc: "Reached #1 on the points board." },
+];
+// Points Clubs — auto-awarded tiers (highest first).
+const CLUBS = [
+  { key: "club_1000", points: 1000, icon: "👑", name: "1000 Points Club", title: "Legend" },
+  { key: "club_500", points: 500, icon: "💎", name: "500 Points Club", title: "Diamond Star" },
+  { key: "club_200", points: 200, icon: "🌟", name: "200 Points Club", title: "Super Star" },
+  { key: "club_100", points: 100, icon: "⭐", name: "100 Points Club", title: "Rising Star" },
 ];
 async function totalPoints(student_id) {
   const r = (await db.execute({ sql: "SELECT COALESCE(SUM(points),0) AS t FROM points_log WHERE student_id=?", args: [student_id] })).rows[0];
@@ -333,6 +343,7 @@ async function checkBadges(student_id) {
   const have = new Set((await db.execute({ sql: "SELECT badge_key FROM student_badges WHERE student_id=?", args: [student_id] })).rows.map(r => r.badge_key));
   const earn = [];
   if (st.points >= 50) earn.push("rising_author");
+  for (const c of CLUBS) if (st.points >= c.points) earn.push(c.key);
   const top = (await db.execute({ sql: `
     SELECT u.id FROM users u
     LEFT JOIN points_log p ON p.student_id = u.id
@@ -571,7 +582,7 @@ const WORK_TYPES = ["story", "diary", "letter", "poem", "manifesto", "review", "
 const LANGUAGES = ["English", "Malayalam", "Manglish", "Arabic", "Urdu", "Kannada"];
 
 app.post("/api/works", requireStudent, async (req, res) => {
-  const { type, language, title, content, weekly_task_id } = req.body || {};
+  const { type, language, title, content, weekly_task_id, edited_by, edited_by_class } = req.body || {};
   if (!WORK_TYPES.includes(type)) return res.status(400).json({ error: "Invalid writing type." });
   if (!LANGUAGES.includes(language)) return res.status(400).json({ error: "Invalid language." });
   if (!title || !title.trim() || !content || !content.trim())
@@ -581,22 +592,26 @@ app.post("/api/works", requireStudent, async (req, res) => {
     const t = (await db.execute({ sql: "SELECT id, kind FROM weekly_tasks WHERE id=?", args: [weekly_task_id] })).rows[0];
     if (t && t.kind !== "quiz") taskId = t.id;
   }
-  const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id)
-    VALUES (?,?,?,?,?,?)`, args: [req.user.id, type, language, title.trim(), content.trim(), taskId] });
+  const eb = (edited_by || "").toString().trim().slice(0, 120);
+  const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
+  const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
+    VALUES (?,?,?,?,?,?,?,?)`, args: [req.user.id, type, language, title.trim(), content.trim(), taskId, eb, ebc] });
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
 });
 
 // Mentor (guest) writes a work in a student's name → goes to the teacher's approval queue as that student's work
 app.post("/api/guest/works", requireGuest, async (req, res) => {
-  const { student_id, type, language, title, content } = req.body || {};
+  const { student_id, type, language, title, content, edited_by, edited_by_class } = req.body || {};
   if (!WORK_TYPES.includes(type)) return res.status(400).json({ error: "Invalid writing type." });
   if (!LANGUAGES.includes(language)) return res.status(400).json({ error: "Invalid language." });
   if (!title || !title.trim() || !content || !content.trim())
     return res.status(400).json({ error: "Title and content are required." });
   const stu = (await db.execute({ sql: "SELECT id FROM users WHERE id=? AND role='student'", args: [student_id] })).rows[0];
   if (!stu) return res.status(400).json({ error: "Please choose a student." });
-  const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id)
-    VALUES (?,?,?,?,?,NULL)`, args: [stu.id, type, language, title.trim(), content.trim()] });
+  const eb = (edited_by || "").toString().trim().slice(0, 120);
+  const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
+  const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
+    VALUES (?,?,?,?,?,NULL,?,?)`, args: [stu.id, type, language, title.trim(), content.trim(), eb, ebc] });
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
 });
 
@@ -754,7 +769,6 @@ app.post("/api/quiz/:id/attempt", requireStudent, async (req, res) => {
 
 // ── Mystery room ──────────────────────────────────────────────
 
-
 // ── Challenges ────────────────────────────────────────────────
 app.get("/api/challenges", requireLogin, async (req, res) => {
   const rows = (await db.execute({ sql: "SELECT * FROM challenges ORDER BY created_at DESC", args: [] })).rows;
@@ -785,6 +799,18 @@ app.get("/api/points-board", requireLogin, async (req, res) => {
     WHERE u.role='student'
     GROUP BY u.id ORDER BY points DESC, u.display_name`, args: [] })).rows;
   res.json({ period, board: rows });
+});
+// Points Clubs — members per tier (all logged-in users).
+app.get("/api/clubs", requireLogin, async (req, res) => {
+  const rows = (await db.execute({ sql: `
+    SELECT u.id, u.display_name, u.photo, COALESCE(SUM(p.points),0) AS points
+    FROM users u LEFT JOIN points_log p ON p.student_id=u.id
+    WHERE u.role='student' GROUP BY u.id`, args: [] })).rows;
+  const tiers = CLUBS.map(c => ({
+    ...c,
+    members: rows.filter(r => r.points >= c.points).sort((a, b) => b.points - a.points || a.display_name.localeCompare(b.display_name)),
+  }));
+  res.json({ tiers });
 });
 app.get("/api/authors", requireLogin, async (req, res) => {
   const rows = (await db.execute({ sql: `
@@ -839,6 +865,7 @@ app.get("/api/teacher/pending", requireTeacher, async (req, res) => {
   res.json({ works: rows });
 });
 
+app.post("/api/teacher/work/:id/review", requireTeacher, async (req, res) => {
   const w = (await db.execute({ sql: "SELECT * FROM works WHERE id=?", args: [req.params.id] })).rows[0];
   if (!w) return res.status(404).json({ error: "Not found." });
   const { decision, stars, points } = req.body || {};
@@ -960,9 +987,9 @@ app.get("/api/teacher/backup", requireTeacher, async (req, res) => {
     try { dump[t] = (await db.execute({ sql: `SELECT * FROM ${t}`, args: [] })).rows; }
     catch (e) { dump[t] = []; }
   }
-    if (noPdf && Array.isArray(dump.books)) {
-          dump.books = dump.books.map(b => ( ...b, pdf_bytes: (b.pdf_data || "").length, pdf_data: null }));
-}
+  if (noPdf && Array.isArray(dump.books)) {
+    dump.books = dump.books.map(b => ({ ...b, pdf_bytes: (b.pdf_data || "").length, pdf_data: null }));
+  }
   res.setHeader("Content-Disposition", 'attachment; filename="lhbs-backup.json"');
   res.json({ backup: dump, exported_at: new Date().toISOString() });
 });
@@ -1069,17 +1096,17 @@ app.post("/api/teacher/student/:id", requireTeacher, async (req, res) => {
 // Likes/reads points REMOVED 2026-10-30 per Samad — only works earn points hereafter.
 // One-time teacher cleanup: delete every like/read point and re-check auto badges.
 app.post("/api/teacher/purge-like-read", requireTeacher, async (req, res) => {
-    const del = await db.execute("DELETE FROM points_log WHERE ref_type IN ('like','read')");
-    await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion')");
-    const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
-    for (const s of students) await checkBadges(s.id);
-    res.json({ ok: true, deleted_entries: del.rowsAffected || 0 });
+  const del = await db.execute("DELETE FROM points_log WHERE ref_type IN ('like','read')");
+  await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion','club_100','club_200','club_500','club_1000')");
+  const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
+  for (const s of students) await checkBadges(s.id);
+  res.json({ ok: true, deleted_entries: del.rowsAffected || 0 });
 });
-  // Puzzle game REMOVED 2026-10-29 per Samad — no puzzles on the site hereafter.
+// Puzzle game REMOVED 2026-10-29 per Samad — no puzzles on the site hereafter.
 // One-time teacher cleanup: delete every puzzle point and re-check auto badges.
 app.post("/api/teacher/purge-puzzle", requireTeacher, async (req, res) => {
   const del = await db.execute("DELETE FROM points_log WHERE ref_type='puzzle'");
-  await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion')");
+  await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion','club_100','club_200','club_500','club_1000')");
   const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
   for (const s of students) await checkBadges(s.id);
   res.json({ ok: true, deleted_puzzle_entries: del.rowsAffected || 0 });
@@ -1087,13 +1114,12 @@ app.post("/api/teacher/purge-puzzle", requireTeacher, async (req, res) => {
 // Mysteries REMOVED 2026-10-30 per Samad — no mysteries on the site hereafter.
 // One-time teacher cleanup: delete every mystery point and re-check auto badges.
 app.post("/api/teacher/purge-mystery", requireTeacher, async (req, res) => {
-    const del = await db.execute("DELETE FROM points_log WHERE ref_type='mystery'");
-    await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion')");
-    const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
-    for (const st of students) await checkBadges(st.id);
-    res.json({ ok: true, deleted_mystery_entries: del.rowsAffected || 0 });
+  const del = await db.execute("DELETE FROM points_log WHERE ref_type='mystery'");
+  await db.execute("DELETE FROM student_badges WHERE badge_key IN ('rising_author','story_champion','club_100','club_200','club_500','club_1000')");
+  const students = (await db.execute("SELECT id FROM users WHERE role='student'")).rows;
+  for (const st of students) await checkBadges(st.id);
+  res.json({ ok: true, deleted_mystery_entries: del.rowsAffected || 0 });
 });
-
 app.post("/api/teacher/adjust-points", requireTeacher, async (req, res) => {
   const { student_id, points, reason } = req.body || {};
   const s = (await db.execute({ sql: "SELECT id FROM users WHERE id=? AND role='student'", args: [student_id] })).rows[0];
@@ -1263,72 +1289,6 @@ app.get("/api/teacher/learning-summary", requireTeacherOrGuest, async (req, res)
   summary.sort((a, b) => b.pct - a.pct || b.totalDone - a.totalDone);
   res.json({ summary, catTotals, categories: LEARN_CATS, total: tasks.length });
 });
-// One student's ticked tasks (teacher or guest view for the grid).
-app.get("/api/teacher/learning-ticks/:id", requireTeacherOrGuest, async (req, res) => {
-  const rows = (await db.execute({ sql: "SELECT task_id FROM learning_task_done WHERE student_id=?", args: [req.params.id] })).rows;
-  res.json({ done: rows.map(r => r.task_id), progress: await learningProgress(req.params.id) });
-// ── Completion Certificates (100% of Learning Tasks) ──
-app.get("/api/teacher/completion-eligible", requireTeacher, async (req, res) => {
-  const students = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE role='student' ORDER BY display_name", args: [] })).rows;
-  const certs = (await db.execute({ sql: "SELECT student_id, issued_at FROM completion_certs", args: [] })).rows;
-  const issuedAt = Object.fromEntries(certs.map(r => [r.student_id, r.issued_at]));
-    const examRows = (await db.execute({ sql: "SELECT student_id, passed_at FROM completion_exams", args: [] })).rows;
-    const examAt = Object.fromEntries(examRows.map(r => [r.student_id, r.passed_at]));
-  const list = [];
-  for (const st of students) {
-    const pg = await learningProgress(st.id);
-    list.push({ ...st, ...pg, issued: !!issuedAt[st.id], issued_at: issuedAt[st.id] || null, exam_passed: !!examAt[st.id], exam_at: examAt[st.id] || null });
-  }
-  res.json({ students: list.filter(x => x.pct === 100) });
-});
-
-  // Mark the completion exam as passed (teacher only; only at 100%). The exam itself is conducted in class.
-  app.post("/api/teacher/completion-exam/:id/pass", requireTeacher, async (req, res) => {
-      const s2 = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [req.params.id] })).rows[0];
-      if (!s2) return res.status(404).json({ error: "Student not found." });
-      if ((await learningProgress(s2.id)).pct !== 100) return res.status(400).json({ error: "Not at 100% yet." });
-      await db.execute({ sql: "INSERT OR IGNORE INTO completion_exams (student_id) VALUES (?)", args: [s2.id] });
-      await logActivity(req.user.id, req.user.role, "completion_exam", `Marked completion exam passed for ${s2.display_name}`, "completion_exam", s2.id);
-      res.json({ ok: true });
-  });
-  // Unmark the completion exam (teacher only; not allowed once the certificate is issued).
-  app.post("/api/teacher/completion-exam/:id/unpass", requireTeacher, async (req, res) => {
-      const c = (await db.execute({ sql: "SELECT student_id FROM completion_certs WHERE student_id=?", args: [req.params.id] })).rows[0];
-      if (c) return res.status(400).json({ error: "Certificate already issued — revoke it first." });
-      await db.execute({ sql: "DELETE FROM completion_exams WHERE student_id=?", args: [req.params.id] });
-      res.json({ ok: true });
-  });
-  
-    app.post("/api/teacher/completion-cert/:id/issue", requireTeacher, async (req, res) => {
-  const s2 = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [req.params.id] })).rows[0];
-  if (!s2) return res.status(404).json({ error: "Student not found." });
-  if ((await learningProgress(s2.id)).pct !== 100) return res.status(400).json({ error: "Not at 100% yet." });
-        const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [s2.id] })).rows[0];
-        if (!ex) return res.status(400).json({ error: "Exam not passed yet." });
-  await db.execute({ sql: "INSERT OR IGNORE INTO completion_certs (student_id) VALUES (?)", args: [s2.id] });
-  await logActivity(req.user.id, req.user.role, "completion_cert", `Issued completion certificate to ${s2.display_name}`, "completion_cert", s2.id);
-  res.json({ ok: true });
-});
-app.post("/api/teacher/completion-cert/:id/revoke", requireTeacher, async (req, res) => {
-  await db.execute({ sql: "DELETE FROM completion_certs WHERE student_id=?", args: [req.params.id] });
-  res.json({ ok: true });
-});
-app.get("/api/my/completion-cert", requireStudent, async (req, res) => {
-  const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [req.user.id] })).rows[0];
-    const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [req.user.id] })).rows[0];
-    const out = { issued: !!c, issued_at: c ? c.issued_at : null, exam_passed: !!ex, exam_at: ex ? ex.passed_at : null };
-    if (!c) out.progress = await learningProgress(req.user.id);
-  res.json(out);
-});
-app.get("/api/parent/completion-cert", requireParent, async (req, res) => {
-  const me = (await db.execute({ sql: "SELECT parent_of FROM users WHERE id=?", args: [req.user.id] })).rows[0];
-  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
-  const st = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE id=? AND role='student'", args: [me.parent_of] })).rows[0];
-  if (!st) return res.status(404).json({ error: "Linked student not found." });
-  const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [st.id] })).rows[0];
-    const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [st.id] })).rows[0];
-  res.json({ student: st, issued: !!c, issued_at: c ? c.issued_at : null, exam_passed: !!ex, exam_at: ex ? ex.passed_at : null });
-});
 // Top 10 boys by Learning Tasks completion % (all logged-in users — a public ranking like the points board).
 app.get("/api/learning-top10", requireLogin, async (req, res) => {
   const students = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE role='student'", args: [] })).rows;
@@ -1338,11 +1298,79 @@ app.get("/api/learning-top10", requireLogin, async (req, res) => {
   doneRows.forEach(r => { (doneMap[r.student_id] = doneMap[r.student_id] || new Set()).add(r.task_id); });
   const list = students.map(st => {
     const done = doneMap[st.id] ? doneMap[st.id].size : 0;
-    return { id: st.id, display_name: st.display_name, ad_no: st.ad_no, photo: st.photo, done, total, pct: total ? Math.round(done / total * 100) : 0 };
+    return { id: st.id, display_name: st.display_name, ad_no: st.ad_no, photo: st.photo,
+      done, total, pct: total ? Math.round(done / total * 100) : 0 };
   });
   list.sort((a, b) => b.pct - a.pct || b.done - a.done || a.display_name.localeCompare(b.display_name));
   res.json({ top: list.slice(0, 10), total });
 });
+// One student's ticked tasks (teacher or guest view for the grid).
+app.get("/api/teacher/learning-ticks/:id", requireTeacherOrGuest, async (req, res) => {
+  const rows = (await db.execute({ sql: "SELECT task_id FROM learning_task_done WHERE student_id=?", args: [req.params.id] })).rows;
+  res.json({ done: rows.map(r => r.task_id), progress: await learningProgress(req.params.id) });
+});
+// ── Completion Certificates (100% of Learning Tasks) ──
+app.get("/api/teacher/completion-eligible", requireTeacher, async (req, res) => {
+  const students = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE role='student' ORDER BY display_name", args: [] })).rows;
+  const certs = (await db.execute({ sql: "SELECT student_id, issued_at FROM completion_certs", args: [] })).rows;
+  const issuedAt = Object.fromEntries(certs.map(r => [r.student_id, r.issued_at]));
+  const examRows = (await db.execute({ sql: "SELECT student_id, passed_at FROM completion_exams", args: [] })).rows;
+  const examAt = Object.fromEntries(examRows.map(r => [r.student_id, r.passed_at]));
+  const list = [];
+  for (const st of students) {
+    const pg = await learningProgress(st.id);
+    list.push({ ...st, ...pg, issued: !!issuedAt[st.id], issued_at: issuedAt[st.id] || null,
+      exam_passed: !!examAt[st.id], exam_at: examAt[st.id] || null });
+  }
+  res.json({ students: list.filter(x => x.pct === 100) });
+});
+app.post("/api/teacher/completion-exam/:id/pass", requireTeacher, async (req, res) => {
+  const s2 = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [req.params.id] })).rows[0];
+  if (!s2) return res.status(404).json({ error: "Student not found." });
+  if ((await learningProgress(s2.id)).pct !== 100) return res.status(400).json({ error: "Not at 100% yet." });
+  await db.execute({ sql: "INSERT OR IGNORE INTO completion_exams (student_id) VALUES (?)", args: [s2.id] });
+  await logActivity(req.user.id, req.user.role, "completion_exam",
+    `Marked completion exam passed for ${s2.display_name}`, "completion_exam", s2.id);
+  res.json({ ok: true });
+});
+app.post("/api/teacher/completion-exam/:id/unpass", requireTeacher, async (req, res) => {
+  const c = (await db.execute({ sql: "SELECT student_id FROM completion_certs WHERE student_id=?", args: [req.params.id] })).rows[0];
+  if (c) return res.status(400).json({ error: "Certificate already issued — revoke it first." });
+  await db.execute({ sql: "DELETE FROM completion_exams WHERE student_id=?", args: [req.params.id] });
+  res.json({ ok: true });
+});
+app.post("/api/teacher/completion-cert/:id/issue", requireTeacher, async (req, res) => {
+  const s2 = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [req.params.id] })).rows[0];
+  if (!s2) return res.status(404).json({ error: "Student not found." });
+  if ((await learningProgress(s2.id)).pct !== 100) return res.status(400).json({ error: "Not at 100% yet." });
+  const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [s2.id] })).rows[0];
+  if (!ex) return res.status(400).json({ error: "Exam not passed yet." });
+  await db.execute({ sql: "INSERT OR IGNORE INTO completion_certs (student_id) VALUES (?)", args: [s2.id] });
+  await logActivity(req.user.id, req.user.role, "completion_cert",
+    `Issued completion certificate to ${s2.display_name}`, "completion_cert", s2.id);
+  res.json({ ok: true });
+});
+app.post("/api/teacher/completion-cert/:id/revoke", requireTeacher, async (req, res) => {
+  await db.execute({ sql: "DELETE FROM completion_certs WHERE student_id=?", args: [req.params.id] });
+  res.json({ ok: true });
+});
+app.get("/api/my/completion-cert", requireStudent, async (req, res) => {
+  const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [req.user.id] })).rows[0];
+  const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [req.user.id] })).rows[0];
+  const out = { issued: !!c, issued_at: c ? c.issued_at : null,
+    exam_passed: !!ex, exam_at: ex ? ex.passed_at : null };
+  if (!c) out.progress = await learningProgress(req.user.id);
+  res.json(out);
+});
+app.get("/api/parent/completion-cert", requireParent, async (req, res) => {
+  const me = (await db.execute({ sql: "SELECT parent_of FROM users WHERE id=?", args: [req.user.id] })).rows[0];
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const st = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE id=? AND role='student'", args: [me.parent_of] })).rows[0];
+  if (!st) return res.status(404).json({ error: "Linked student not found." });
+  const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [st.id] })).rows[0];
+  const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [st.id] })).rows[0];
+  res.json({ student: st, issued: !!c, issued_at: c ? c.issued_at : null,
+    exam_passed: !!ex, exam_at: ex ? ex.passed_at : null });
 });
 // Student's own progress + checklist.
 app.get("/api/my/learning-progress", requireStudent, async (req, res) => {
@@ -1419,7 +1447,6 @@ app.get("/api/teacher/quiz/:id/attempts", requireTeacher, async (req, res) => {
 });
 
 // Mysteries
-
 
 // Challenges
 app.post("/api/teacher/challenge", requireTeacher, async (req, res) => {
