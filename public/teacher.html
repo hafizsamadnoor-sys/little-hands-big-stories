@@ -48,7 +48,8 @@ async function vApprovals(p) {
   p.innerHTML = `<h2>📮 Waiting for approval (${d.works.length})</h2>` + (d.works.length ? d.works.map(w => `
     <div class="card"><h3>${esc(w.title)}</h3>
       <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
-      <span class="muted" style="font-size:.85rem">by ${esc(w.author)} · ${fmtDate(w.created_at)}</span></p>
+      <span class="muted" style="font-size:.85rem">by ${esc(w.author)} · ${fmtDate(w.created_at)}</span>
+      ${w.edited_by ? `<br><span class="pill" style="border:1px solid #b45309;color:#b45309">✏️ Edited by ${esc(w.edited_by)}${w.edited_by_class ? ` (${esc(w.edited_by_class)})` : ""}</span>` : ""}</p>
       <div class="card" style="white-space:pre-wrap;box-shadow:none">${esc(w.content)}</div>
       <label>Stars (0–5)</label>
       <select id="st${w.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
@@ -341,8 +342,7 @@ async function vPoints(p) {
 async function vLearning(p) {
   const cats = { dua5: "🕌 5 Daily Duas", dua: "🤲 General Dua", quran: "📖 Quran Hifz", speech: "🎤 Speech", other: "📌 Other" };
   p.innerHTML = `<div class="card" id="lt_banner" style="background:linear-gradient(135deg,#0b3c46 0%,#0e7c8c 100%);color:#fff;border:none"><p style="color:#c9e8ee">Loading…</p></div>
-  <p style="margin-bottom:10px"><a class="btn ghost" href="/top10-learning.html" target="_blank">🏆 Top 10 Learning Completers Poster</a></p>
-  <div class="card"><h2>📊 Total Summary</h2><div id="lt_class"><p class="muted">Loading…</p></div></div>
+  <p style="margin-bottom:10px"><a class="btn ghost" href="/top10-learning.html" target="_blank">🏆 Top 10 Learning Completers Poster</a></p><div class="card"><h2>📊 Total Summary</h2><div id="lt_class"><p class="muted">Loading…</p></div></div>
   <div class="card"><h2>✅ Tick Completed — per student</h2>
     <p class="muted">Select a student, tick what they've completed.</p>
     <label>Student</label><select id="lt_s"></select>
@@ -552,27 +552,27 @@ async function vCompletion(p) {
       <tr><th style="text-align:left">Student</th><th>Exam</th><th>Certificate</th><th>Action</th></tr>
       ${rows.map(r => `<tr>
         <td><a href="/completion-cert.html?student=${r.id}" target="_blank">${esc(r.display_name)}</a></td>
-                <td>${r.exam_passed ? `✅ Passed (${new Date(r.exam_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not taken"}</td>
-                <td>${r.issued ? `✅ Issued (${new Date(r.issued_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not issued"}</td>
+        <td>${r.exam_passed ? `✅ Passed (${new Date(r.exam_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not taken"}</td>
+        <td>${r.issued ? `✅ Issued (${new Date(r.issued_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not issued"}</td>
         <td style="white-space:nowrap">${r.issued
-                                                                   ? `<button class="btn small ghost" data-revoke="${r.id}">Revoke cert</button>`
-                                                                   : (r.exam_passed
-                                                                                  ? `<button class="btn small" data-issue="${r.id}">Issue certificate</button> <button class="btn small ghost" data-unpass="${r.id}">↩️ Unmark exam</button>`
-                                                                                  : `<button class="btn small" data-pass="${r.id}">✅ Exam passed</button>`)}</td>
+          ? `<button class="btn small ghost" data-revoke="${r.id}">Revoke cert</button>`
+          : (r.exam_passed
+            ? `<button class="btn small" data-issue="${r.id}">Issue certificate</button> <button class="btn small ghost" data-unpass="${r.id}">↩️ Unmark exam</button>`
+            : `<button class="btn small" data-pass="${r.id}">✅ Exam passed</button>`)}</td>
       </tr>`).join("")}
     </table>` : `<p class="muted">No boy is at 100% yet.</p>`}`;
-    p.querySelectorAll("[data-pass]").forEach(b => b.onclick = async () => {
-          if (!confirm("Mark the exam as PASSED for this boy? (Conduct the exam in class first.)")) return;
-          const rp = await api("POST", "/api/teacher/completion-exam/" + b.dataset.pass + "/pass");
-          if (rp.error) return alert(rp.error);
-          toast("Exam marked passed ✔"); vCompletion(p);
-    });
-    p.querySelectorAll("[data-unpass]").forEach(b => b.onclick = async () => {
-          if (!confirm("Remove the exam-passed mark for this boy?")) return;
-          const ru = await api("POST", "/api/teacher/completion-exam/" + b.dataset.unpass + "/unpass");
-          if (ru.error) return alert(ru.error);
-          toast("Exam mark removed"); vCompletion(p);
-    });
+  p.querySelectorAll("[data-pass]").forEach(b => b.onclick = async () => {
+    if (!confirm("Mark the exam as PASSED for this boy? (Conduct the exam in class first.)")) return;
+    const rp = await api("POST", "/api/teacher/completion-exam/" + b.dataset.pass + "/pass");
+    if (rp.error) return alert(rp.error);
+    toast("Exam marked passed ✔"); vCompletion(p);
+  });
+  p.querySelectorAll("[data-unpass]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove the exam-passed mark for this boy?")) return;
+    const ru = await api("POST", "/api/teacher/completion-exam/" + b.dataset.unpass + "/unpass");
+    if (ru.error) return alert(ru.error);
+    toast("Exam mark removed"); vCompletion(p);
+  });
   p.querySelectorAll("[data-issue]").forEach(b => b.onclick = async () => {
     if (!confirm("Issue the completion certificate for this boy?")) return;
     const r = await api("POST", "/api/teacher/completion-cert/" + b.dataset.issue + "/issue");
@@ -585,7 +585,6 @@ async function vCompletion(p) {
     toast("Certificate revoked"); vCompletion(p);
   });
 }
-
 async function vMarks(p) {
   p.innerHTML = `
   <div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
@@ -663,7 +662,7 @@ async function vWow(p) {
 async function vSettings(p) {
   const d = await api("GET", "/api/teacher/point-settings");
   const labels = { per_star: "⭐ Per star", read: "👁️ Reading a story", like_received: "❤️ Receiving a like",
-    challenge: "🎯 Challenge", quiz_correct: "🧠 Quiz (per correct)", featured: "🌟 Featured bonus" };
+challenge: "🎯 Challenge", quiz_correct: "🧠 Quiz (per correct)", featured: "🌟 Featured bonus" };
   p.innerHTML = `<div class="card"><h2>⚙️ Point values</h2>
     ${Object.keys(labels).map(k => `<label>${labels[k]}</label><input type="number" min="0" id="ps_${k}" value="${d.settings[k] ?? 0}">`).join("")}
     <button class="btn" id="ps_go">Save</button></div>`;
