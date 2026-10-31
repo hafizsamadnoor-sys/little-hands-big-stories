@@ -721,7 +721,7 @@ app.post("/api/work/:id/like", requireStudent, async (req, res) => {
 });
 
 app.get("/api/my/works", requireStudent, async (req, res) => {
-  const rows = (await db.execute({ sql: "SELECT id, type, language, title, status, stars, points_awarded, created_at FROM works WHERE student_id=? ORDER BY created_at DESC", args: [req.user.id] })).rows;
+  const rows = (await db.execute({ sql: "SELECT id, type, language, title, status, stars, points_awarded, created_at, reject_reason FROM works WHERE student_id=? ORDER BY created_at DESC", args: [req.user.id] })).rows;
   res.json({ works: rows });
 });
 
