@@ -75,7 +75,8 @@
        <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span> ${badge(w.status)}
        ${w.stars ? ` <span class="pill">⭐ ${w.stars}</span>` : ""}</p>
        <p class="muted" style="font-size:.8rem">${fmtDate(w.created_at)}</p>
-       ${w.status === "approved" ? `<p class="muted" style="font-size:.85rem">🔒 Published works can't be changed. Ask your teacher for help.</p>` : ""}</div>`).join("")
+       ${w.status === "approved" ? `<p class="muted" style="font-size:.85rem">🔒 Published works can't be changed. Ask your teacher for help.</p>` : ""}
+       ${w.status === "rejected" && w.reject_reason ? `<p style="font-size:.85rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:8px;margin-top:6px">💬 <b>Teacher's note:</b> ${esc(w.reject_reason)}</p>` : ""}</div>`).join("")
       : `<p class="muted">Nothing written yet — your first story is waiting! ✍️</p>`;
   }
   await loadMine();
