@@ -196,6 +196,41 @@
         <td><b>${m.marks}</b>/${m.max_marks}</td><td>${esc(m.grade)}</td></tr>`).join("")}
       </table>` : `<p class="muted">No marks yet.</p>`;
   } catch (e) { document.getElementById("mymarks").innerHTML = ""; }
+  // Private messages from teacher (only this student's)
+  try {
+    const md = await api("GET", "/api/my/messages");
+    if (md.messages.length) {
+      document.getElementById("msgcard").style.display = "block";
+      document.getElementById("mymsgs").innerHTML = md.messages.map(m =>
+        `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin:8px 0;${m.read_at ? "" : "background:#eff6ff;border-color:#93c5fd"}">
+        <p>${esc(m.text)}</p><p class="muted" style="font-size:.78rem">${fmtDateTime(m.created_at)}${m.read_at ? "" : ' · <b style="color:#1d4ed8">NEW</b>'}</p></div>`).join("");
+      for (const m of md.messages.filter(x => !x.read_at)) {
+        try { await api("POST", `/api/my/messages/${m.id}/read`); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+  // Notice board (all students see; with a listen button)
+  try {
+    const nd = await api("GET", "/api/notices");
+    if (nd.notices.length) {
+      document.getElementById("noticecard").style.display = "block";
+      document.getElementById("notices").innerHTML = nd.notices.map((n, i) =>
+        `<div style="border:1px solid #fbbf24;background:#fffbeb;border-radius:8px;padding:10px;margin:8px 0">
+        <p><b>📌 ${esc(n.title || "Notice")}</b></p><p>${esc(n.text)}</p>
+        <p class="muted" style="font-size:.78rem">${fmtDateTime(n.created_at)}
+        <button class="btn small ghost" onclick="speakNotice(${i})" style="margin-left:8px">🔊 Listen</button></p></div>`).join("");
+      window._notices = nd.notices;
+    }
+  } catch (e) {}
 })();
+function speakNotice(i) {
+  try {
+    const n = (window._notices || [])[i]; if (!n) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance((n.title ? n.title + ". " : "") + n.text);
+    u.lang = "en-IN"; u.rate = 0.95;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
 </script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
 </body></html>
