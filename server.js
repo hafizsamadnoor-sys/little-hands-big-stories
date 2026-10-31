@@ -919,6 +919,10 @@ app.post("/api/teacher/work/:id/review", requireTeacher, async (req, res) => {
       });
     }
   }
+  // Every approval/rejection decision is logged (2026-10-31): the decision itself must never be losable.
+  const author = (await db.execute({ sql: "SELECT display_name FROM users WHERE id=?", args: [w.student_id] })).rows[0];
+  await logActivity(req.user.id, "teacher", decision === "approve" ? "approved work" : "rejected work",
+    `"${w.title}" by ${author ? author.display_name : "?"}${decision === "approve" ? ` (${st} stars)` : ""}`, "work", w.id);
   res.json({ ok: true });
 });
 
