@@ -11,7 +11,7 @@
 <body><div id="nav"></div><div class="wrap">
 <h1>🏆 Points Board</h1>
 <p class="muted">Every writer can see this board. Keep writing, keep climbing! ✨</p>
-<div style="margin:12px 0"><a class="btn" href="/top10.html">🖨️ Top 10 Printable Poster</a> <a class="btn ghost" href="/certificate.html">🏅 Winner Certificates</a> <a class="btn ghost" href="/club100.html">⭐ 100 Points Club</a> <a class="btn ghost" href="/top10-learning.html">🏆 Top 10 Learners</a></div>
+<div style="margin:12px 0"><a class="btn" href="/top10.html">🖨️ Top 10 Printable Poster</a> <a class="btn ghost" href="/certificate.html">🏅 Winner Certificates</a> <a class="btn ghost" href="/club100.html">⭐ 100 Points Club</a> <a class="btn ghost" href="/clubs.html">🏆 Points Clubs</a> <a class="btn ghost" href="/top10-learning.html">🏆 Top 10 Learners</a></div>
 <div class="tabs">
   <button id="t_all" class="on">All-time</button>
   <button id="t_month">This month</button>
@@ -35,7 +35,7 @@
     document.getElementById("rows").innerHTML = d.board.map((r, i) =>
       `<tr class="${i === 0 ? "rank1" : ""}">
         <td>${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</td>
-        <td class="authorcell"><span class="bavatar">${avatar(r.display_name, r.photo)}</span><span><a href="/author.html?id=${r.id}" style="color:inherit;font-weight:700">${esc(r.display_name)}</a>${r.id === user.id ? " 👈 you" : ""}</span></td>
+        <td class="authorcell"><span class="bavatar">${avatar(r.display_name, r.photo)}</span><span><a href="/author.html?id=${r.id}" style="color:inherit;font-weight:700">${esc(r.display_name)}</a>${r.id === user.id ? " 👈 you" : ""}${(() => { const c = clubFor(r.points); return c ? ` <span title="${esc(c.name)} — ${esc(c.title)}">${c.icon}</span>` : ""; })()}</span></td>
         <td><b>${r.points}</b></td><td>${r.stars}⭐</td><td>${r.works}</td></tr>`).join("");
   }
   const ta = document.getElementById("t_all"), tm = document.getElementById("t_month");
