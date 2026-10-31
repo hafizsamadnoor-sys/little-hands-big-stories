@@ -82,11 +82,14 @@
       : `<p class="muted">No marks yet.</p>`;
   } catch (e) { document.getElementById("pmarks").innerHTML = ""; }
 
-  // Completion certificate (own child only, if issued)
+  // Completion certificate / exam status (own child only)
   try {
     const cc = await api("GET", "/api/parent/completion-cert");
-    if (cc.issued) document.getElementById("compcertlink").innerHTML =
+        const el = document.getElementById("compcertlink");
+    if (cc.issued) el.innerHTML =
       `<a class="btn" href="/completion-cert.html">🎓 Completion Certificate</a>`;
+        else if (cc.exam_passed) el.innerHTML =
+                `<span class="muted">✅ Exam passed — certificate coming soon.</span>`;
   } catch (e) {}
 
   // ---- Class Tasks: own child's % + summary graph (private to this parent) ----
