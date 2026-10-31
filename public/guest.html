@@ -102,6 +102,8 @@
   <input id="w_title" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px" placeholder="Title of the work">
   <label style="display:block;font-weight:700;margin:10px 0 4px">Content</label>
   <textarea id="w_content" rows="9" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px" placeholder="Write the work here…"></textarea>
+  <div style="display:flex;gap:8px;margin-top:8px"><input id="w_editedby" style="flex:2;padding:10px;border:2px solid #e8f2f6;border-radius:10px" placeholder="Edited by (required)">
+  <select id="w_editedbyclass" style="flex:1;padding:10px;border:2px solid #e8f2f6;border-radius:10px"><option value="">—</option><option>SS1</option><option>SS2</option><option>D1</option><option>D2</option><option>D3</option><option>Teacher</option></select></div>
   <button class="btn" id="w_submit" style="margin-top:12px">📩 Send to Teacher for Approval</button>
   <div id="w_msg" style="margin-top:10px;font-weight:700"></div>
 </div>
@@ -239,12 +241,17 @@ function barHTML(pct) {
   };
   document.getElementById("w_submit").onclick = async () => {
     const msg = document.getElementById("w_msg");
+    if (!document.getElementById("w_editedby").value.trim() || !document.getElementById("w_editedbyclass").value) {
+      msg.style.color = "#dc2626"; msg.textContent = "Please fill Edited by (name and class) — both are required."; return;
+    }
     const body = {
       student_id: +document.getElementById("w_student").value,
       type: document.getElementById("w_type").value,
       language: document.getElementById("w_lang").value,
       title: document.getElementById("w_title").value,
-      content: document.getElementById("w_content").value
+      content: document.getElementById("w_content").value,
+      edited_by: document.getElementById("w_editedby").value,
+      edited_by_class: document.getElementById("w_editedbyclass").value
     };
     const stu = students.find(s => s.id === body.student_id);
     msg.style.color = "#64748b"; msg.textContent = "⏳ Sending…";
