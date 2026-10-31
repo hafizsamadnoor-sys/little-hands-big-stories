@@ -11,6 +11,14 @@ async function api(method, url, body) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtDate = (d) => { try { return new Date(d).toLocaleDateString(); } catch (e) { return d || ""; } };
+// Points Clubs (highest first) — mirrors the server CLUBS list.
+const CLUBS = [
+  { points: 1000, icon: "👑", name: "1000 Points Club", title: "Legend" },
+  { points: 500, icon: "💎", name: "500 Points Club", title: "Diamond Star" },
+  { points: 200, icon: "🌟", name: "200 Points Club", title: "Super Star" },
+  { points: 100, icon: "⭐", name: "100 Points Club", title: "Rising Star" },
+];
+const clubFor = (pts) => CLUBS.find(c => (pts || 0) >= c.points) || null;
 const fmtDateTime = (d) => { try { const t = new Date(d); return t.toLocaleDateString() + " " + t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return d || ""; } };
 const avatar = (name, photo) =>
   photo ? `<img src="${esc(photo)}" alt="">` : esc((name || "?").trim()[0] || "?");
