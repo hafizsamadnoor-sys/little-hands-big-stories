@@ -900,6 +900,73 @@ app.get("/api/teacher/pending", requireTeacher, async (req, res) => {
   res.json({ works: rows });
 });
 
+// ── Teacher → student private messages ──
+app.post("/api/teacher/message", requireTeacher, async (req, res) => {
+  const { student_ids, text, all } = req.body || {};
+  const msg = (text || "").toString().trim().slice(0, 1000);
+  const media = ((req.body || {}).media_data || "").toString().slice(0, 1500000);
+  const mtype = ((req.body || {}).media_type || "").toString().slice(0, 20);
+  if (!msg && !media) return res.status(400).json({ error: "Message text or photo is required." });
+  let ids = [];
+  if (all) {
+    ids = (await db.execute("SELECT id FROM users WHERE role='student'")).rows.map(u => u.id);
+  } else if (Array.isArray(student_ids)) {
+    const valid = (await db.execute("SELECT id FROM users WHERE role='student'")).rows.map(u => u.id);
+    ids = student_ids.map(Number).filter(id => valid.includes(id));
+  }
+  if (!ids.length) return res.status(400).json({ error: "Choose at least one student." });
+  for (const id of ids) await db.execute({ sql: "INSERT INTO messages (student_id, text, media_data, media_type) VALUES (?,?,?,?)", args: [id, msg, media || null, mtype || null] });
+  await logActivity(req.user.id, "teacher", "sent message", `${ids.length} student(s)`, "message", null);
+  res.json({ ok: true, sent: ids.length });
+});
+app.get("/api/teacher/messages", requireTeacher, async (req, res) => {
+  const rows = (await db.execute(`SELECT m.id, m.text, m.created_at, m.read_at, u.display_name AS student
+    FROM messages m JOIN users u ON u.id=m.student_id ORDER BY m.created_at DESC LIMIT 100`)).rows;
+  res.json({ messages: rows });
+});
+app.post("/api/teacher/message/:id/delete", requireTeacher, async (req, res) => {
+  await db.execute({ sql: "DELETE FROM messages WHERE id=?", args: [req.params.id] });
+  res.json({ ok: true });
+});
+app.get("/api/my/messages", requireStudent, async (req, res) => {
+  const rows = (await db.execute({ sql: "SELECT id, text, created_at, read_at, media_data, media_type FROM messages WHERE student_id=? ORDER BY created_at DESC LIMIT 50", args: [req.user.id] })).rows;
+  res.json({ messages: rows });
+});
+app.post("/api/my/messages/:id/read", requireStudent, async (req, res) => {
+  await db.execute({ sql: "UPDATE messages SET read_at=datetime('now') WHERE id=? AND student_id=?", args: [req.params.id, req.user.id] });
+  res.json({ ok: true });
+});
+
+// ── Notice board ──
+app.post("/api/teacher/notice", requireTeacher, async (req, res) => {
+  const title = ((req.body || {}).title || "").toString().trim().slice(0, 120);
+  const text = ((req.body || {}).text || "").toString().trim().slice(0, 2000);
+  const media = ((req.body || {}).media_data || "").toString().slice(0, 1500000);
+  const mtype = ((req.body || {}).media_type || "").toString().slice(0, 20);
+  if (!text && !media) return res.status(400).json({ error: "Notice text or photo is required." });
+  const r = await db.execute({ sql: "INSERT INTO notices (title, text, media_data, media_type) VALUES (?,?,?,?)", args: [title, text, media || null, mtype || null] });
+  await logActivity(req.user.id, "teacher", "posted notice", title || text.slice(0, 60), "notice", Number(r.lastInsertRowid));
+  res.json({ ok: true, id: Number(r.lastInsertRowid) });
+});
+app.get("/api/notices", requireLogin, async (req, res) => {
+  const rows = (await db.execute("SELECT id, title, text, created_at, media_data, media_type FROM notices ORDER BY created_at DESC LIMIT 30")).rows;
+  res.json({ notices: rows });
+});
+app.get("/api/my/unread", requireStudent, async (req, res) => {
+  const m = (await db.execute({ sql: "SELECT COUNT(*) c FROM messages WHERE student_id=? AND read_at IS NULL", args: [req.user.id] })).rows[0].c;
+  const n = (await db.execute({ sql: `SELECT COUNT(*) c FROM notices WHERE id NOT IN
+    (SELECT notice_id FROM notice_reads WHERE student_id=?)`, args: [req.user.id] })).rows[0].c;
+  res.json({ messages: m, notices: n });
+});
+app.post("/api/my/notices/:id/read", requireStudent, async (req, res) => {
+  await db.execute({ sql: "INSERT OR IGNORE INTO notice_reads (notice_id, student_id) VALUES (?,?)", args: [req.params.id, req.user.id] });
+  res.json({ ok: true });
+});
+app.post("/api/teacher/notice/:id/delete", requireTeacher, async (req, res) => {
+  await db.execute({ sql: "DELETE FROM notices WHERE id=?", args: [req.params.id] });
+  res.json({ ok: true });
+});
+
 app.post("/api/teacher/work/:id/review", requireTeacher, async (req, res) => {
   const w = (await db.execute({ sql: "SELECT * FROM works WHERE id=?", args: [req.params.id] })).rows[0];
   if (!w) return res.status(404).json({ error: "Not found." });
