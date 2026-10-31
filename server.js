@@ -599,7 +599,8 @@ app.post("/api/works", requireStudent, async (req, res) => {
   }
   const eb = (edited_by || "").toString().trim().slice(0, 120);
   const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
-  if (!eb || !ebc) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
+  // Weekly-task writings (teacher-given) need no "Edited by" — only require it for free writings.
+  if (!taskId && (!eb || !ebc)) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
   const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
     VALUES (?,?,?,?,?,?,?,?)`, args: [req.user.id, type, language, title.trim(), content.trim(), taskId, eb, ebc] });
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
@@ -616,7 +617,8 @@ app.post("/api/guest/works", requireGuest, async (req, res) => {
   if (!stu) return res.status(400).json({ error: "Please choose a student." });
   const eb = (edited_by || "").toString().trim().slice(0, 120);
   const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
-  if (!eb || !ebc) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
+  // Weekly-task writings (teacher-given) need no "Edited by" — only require it for free writings.
+  if (!taskId && (!eb || !ebc)) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
   const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
     VALUES (?,?,?,?,?,NULL,?,?)`, args: [stu.id, type, language, title.trim(), content.trim(), eb, ebc] });
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
