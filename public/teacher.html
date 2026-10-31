@@ -58,6 +58,12 @@ async function vApprovals(p) {
       <div class="muted" id="tot${w.id}" style="font-size:.85rem;margin:4px 0"></div>
       <button class="btn small" data-a="${w.id}">✅ Approve</button>
       <button class="btn small ghost" data-r="${w.id}">❌ Reject</button>
+      <div id="rejbox${w.id}" style="display:none;margin-top:8px">
+        <label>Why is it rejected? (only the student will see this)</label>
+        <textarea id="rejreason${w.id}" rows="2" style="width:100%" placeholder="e.g. The story is too short — write at least 10 lines."></textarea>
+        <button class="btn small danger" id="rejgo${w.id}">Confirm reject</button>
+        <button class="btn small ghost" id="rejcancel${w.id}">Cancel</button>
+      </div>
       <button class="btn small danger" data-d="${w.id}">🗑 Delete</button></div>`).join("")
     : `<div class="card"><p class="muted">Nothing waiting. 🎉</p></div>`);
   d.works.forEach(w => {
@@ -71,14 +77,21 @@ async function vApprovals(p) {
     upd();
   });
   p.querySelectorAll("[data-a]").forEach(b => b.onclick = () => review(b.dataset.a, "approve"));
-  p.querySelectorAll("[data-r]").forEach(b => b.onclick = () => review(b.dataset.r, "reject"));
+  p.querySelectorAll("[data-r]").forEach(b => b.onclick = () => {
+    document.getElementById("rejbox" + b.dataset.r).style.display = "block";
+    document.getElementById("rejgo" + b.dataset.r).onclick = () =>
+      review(b.dataset.r, "reject", document.getElementById("rejreason" + b.dataset.r).value);
+    document.getElementById("rejcancel" + b.dataset.r).onclick = () =>
+      document.getElementById("rejbox" + b.dataset.r).style.display = "none";
+  });
   p.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
     if (confirm("Delete this work?")) { await api("POST", `/api/teacher/work/${b.dataset.d}/delete`); render(); }
   });
-  async function review(id, decision) {
+  async function review(id, decision, reason) {
     try {
       const body = { decision, stars: document.getElementById("st" + id).value };
       if (decision === "approve") body.points = document.getElementById("pt" + id).value || 0;
+      if (decision === "reject" && reason) body.reason = reason;
       await api("POST", `/api/teacher/work/${id}/review`, body);
       toast(decision === "approve" ? "Published! ⭐" : "Rejected."); render();
     } catch (e) { toast(e.message, false); }
