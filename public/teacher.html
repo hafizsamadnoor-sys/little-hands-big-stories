@@ -672,7 +672,7 @@ async function vActivity(p) {
       (f === "mentors" && e.actor_role === "guest"));
     document.getElementById("act_rows").innerHTML = rows.map(e => {
       const c = RCOL[e.actor_role] || "#334155";
-      return `<tr><td style="font-size:.78rem;white-space:nowrap">${fmtDate(e.at)}</td>
+      return `<tr><td style="font-size:.78rem;white-space:nowrap">${fmtDateTime(e.at)}</td>
         <td><span class="pill" style="border:1px solid ${c};color:${c};margin-right:6px">${RNAME[e.actor_role] || esc(e.actor_role || "")}</span><b>${esc(e.actor || "—")}</b></td>
         <td style="font-size:1.15rem">${KICON[e.kind] || "•"}</td>
         <td style="font-size:.85rem">${e.kind === "login" ? "Logged in" : esc(e.text)}${e.points ? ` <b style="color:${e.points > 0 ? "#16a34a" : "#dc2626"}">${e.points > 0 ? "+" : ""}${e.points}</b>` : ""}</td></tr>`;
