@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS student_badges (
   awarded_at TEXT DEFAULT (datetime('now')),
   UNIQUE(student_id, badge_key)
 );`);
+  try { await db.execute("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
   await db.execute(`
 CREATE TABLE IF NOT EXISTS weekly_tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -594,6 +595,7 @@ app.post("/api/works", requireStudent, async (req, res) => {
   }
   const eb = (edited_by || "").toString().trim().slice(0, 120);
   const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
+  if (!eb || !ebc) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
   const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
     VALUES (?,?,?,?,?,?,?,?)`, args: [req.user.id, type, language, title.trim(), content.trim(), taskId, eb, ebc] });
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
@@ -610,6 +612,7 @@ app.post("/api/guest/works", requireGuest, async (req, res) => {
   if (!stu) return res.status(400).json({ error: "Please choose a student." });
   const eb = (edited_by || "").toString().trim().slice(0, 120);
   const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
+  if (!eb || !ebc) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
   const r = await db.execute({ sql: `INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
     VALUES (?,?,?,?,?,NULL,?,?)`, args: [stu.id, type, language, title.trim(), content.trim(), eb, ebc] });
   res.json({ ok: true, id: Number(r.lastInsertRowid) });
@@ -848,6 +851,18 @@ app.get("/api/badges", requireLogin, (req, res) => res.json({ badges: BADGES }))
 app.get("/api/my/badges", requireStudent, async (req, res) => {
   const mine = (await db.execute({ sql: "SELECT badge_key, awarded_at FROM student_badges WHERE student_id=?", args: [req.user.id] })).rows;
   res.json({ badges: BADGES, mine });
+});
+// Club entry celebrations — uncelebrated club badges for this student.
+app.get("/api/my/club-celebrations", requireStudent, async (req, res) => {
+  const rows = (await db.execute({ sql: "SELECT badge_key, awarded_at FROM student_badges WHERE student_id=? AND celebrated_at IS NULL AND badge_key LIKE 'club_%'", args: [req.user.id] })).rows;
+  const out = rows.map(r => CLUBS.find(c => c.key === r.badge_key)).filter(Boolean);
+  res.json({ clubs: out });
+});
+app.post("/api/my/club-celebrated", requireStudent, async (req, res) => {
+  const { key } = req.body || {};
+  if (!CLUBS.some(c => c.key === key)) return res.status(400).json({ error: "Invalid club." });
+  await db.execute({ sql: "UPDATE student_badges SET celebrated_at=datetime('now') WHERE student_id=? AND badge_key=?", args: [req.user.id, key] });
+  res.json({ ok: true });
 });
 
 // ── Teacher panel ─────────────────────────────────────────────
