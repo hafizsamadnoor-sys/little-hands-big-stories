@@ -11,6 +11,7 @@ async function api(method, url, body) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtDate = (d) => { try { return new Date(d).toLocaleDateString(); } catch (e) { return d || ""; } };
+const fmtDateTime = (d) => { try { const t = new Date(d); return t.toLocaleDateString() + " " + t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return d || ""; } };
 const avatar = (name, photo) =>
   photo ? `<img src="${esc(photo)}" alt="">` : esc((name || "?").trim()[0] || "?");
 
