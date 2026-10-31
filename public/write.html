@@ -28,7 +28,7 @@
   </select>
   <label>Title</label><input id="title" placeholder="Give your piece a lovely title">
   <label>Your writing</label><textarea id="content" placeholder="Once upon a time…"></textarea>
-  <div style="display:flex;gap:8px"><div style="flex:2"><label>Edited by *</label><input id="editedby" placeholder="Who helped edit this? (required)"></div>
+  <div id="editedbyrow" style="display:flex;gap:8px"><div style="flex:2"><label>Edited by *</label><input id="editedby" placeholder="Who helped edit this? (required)"></div>
   <div style="flex:1"><label>Their class *</label><select id="editedbyclass"><option value="">—</option><option>SS1</option><option>SS2</option><option>D1</option><option>D2</option><option>D3</option><option>Teacher</option></select></div></div>
   <button class="btn" id="submit">Submit for approval 📮</button>
   <p class="muted" style="font-size:.85rem">Your teacher reads everything before it is published. ⭐</p>
@@ -42,12 +42,16 @@
   document.getElementById("nav").innerHTML = studentNav("write.html");
   const params = new URLSearchParams(location.search);
   const taskId = params.get("task");
+  let isTaskWrite = false;
   if (taskId) {
     try {
       const t = await api("GET", "/api/weekly-tasks");
       const all = [t.current, ...(t.archive || [])].filter(Boolean);
       const task = all.find(x => String(x.id) === String(taskId));
       if (task && task.kind !== "quiz") {
+        // Weekly-task writings (teacher-given) need no "Edited by" — hide those fields entirely.
+        isTaskWrite = true;
+        document.getElementById("editedbyrow").style.display = "none";
         document.getElementById("taskinfo").innerHTML =
           `<div class="alert"><b>📅 Weekly task: ${esc(task.title)}</b><br>${esc(task.prompt)}</div>`;
         if (task.kind === "story_start") document.getElementById("content").value = task.prompt + "\n\n";
@@ -76,9 +80,9 @@
   }
   await loadMine();
   document.getElementById("submit").onclick = async () => {
-    const ebName = document.getElementById("editedby").value.trim();
-    const ebClass = document.getElementById("editedbyclass").value;
-    if (!ebName || !ebClass) { toast("Please write who edited your work and their class — both are required.", false); return; }
+    const ebName = isTaskWrite ? "" : document.getElementById("editedby").value.trim();
+    const ebClass = isTaskWrite ? "" : document.getElementById("editedbyclass").value;
+    if (!isTaskWrite && (!ebName || !ebClass)) { toast("Please write who edited your work and their class — both are required.", false); return; }
     try {
       await api("POST", "/api/works", {
         type: document.getElementById("type").value,
