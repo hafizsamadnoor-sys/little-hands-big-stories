@@ -118,6 +118,12 @@ CREATE TABLE IF NOT EXISTS completion_certs (
   issued_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
   await db.execute(`
+  CREATE TABLE IF NOT EXISTS completion_exams (
+    student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      passed_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      `);
+  await db.execute(`
 CREATE TABLE IF NOT EXISTS student_marks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -964,7 +970,7 @@ app.get("/api/teacher/backup", requireTeacher, async (req, res) => {
 // after the hosting wipes the disk). Replaces all content tables atomically.
 const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log","activity_log","student_badges",
   "weekly_tasks","quiz_questions","quiz_attempts","mysteries","mystery_solves",
-  "challenges","challenge_entries","writer_of_week","point_settings","books","completion_certs","student_marks"];
+  "challenges","challenge_entries","writer_of_week","point_settings","books","completion_certs","completion_exams","student_marks"];
 app.post("/api/teacher/restore", requireTeacher, async (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -1266,17 +1272,39 @@ app.get("/api/teacher/completion-eligible", requireTeacher, async (req, res) => 
   const students = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE role='student' ORDER BY display_name", args: [] })).rows;
   const certs = (await db.execute({ sql: "SELECT student_id, issued_at FROM completion_certs", args: [] })).rows;
   const issuedAt = Object.fromEntries(certs.map(r => [r.student_id, r.issued_at]));
+    const examRows = (await db.execute({ sql: "SELECT student_id, passed_at FROM completion_exams", args: [] })).rows;
+    const examAt = Object.fromEntries(examRows.map(r => [r.student_id, r.passed_at]));
   const list = [];
   for (const st of students) {
     const pg = await learningProgress(st.id);
-    list.push({ ...st, ...pg, issued: !!issuedAt[st.id], issued_at: issuedAt[st.id] || null });
+    list.push({ ...st, ...pg, issued: !!issuedAt[st.id], issued_at: issuedAt[st.id] || null, exam_passed: !!examAt[st.id], exam_at: examAt[st.id] || null });
   }
   res.json({ students: list.filter(x => x.pct === 100) });
 });
-app.post("/api/teacher/completion-cert/:id/issue", requireTeacher, async (req, res) => {
+
+  // Mark the completion exam as passed (teacher only; only at 100%). The exam itself is conducted in class.
+  app.post("/api/teacher/completion-exam/:id/pass", requireTeacher, async (req, res) => {
+      const s2 = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [req.params.id] })).rows[0];
+      if (!s2) return res.status(404).json({ error: "Student not found." });
+      if ((await learningProgress(s2.id)).pct !== 100) return res.status(400).json({ error: "Not at 100% yet." });
+      await db.execute({ sql: "INSERT OR IGNORE INTO completion_exams (student_id) VALUES (?)", args: [s2.id] });
+      await logActivity(req.user.id, req.user.role, "completion_exam", `Marked completion exam passed for ${s2.display_name}`, "completion_exam", s2.id);
+      res.json({ ok: true });
+  });
+  // Unmark the completion exam (teacher only; not allowed once the certificate is issued).
+  app.post("/api/teacher/completion-exam/:id/unpass", requireTeacher, async (req, res) => {
+      const c = (await db.execute({ sql: "SELECT student_id FROM completion_certs WHERE student_id=?", args: [req.params.id] })).rows[0];
+      if (c) return res.status(400).json({ error: "Certificate already issued — revoke it first." });
+      await db.execute({ sql: "DELETE FROM completion_exams WHERE student_id=?", args: [req.params.id] });
+      res.json({ ok: true });
+  });
+  
+    app.post("/api/teacher/completion-cert/:id/issue", requireTeacher, async (req, res) => {
   const s2 = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [req.params.id] })).rows[0];
   if (!s2) return res.status(404).json({ error: "Student not found." });
   if ((await learningProgress(s2.id)).pct !== 100) return res.status(400).json({ error: "Not at 100% yet." });
+        const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [s2.id] })).rows[0];
+        if (!ex) return res.status(400).json({ error: "Exam not passed yet." });
   await db.execute({ sql: "INSERT OR IGNORE INTO completion_certs (student_id) VALUES (?)", args: [s2.id] });
   await logActivity(req.user.id, req.user.role, "completion_cert", `Issued completion certificate to ${s2.display_name}`, "completion_cert", s2.id);
   res.json({ ok: true });
@@ -1287,7 +1315,10 @@ app.post("/api/teacher/completion-cert/:id/revoke", requireTeacher, async (req, 
 });
 app.get("/api/my/completion-cert", requireStudent, async (req, res) => {
   const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [req.user.id] })).rows[0];
-  res.json(c ? { issued: true, issued_at: c.issued_at } : { issued: false });
+    const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [req.user.id] })).rows[0];
+    const out = { issued: !!c, issued_at: c ? c.issued_at : null, exam_passed: !!ex, exam_at: ex ? ex.passed_at : null };
+    if (!c) out.progress = await learningProgress(req.user.id);
+  res.json(out);
 });
 app.get("/api/parent/completion-cert", requireParent, async (req, res) => {
   const me = (await db.execute({ sql: "SELECT parent_of FROM users WHERE id=?", args: [req.user.id] })).rows[0];
@@ -1295,7 +1326,8 @@ app.get("/api/parent/completion-cert", requireParent, async (req, res) => {
   const st = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE id=? AND role='student'", args: [me.parent_of] })).rows[0];
   if (!st) return res.status(404).json({ error: "Linked student not found." });
   const c = (await db.execute({ sql: "SELECT issued_at FROM completion_certs WHERE student_id=?", args: [st.id] })).rows[0];
-  res.json({ student: st, issued: !!c, issued_at: c ? c.issued_at : null });
+    const ex = (await db.execute({ sql: "SELECT passed_at FROM completion_exams WHERE student_id=?", args: [st.id] })).rows[0];
+  res.json({ student: st, issued: !!c, issued_at: c ? c.issued_at : null, exam_passed: !!ex, exam_at: ex ? ex.passed_at : null });
 });
 // Top 10 boys by Learning Tasks completion % (all logged-in users — a public ranking like the points board).
 app.get("/api/learning-top10", requireLogin, async (req, res) => {
