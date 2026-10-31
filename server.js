@@ -58,10 +58,14 @@ CREATE TABLE IF NOT EXISTS works (
   created_at TEXT DEFAULT (datetime('now')),
   reviewed_at TEXT,
   edited_by TEXT DEFAULT '',
-  edited_by_class TEXT DEFAULT ''
+  edited_by_class TEXT DEFAULT '',
+  content_original TEXT,
+  proofread_at TEXT
 );`);
   try { await db.execute("ALTER TABLE works ADD COLUMN edited_by TEXT DEFAULT ''"); } catch (e) { /* already there */ }
   try { await db.execute("ALTER TABLE works ADD COLUMN edited_by_class TEXT DEFAULT ''"); } catch (e) { /* already there */ }
+  try { await db.execute("ALTER TABLE works ADD COLUMN content_original TEXT"); } catch (e) { /* already there */ }
+  try { await db.execute("ALTER TABLE works ADD COLUMN proofread_at TEXT"); } catch (e) { /* already there */ }
   await db.execute(`
 CREATE TABLE IF NOT EXISTS reads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -924,6 +928,18 @@ app.post("/api/teacher/work/:id/feature", requireTeacher, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Teacher applies proofread corrections (spelling/grammar only) to an approved work.
+// Keeps the boy's original text in content_original; sets proofread_at.
+app.post("/api/teacher/work/:id/proofread", requireTeacher, async (req, res) => {
+  const w = (await db.execute({ sql: "SELECT * FROM works WHERE id=?", args: [req.params.id] })).rows[0];
+  if (!w) return res.status(404).json({ error: "Not found." });
+  if (w.status !== "approved") return res.status(400).json({ error: "Only approved works can be proofread." });
+  const { content, fixes } = req.body || {};
+  if (!content || !content.trim()) return res.status(400).json({ error: "Corrected text is required." });
+  await db.execute({ sql: "UPDATE works SET content_original=COALESCE(content_original, content), content=?, proofread_at=datetime('now') WHERE id=?", args: [content.trim(), w.id] });
+  await logActivity(req.user.id, "teacher", `Proofread "${w.title}"` + (fixes ? ` (${fixes})` : ""));
+  res.json({ ok: true });
+});
 app.post("/api/teacher/work/:id/delete", requireTeacher, async (req, res) => {
   // Complete removal: the work, its points, its auto-book, reads and likes —
   // nothing about it stays anywhere on the site.
