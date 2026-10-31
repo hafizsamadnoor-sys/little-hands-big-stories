@@ -96,7 +96,8 @@
   <div class="inst">Noorul Huda Centre for Excellence</div>
   <h1>🏆 Points Clubs</h1>
   <div class="subtitle"><b>Little Hands, Big Stories</b> · S1 — 12th Batch<br><span id="pdate"></span></div>
-  <div id="rows"><p class="muted">Loading…</p></div>
+  <div id="closest"></div>
+<div id="rows"><p class="muted">Loading…</p></div>
   <div class="top10-footer">
     <div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>
     Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch
@@ -125,8 +126,34 @@
         <div class="tphoto">${avatar(r.display_name, r.photo)}</div>
         <div class="rname">${esc(r.display_name)}</div>
         <div class="rpts">${r.points} pts</div>
+        <div><a class="btn small ghost" style="font-size:.7rem;padding:4px 8px" href="/club-cert.html?club=${t.key}&student=${r.id}">📜</a></div>
       </div>`).join("") : `<p class="muted" style="font-size:.85em">No members yet — keep writing! ✍️</p>`}
     </div>`).join("");
+  // Closest to the next club (top 5)
+  {
+    const byId = {};
+    tiers.forEach(t => t.members.forEach(m => { byId[m.id] = m; }));
+    const asc = [...CLUBS].reverse(); // 100,200,500,1000
+    const close = Object.values(byId).map(m => {
+      const nxt = asc.find(c => m.points < c.points);
+      return nxt ? { m, nxt, away: nxt.points - m.points } : null;
+    }).filter(Boolean).sort((a, b) => a.away - b.away).slice(0, 5);
+    if (close.length) {
+      document.getElementById("closest").innerHTML = `
+        <div style="margin-bottom:.6em">
+          <div style="display:flex;align-items:center;gap:.5em;margin:.5em 0 .3em">
+            <span style="font-size:1.4em">🎯</span>
+            <b style="color:#1e3a8a;font-size:1em">Closest to the next club</b>
+          </div>
+          ${close.map(x => `
+          <div class="top10-row">
+            <div class="tphoto">${avatar(x.m.display_name, x.m.photo)}</div>
+            <div class="rname">${esc(x.m.display_name)}<div class="rworks">${x.m.points} pts → ${x.nxt.icon} ${esc(x.nxt.name)}</div></div>
+            <div class="rpts">${x.away} away</div>
+          </div>`).join("")}
+        </div>`;
+    }
+  }
   fitPoster();
 
   function loadScript(src) {
