@@ -127,13 +127,18 @@
       const f = document.getElementById("learnfill"); if (f) f.style.width = f.dataset.w + "%";
     }));
   } catch (e) { document.getElementById("learnprog").innerHTML = ""; }
-  // Completion certificate (own, if issued)
+  // Completion certificate / exam status (own)
   try {
     const cc = await api("GET", "/api/my/completion-cert");
-    if (cc.issued) document.getElementById("compcert").innerHTML =
+        const el = document.getElementById("compcert");
+    if (cc.issued) el.innerHTML =
       `<div class="card" style="border:2px solid #b45309"><h2>🎓 Certificate of Completion</h2>
        <p>You completed 100% of the Learning Tasks! 🎉</p>
        <a class="btn" href="/completion-cert.html">🎓 View / Download Certificate</a></div>`;
+        else if (cc.exam_passed) el.innerHTML =
+                `<div class="card"><h2>🎓 Completion</h2><p>✅ You passed the completion exam! Your certificate is coming soon.</p></div>`;
+        else if (cc.progress && cc.progress.pct === 100) el.innerHTML =
+                `<div class="card"><h2>🎓 Completion</h2><p>🎉 100% of Learning Tasks done! Your teacher will conduct the exam soon.</p></div>`;
   } catch (e) {}
   // My marks
   try {
