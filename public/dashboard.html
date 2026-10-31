@@ -11,6 +11,7 @@
 <body><div id="nav"></div><div class="wrap">
 <h1 id="hello">👋</h1>
 <div class="statrow" id="stats"></div>
+<div class="card"><h2>🏆 My Club Journey</h2><div id="clubjourney"><p class="muted">Loading…</p></div></div>
 <div class="card"><h2>📊 My Total Progress</h2><div id="totalprog"><p class="muted">Loading…</p></div></div>
 <div id="taskcard"></div>
 <div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
@@ -20,7 +21,6 @@
   <h2>✍️ Start creating</h2>
   <a class="btn" href="/write.html">✍️ Write now</a>
   <a class="btn ghost" href="/works.html">📖 Read stories</a>
-
   <a class="btn ghost" href="/board.html">🏆 Points Board</a>
 </div>
 <div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
@@ -39,9 +39,33 @@
     <div class="stat" style="--sc:#16a34a"><span class="ic">📖</span><b>${d.approved}</b><span>Published</span></div>
     <div class="stat" style="--sc:#7c3aed"><span class="ic">🎖️</span><b>${d.badges.length}</b><span>Badges</span></div>
     <div class="stat" style="--sc:#f59e0b"><span class="ic">⭐</span><b>${d.stars}</b><span>Stars</span></div>`;
+  // ---- Club journey: current club + progress to the next ----
+  {
+    const pts = d.points || 0;
+    const cur = clubFor(pts);
+    const next = [...CLUBS].reverse().find(c => pts < c.points);
+    let html;
+    if (!next) {
+      html = `<div style="font-size:1rem">👑 <b>Legend!</b> You have reached the highest club.</div>`;
+    } else {
+      const pct = Math.min(100, Math.round(pts / next.points * 100));
+      const away = next.points - pts;
+      html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:1.4rem">${cur ? cur.icon : "🏆"}</span>
+        <div style="flex:1;min-width:180px">
+          <div style="font-weight:800">${cur ? esc(cur.name) + " · " + esc(cur.title) : "No club yet — your journey starts now!"}</div>
+          <div class="bar" style="height:12px;background:#e2e8f0;border-radius:999px;margin:8px 0 4px;overflow:hidden">
+            <div style="width:${pct}%;background:linear-gradient(90deg,#fbbf24,#f59e0b);height:100%;border-radius:999px"></div></div>
+          <div style="font-size:.88rem">${next.icon} <b>${away} points</b> more to <b>${esc(next.name)}</b>!</div>
+        </div>
+        ${cur ? `<a class="btn small ghost" href="/club-cert.html?club=${cur.key}">📜 My certificate</a>` : ""}
+      </div>`;
+    }
+    document.getElementById("clubjourney").innerHTML = html;
+  }
   // ---- Total progress: animated rings + where-my-points-came-from bar ----
   const TCOL = { work:["✍️","Writing","#0e7c8c"], task:["📅","Weekly tasks","#16a34a"],
-    quiz:["🧠","Quizzes","#7c3aed"], 
+    quiz:["🧠","Quizzes","#7c3aed"],
     challenge:["🎯","Challenges","#dc2626"], like:["❤️","Likes","#e11d48"],
     read:["📚","Reading","#0284c7"], other:["🎁","Bonus","#64748b"] };
   function ring(pct, color, emoji, label) {
@@ -104,6 +128,28 @@
   const mine = new Set(b.mine.map(x => x.badge_key));
   document.getElementById("badges").innerHTML = b.badges.map(x =>
     `<span class="badge ${mine.has(x.key) ? "" : "locked"}">${x.icon} ${esc(x.name)}</span>`).join("");
+  // Club entry celebration — one popup per new club
+  try {
+    const cel = await api("GET", "/api/my/club-celebrations");
+    if (cel.clubs && cel.clubs.length) {
+      cel.clubs.sort((a, b) => b.points - a.points);
+      const c = cel.clubs[0]; // celebrate the highest new club first
+      const ov = document.createElement("div");
+      ov.id = "clubpop";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(11,60,70,.75);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px";
+      ov.innerHTML = `<div style="background:#fff;border-radius:18px;padding:28px 22px;max-width:340px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35)">
+        <div style="font-size:2.4rem">🎉🎊🎉</div>
+        <h2 style="color:#0b3c46;margin:10px 0 4px">Welcome to the<br>${c.icon} ${esc(c.name)}!</h2>
+        <p class="muted">You are now a <b>${esc(c.title)}</b> with ${d.points} points!</p>
+        <a class="btn" href="/club-cert.html?club=${c.key}">📜 Get my certificate</a><br><br>
+        <button class="btn ghost" id="clubpopok">Awesome! ⭐</button></div>`;
+      document.body.appendChild(ov);
+      document.getElementById("clubpopok").onclick = async () => {
+        try { await api("POST", "/api/my/club-celebrated", { key: c.key }); } catch (e) {}
+        ov.remove();
+      };
+    }
+  } catch (e) {}
   // My learning tasks progress
   try {
     const lp = await api("GET", "/api/my/learning-progress");
@@ -130,25 +176,25 @@
   // Completion certificate / exam status (own)
   try {
     const cc = await api("GET", "/api/my/completion-cert");
-        const el = document.getElementById("compcert");
+    const el = document.getElementById("compcert");
     if (cc.issued) el.innerHTML =
       `<div class="card" style="border:2px solid #b45309"><h2>🎓 Certificate of Completion</h2>
        <p>You completed 100% of the Learning Tasks! 🎉</p>
        <a class="btn" href="/completion-cert.html">🎓 View / Download Certificate</a></div>`;
-        else if (cc.exam_passed) el.innerHTML =
-                `<div class="card"><h2>🎓 Completion</h2><p>✅ You passed the completion exam! Your certificate is coming soon.</p></div>`;
-        else if (cc.progress && cc.progress.pct === 100) el.innerHTML =
-                `<div class="card"><h2>🎓 Completion</h2><p>🎉 100% of Learning Tasks done! Your teacher will conduct the exam soon.</p></div>`;
+    else if (cc.exam_passed) el.innerHTML =
+      `<div class="card"><h2>🎓 Completion</h2><p>✅ You passed the completion exam! Your certificate is coming soon.</p></div>`;
+    else if (cc.progress && cc.progress.pct === 100) el.innerHTML =
+      `<div class="card"><h2>🎓 Completion</h2><p>🎉 100% of Learning Tasks done! Your teacher will conduct the exam soon.</p></div>`;
   } catch (e) {}
   // My marks
   try {
     const md = await api("GET", "/api/my/marks");
     const el = document.getElementById("mymarks");
-    if (md.marks.length) {
-      el.innerHTML = `<table><tr><th>Subject</th><th>Exam</th><th>Marks</th><th>Grade</th></tr>` + md.marks.map(m => `<tr><td>${esc(m.subject)}</td><td>${esc(m.exam)}</td><td><b>${m.marks}</b>/${m.max_marks}</td><td>${esc(m.grade)}</td></tr>`).join("") + `</table>`;
-    } else {
-      el.innerHTML = `<p class="muted">No marks yet.</p>`;
-    }
+    el.innerHTML = md.marks.length ? `<table style="width:100%;font-size:.88rem">
+      <tr><th style="text-align:left">Subject</th><th>Exam</th><th>Marks</th><th>Grade</th></tr>
+      ${md.marks.map(m => `<tr><td>${esc(m.subject)}</td><td>${esc(m.exam)}</td>
+        <td><b>${m.marks}</b>/${m.max_marks}</td><td>${esc(m.grade)}</td></tr>`).join("")}
+      </table>` : `<p class="muted">No marks yet.</p>`;
   } catch (e) { document.getElementById("mymarks").innerHTML = ""; }
 })();
 </script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
