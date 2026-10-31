@@ -19,7 +19,8 @@
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
-  ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"]];
+  ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
+  ["messages","💬 Messages"],["notices","📢 Notices"]];
 let cur = "approvals";
 (async () => {
   const user = await guard("teacher"); if (!user) return;
@@ -40,7 +41,7 @@ async function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
   ({ approvals: vApprovals, tasks: vTasks, challenges: vChallenges,
-     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks })[cur](p);
+     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices })[cur](p);
 }
 
 async function vApprovals(p) {
@@ -96,6 +97,67 @@ async function vApprovals(p) {
       toast(decision === "approve" ? "Published! ⭐" : "Rejected."); render();
     } catch (e) { toast(e.message, false); }
   }
+}
+
+async function vMessages(p) {
+  const [sdata, mdata] = await Promise.all([api("GET", "/api/teacher/students"), api("GET", "/api/teacher/messages")]);
+  const students = sdata.students || [];
+  p.innerHTML = `<h2>💬 Send a message</h2><div class="card">
+    <p class="muted" style="font-size:.85rem">Only the chosen student(s) will see it — private.</p>
+    <label><input type="checkbox" id="msg_all" style="width:auto"> Send to ALL 38 students</label>
+    <label>Or choose students</label>
+    <div id="msg_students" style="max-height:180px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:8px">
+      ${students.map(x => `<label style="display:block;font-weight:normal"><input type="checkbox" class="msg_stu" value="${x.id}" style="width:auto"> ${esc(x.display_name)}</label>`).join("")}
+    </div>
+    <label>Message</label><textarea id="msg_text" rows="3" style="width:100%" placeholder="Write your message..."></textarea>
+    <button class="btn" id="msg_send">Send 💬</button></div>
+    <h2>📨 Sent messages</h2><div id="msglist">` + (mdata.messages.length ? mdata.messages.map(m =>
+      `<div class="card"><p><b>${esc(m.student)}</b> <span class="muted" style="font-size:.8rem">${fmtDateTime(m.created_at)}${m.read_at ? " · ✅ read" : " · ⏳ unread"}</span></p>
+      <p>${esc(m.text)}</p><button class="btn small danger" data-mdel="${m.id}">Delete</button></div>`).join("")
+    : `<div class="card"><p class="muted">No messages sent yet.</p></div>`) + `</div>`;
+  document.getElementById("msg_all").onchange = e => {
+    document.querySelectorAll(".msg_stu").forEach(c => c.checked = false);
+    document.getElementById("msg_students").style.opacity = e.target.checked ? .4 : 1;
+  };
+  document.getElementById("msg_send").onclick = async () => {
+    const text = document.getElementById("msg_text").value.trim();
+    if (!text) { toast("Write a message first.", false); return; }
+    const all = document.getElementById("msg_all").checked;
+    const ids = [...document.querySelectorAll(".msg_stu:checked")].map(c => +c.value);
+    if (!all && !ids.length) { toast("Choose at least one student.", false); return; }
+    try {
+      const r = await api("POST", "/api/teacher/message", { text, all, student_ids: ids });
+      toast(`Sent to ${r.sent} student(s)! 💬`); render();
+    } catch (e) { toast(e.message, false); }
+  };
+  p.querySelectorAll("[data-mdel]").forEach(b => b.onclick = async () => {
+    if (confirm("Delete this message?")) { await api("POST", `/api/teacher/message/${b.dataset.mdel}/delete`); render(); }
+  });
+}
+
+async function vNotices(p) {
+  const d = await api("GET", "/api/notices");
+  p.innerHTML = `<h2>📢 Notice board</h2><div class="card">
+    <p class="muted" style="font-size:.85rem">Everyone (all students) will see this on their dashboard.</p>
+    <label>Title (optional)</label><input id="nt_title" placeholder="e.g. Tomorrow's class">
+    <label>Notice</label><textarea id="nt_text" rows="3" style="width:100%" placeholder="Write the notice..."></textarea>
+    <button class="btn" id="nt_post">Post 📢</button></div>
+    <h2>📌 Posted notices</h2>` + (d.notices.length ? d.notices.map(n =>
+      `<div class="card"><h3>${esc(n.title || "Notice")}</h3><p>${esc(n.text)}</p>
+      <p class="muted" style="font-size:.8rem">${fmtDateTime(n.created_at)}</p>
+      <button class="btn small danger" data-ndel="${n.id}">Delete</button></div>`).join("")
+    : `<div class="card"><p class="muted">No notices yet.</p></div>`);
+  document.getElementById("nt_post").onclick = async () => {
+    const text = document.getElementById("nt_text").value.trim();
+    if (!text) { toast("Write the notice first.", false); return; }
+    try {
+      await api("POST", "/api/teacher/notice", { title: document.getElementById("nt_title").value, text });
+      toast("Posted! 📢"); render();
+    } catch (e) { toast(e.message, false); }
+  };
+  p.querySelectorAll("[data-ndel]").forEach(b => b.onclick = async () => {
+    if (confirm("Delete this notice?")) { await api("POST", `/api/teacher/notice/${b.dataset.ndel}/delete`); render(); }
+  });
 }
 
 async function vTasks(p) {
