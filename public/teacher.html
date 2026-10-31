@@ -547,17 +547,32 @@ async function vCompletion(p) {
   const d = await api("GET", "/api/teacher/completion-eligible");
   const rows = d.students || [];
   p.innerHTML = `<h2>🎓 Completion Certificates</h2>
-    <p class="muted">Boys who completed 100% of the Learning Tasks. The teacher issues the certificate — nothing is issued automatically.</p>
+    <p class="muted">Boys who completed 100% of the Learning Tasks. Steps: 1) conduct the exam in class → 2) tick "Exam passed" → 3) issue the certificate. Nothing is issued automatically.</p>
     ${rows.length ? `<table style="width:100%;font-size:.9rem">
-      <tr><th style="text-align:left">Student</th><th>Status</th><th>Action</th></tr>
+      <tr><th style="text-align:left">Student</th><th>Exam</th><th>Certificate</th><th>Action</th></tr>
       ${rows.map(r => `<tr>
         <td><a href="/completion-cert.html?student=${r.id}" target="_blank">${esc(r.display_name)}</a></td>
-        <td>${r.issued ? `✅ Issued (${new Date(r.issued_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not issued"}</td>
-        <td>${r.issued
-          ? `<button class="btn small ghost" data-revoke="${r.id}">Revoke</button>`
-          : `<button class="btn small" data-issue="${r.id}">Issue certificate</button>`}</td>
+                <td>${r.exam_passed ? `✅ Passed (${new Date(r.exam_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not taken"}</td>
+                <td>${r.issued ? `✅ Issued (${new Date(r.issued_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not issued"}</td>
+        <td style="white-space:nowrap">${r.issued
+                                                                   ? `<button class="btn small ghost" data-revoke="${r.id}">Revoke cert</button>`
+                                                                   : (r.exam_passed
+                                                                                  ? `<button class="btn small" data-issue="${r.id}">Issue certificate</button> <button class="btn small ghost" data-unpass="${r.id}">↩️ Unmark exam</button>`
+                                                                                  : `<button class="btn small" data-pass="${r.id}">✅ Exam passed</button>`)}</td>
       </tr>`).join("")}
     </table>` : `<p class="muted">No boy is at 100% yet.</p>`}`;
+    p.querySelectorAll("[data-pass]").forEach(b => b.onclick = async () => {
+          if (!confirm("Mark the exam as PASSED for this boy? (Conduct the exam in class first.)")) return;
+          const rp = await api("POST", "/api/teacher/completion-exam/" + b.dataset.pass + "/pass");
+          if (rp.error) return alert(rp.error);
+          toast("Exam marked passed ✔"); vCompletion(p);
+    });
+    p.querySelectorAll("[data-unpass]").forEach(b => b.onclick = async () => {
+          if (!confirm("Remove the exam-passed mark for this boy?")) return;
+          const ru = await api("POST", "/api/teacher/completion-exam/" + b.dataset.unpass + "/unpass");
+          if (ru.error) return alert(ru.error);
+          toast("Exam mark removed"); vCompletion(p);
+    });
   p.querySelectorAll("[data-issue]").forEach(b => b.onclick = async () => {
     if (!confirm("Issue the completion certificate for this boy?")) return;
     const r = await api("POST", "/api/teacher/completion-cert/" + b.dataset.issue + "/issue");
