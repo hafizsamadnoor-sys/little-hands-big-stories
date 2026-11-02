@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS works (
     text TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS notice_reads (
+    notice_id INTEGER NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    read_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (notice_id, student_id)
+  )`);
   await db.execute(`
 CREATE TABLE IF NOT EXISTS reads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,6 +259,21 @@ CREATE TABLE IF NOT EXISTS books (
   pages INTEGER NOT NULL DEFAULT 8,
   created_at TEXT DEFAULT (datetime('now'))
 );`);
+  await db.execute(`
+CREATE TABLE IF NOT EXISTS finance_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category TEXT NOT NULL DEFAULT 'Other',
+  amount REAL NOT NULL,
+  direction TEXT NOT NULL CHECK(direction IN ('red','green')),
+  note TEXT,
+  paid_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+  )`);
   // Seed point settings defaults
   for (const [k, v] of Object.entries(DEFAULT_POINTS))
     await db.execute({ sql: "INSERT OR IGNORE INTO point_settings (key, value) VALUES (?,?)", args: [k, v] });
@@ -967,6 +988,65 @@ app.post("/api/teacher/notice/:id/delete", requireTeacher, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Finance ──
+// Per-student money ledger. direction: 'red' = parent owes teacher, 'green' = teacher owes/holds for parent.
+// Parents see ONLY their own child's ledger (view-only).
+const FIN_CATS = ["Store", "Medical", "Bus cash", "Book", "Trip", "Other"];
+app.post("/api/teacher/finance", requireTeacher, async (req, res) => {
+  const { student_id, category, amount, direction, note } = req.body || {};
+  const s = (await db.execute({ sql: "SELECT id, display_name FROM users WHERE id=? AND role='student'", args: [student_id] })).rows[0];
+  if (!s) return res.status(404).json({ error: "Student not found." });
+  const amt = Math.abs(parseFloat(amount) || 0);
+  if (!amt || amt > 1000000) return res.status(400).json({ error: "Enter a valid amount." });
+  if (!["red", "green"].includes(direction)) return res.status(400).json({ error: "Invalid direction." });
+  const cat = FIN_CATS.includes(category) ? category : "Other";
+  const nt = (note || "").toString().trim().slice(0, 200);
+  const r = await db.execute({ sql: "INSERT INTO finance_entries (student_id, category, amount, direction, note) VALUES (?,?,?,?,?)", args: [s.id, cat, amt, direction, nt || null] });
+  await logActivity(req.user.id, "teacher", "finance entry", `${cat} ₹${amt} (${direction}) for ${s.display_name}${nt ? ": " + nt : ""}`, "finance", Number(r.lastInsertRowId));
+  res.json({ ok: true, id: Number(r.lastInsertRowId) });
+});
+app.get("/api/teacher/finance", requireTeacher, async (req, res) => {
+  const rows = (await db.execute({ sql: `SELECT f.id, f.student_id, f.category, f.amount, f.direction, f.note, f.paid_at, f.created_at,
+    u.display_name AS student FROM finance_entries f JOIN users u ON u.id=f.student_id
+    ORDER BY f.created_at DESC LIMIT 500`, args: [] })).rows;
+  res.json({ entries: rows, categories: FIN_CATS });
+});
+app.post("/api/teacher/finance/:id/paid", requireTeacher, async (req, res) => {
+  const e = (await db.execute({ sql: "SELECT * FROM finance_entries WHERE id=?", args: [req.params.id] })).rows[0];
+  if (!e) return res.status(404).json({ error: "Not found." });
+  const paid = e.paid_at ? null : new Date().toISOString().slice(0, 19).replace("T", " ");
+  await db.execute({ sql: "UPDATE finance_entries SET paid_at=? WHERE id=?", args: [paid, req.params.id] });
+  const s = (await db.execute({ sql: "SELECT display_name FROM users WHERE id=?", args: [e.student_id] })).rows[0];
+  await logActivity(req.user.id, "teacher", e.paid_at ? "finance unpaid" : "finance paid", `${e.category} ₹${e.amount} for ${s.display_name}`, "finance", e.id);
+  res.json({ ok: true, paid: !e.paid_at });
+});
+app.post("/api/teacher/finance/:id/delete", requireTeacher, async (req, res) => {
+  await db.execute({ sql: "DELETE FROM finance_entries WHERE id=?", args: [req.params.id] });
+  res.json({ ok: true });
+});
+// Teacher's UPI settings (text settings table)
+app.get("/api/teacher/finance-settings", requireTeacher, async (req, res) => {
+  const rows = (await db.execute({ sql: "SELECT key, value FROM app_settings WHERE key IN ('upi_id','upi_qr')", args: [] })).rows;
+  res.json({ settings: Object.fromEntries(rows.map(r => [r.key, r.value])) });
+});
+app.post("/api/teacher/finance-settings", requireTeacher, async (req, res) => {
+  const upiId = ((req.body || {}).upi_id || "").toString().trim().slice(0, 100);
+  const upiQr = ((req.body || {}).upi_qr || "").toString().slice(0, 500000);
+  await db.execute({ sql: "INSERT INTO app_settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: ["upi_id", upiId] });
+  if (upiQr) await db.execute({ sql: "INSERT INTO app_settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: ["upi_qr", upiQr] });
+  await logActivity(req.user.id, "teacher", "finance settings", "Updated UPI payment details", "finance", null);
+  res.json({ ok: true });
+});
+// Parent: own child's ledger + teacher's UPI details (view-only)
+app.get("/api/parent/finance", requireParent, async (req, res) => {
+  const me = (await db.execute({ sql: "SELECT parent_of FROM users WHERE id=?", args: [req.user.id] })).rows[0];
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const sid = me.parent_of;
+  const entries = (await db.execute({ sql: "SELECT id, category, amount, direction, note, paid_at, created_at FROM finance_entries WHERE student_id=? ORDER BY created_at DESC", args: [sid] })).rows;
+  const upi = (await db.execute({ sql: "SELECT key, value FROM app_settings WHERE key IN ('upi_id','upi_qr')", args: [] })).rows;
+  res.json({ entries, upi: Object.fromEntries(upi.map(r => [r.key, r.value])) });
+});
+
 app.post("/api/teacher/work/:id/review", requireTeacher, async (req, res) => {
   const w = (await db.execute({ sql: "SELECT * FROM works WHERE id=?", args: [req.params.id] })).rows[0];
   if (!w) return res.status(404).json({ error: "Not found." });
@@ -1017,6 +1097,13 @@ app.post("/api/teacher/work/:id/feature", requireTeacher, async (req, res) => {
 
 // Teacher applies proofread corrections (spelling/grammar only) to an approved work.
 // Keeps the boy's original text in content_original; sets proofread_at.
+app.post("/api/teacher/work/:id/title", requireTeacher, async (req, res) => {
+  const title = ((req.body || {}).title || "").toString().trim().slice(0, 200);
+  if (!title) return res.status(400).json({ error: "Title is required." });
+  await db.execute({ sql: "UPDATE works SET title=? WHERE id=?", args: [title, req.params.id] });
+  await logActivity(req.user.id, "teacher", "edited title", title, "work", req.params.id);
+  res.json({ ok: true });
+});
 app.post("/api/teacher/work/:id/proofread", requireTeacher, async (req, res) => {
   const w = (await db.execute({ sql: "SELECT * FROM works WHERE id=?", args: [req.params.id] })).rows[0];
   if (!w) return res.status(404).json({ error: "Not found." });
@@ -1115,7 +1202,8 @@ app.get("/api/teacher/backup", requireTeacher, async (req, res) => {
 // after the hosting wipes the disk). Replaces all content tables atomically.
 const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log","activity_log","student_badges",
   "weekly_tasks","quiz_questions","quiz_attempts","mysteries","mystery_solves",
-  "challenges","challenge_entries","writer_of_week","point_settings","books","completion_certs","completion_exams","student_marks"];
+  "challenges","challenge_entries","writer_of_week","point_settings","books","completion_certs","completion_exams","student_marks",
+  "messages","notices","notice_reads","learning_tasks","learning_task_done","finance_entries","app_settings"];
 app.post("/api/teacher/restore", requireTeacher, async (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -1195,7 +1283,8 @@ app.get("/api/books/:id/file", requireLogin, async (req, res) => {
   if (!b || !b.pdf_data) return res.status(404).json({ error: "Not found." });
   const buf = Buffer.from(b.pdf_data, "base64");
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${b.title.replace(/"/g, "")}.pdf"`);
+  // 2026-11-02: ASCII-safe filename — non-Latin titles (Kannada) made Node throw ERR_INVALID_CHAR (500 on download); book id is always ASCII.
+  res.setHeader("Content-Disposition", `inline; filename="book-${parseInt(req.params.id, 10)}.pdf"`);
   res.send(buf);
 });
 app.delete("/api/teacher/books/:id", requireTeacher, async (req, res) => {
@@ -1411,15 +1500,45 @@ app.get("/api/teacher/learning-summary", requireTeacherOrGuest, async (req, res)
 app.get("/api/learning-top10", requireLogin, async (req, res) => {
   const students = (await db.execute({ sql: "SELECT id, display_name, ad_no, photo FROM users WHERE role='student'", args: [] })).rows;
   const total = (await db.execute({ sql: "SELECT COUNT(*) c FROM learning_tasks", args: [] })).rows[0].c;
+  const taskIds = new Set((await db.execute({ sql: "SELECT id FROM learning_tasks", args: [] })).rows.map(r => r.id));
   const doneRows = (await db.execute({ sql: "SELECT student_id, task_id FROM learning_task_done", args: [] })).rows;
   const doneMap = {};
   doneRows.forEach(r => { (doneMap[r.student_id] = doneMap[r.student_id] || new Set()).add(r.task_id); });
+  // Who completed first? Replay tick/untick activity in chronological order,
+  // tracking each student's ticked set; completed_at = first moment it hit total.
+  const nameToId = {};
+  students.forEach(s => { nameToId[s.display_name] = s.id; });
+  const events = (await db.execute({ sql: "SELECT id, action, detail, ref_id, created_at FROM activity_log WHERE action IN ('tick','untick') AND ref_type='learning_task' ORDER BY created_at, id", args: [] })).rows;
+  const ticked = {};
+  const completedAt = {};
+  events.forEach(e => {
+    if (!taskIds.has(e.ref_id)) return;
+    const m = /" for (.+)$/.exec(e.detail || "");
+    if (!m) return;
+    const sid = nameToId[m[1]];
+    if (!sid) return;
+    const s = ticked[sid] || (ticked[sid] = new Set());
+    if (e.action === "tick") s.add(e.ref_id); else s.delete(e.ref_id);
+    if (total > 0 && s.size === total && !completedAt[sid]) completedAt[sid] = e.created_at;
+  });
   const list = students.map(st => {
     const done = doneMap[st.id] ? doneMap[st.id].size : 0;
     return { id: st.id, display_name: st.display_name, ad_no: st.ad_no, photo: st.photo,
-      done, total, pct: total ? Math.round(done / total * 100) : 0 };
+      done, total, pct: total ? Math.round(done / total * 100) : 0,
+      completed_at: completedAt[st.id] || null };
   });
-  list.sort((a, b) => b.pct - a.pct || b.done - a.done || a.display_name.localeCompare(b.display_name));
+  list.sort((a, b) => {
+    const aFull = total > 0 && a.done === total, bFull = total > 0 && b.done === total;
+    if (aFull !== bFull) return aFull ? -1 : 1;
+    if (aFull && bFull) {
+      if (a.completed_at && b.completed_at)
+        return a.completed_at < b.completed_at ? -1 : a.completed_at > b.completed_at ? 1 : a.display_name.localeCompare(b.display_name);
+      if (a.completed_at) return -1;
+      if (b.completed_at) return 1;
+      return a.display_name.localeCompare(b.display_name);
+    }
+    return b.pct - a.pct || b.done - a.done || a.display_name.localeCompare(b.display_name);
+  });
   res.json({ top: list.slice(0, 10), total });
 });
 // One student's ticked tasks (teacher or guest view for the grid).
