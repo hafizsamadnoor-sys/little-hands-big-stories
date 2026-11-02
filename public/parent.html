@@ -35,6 +35,9 @@
 </div>
 <p class="muted">View-only access. You can see everything published, but cannot write, edit or complete anything.</p>
 
+<button class="btn" id="fin_toggle" style="width:100%;margin-bottom:12px;font-size:1.05rem">💰 Finance</button>
+<div class="card" id="fincard" style="display:none"><p class="muted">Loading finance…</p></div>
+
 <div class="card" id="childcard"><p class="muted">Loading your child's progress…</p></div>
 
 <div class="card" id="classtasks"><p class="muted">Loading class tasks…</p></div>
@@ -85,13 +88,12 @@
   // Completion certificate / exam status (own child only)
   try {
     const cc = await api("GET", "/api/parent/completion-cert");
-        const el = document.getElementById("compcertlink");
+    const el = document.getElementById("compcertlink");
     if (cc.issued) el.innerHTML =
       `<a class="btn" href="/completion-cert.html">🎓 Completion Certificate</a>`;
-        else if (cc.exam_passed) el.innerHTML =
-                `<span class="muted">✅ Exam passed — certificate coming soon.</span>`;
+    else if (cc.exam_passed) el.innerHTML =
+      `<span class="muted">✅ Exam passed — certificate coming soon.</span>`;
   } catch (e) {}
-
   // ---- Class Tasks: own child's % + summary graph (private to this parent) ----
   const L = d.learning || { done: 0, total: 0, pct: 0, cats: [] };
   const ringC = L.pct >= 80 ? "#16a34a" : L.pct >= 50 ? "#0e7c8c" : L.pct >= 25 ? "#ea580c" : "#dc2626";
@@ -258,6 +260,51 @@
     } catch (err) { alert("Could not make the poster. Please check your internet and try again."); }
     btn.disabled = false; btn.textContent = old;
   });
+
+  // ---- Finance (view-only, own child only) ----
+  let finLoaded = false;
+  document.getElementById("fin_toggle").onclick = async () => {
+    const card = document.getElementById("fincard");
+    if (card.style.display === "none") {
+      card.style.display = "";
+      if (!finLoaded) {
+        try {
+          const f = await api("GET", "/api/parent/finance");
+          finLoaded = true;
+          const money = n => "₹" + (Math.round(n * 100) / 100).toLocaleString("en-IN");
+          let red = 0, green = 0;
+          for (const e of f.entries) { if (e.direction === "red") red += Number(e.amount) || 0; else green += Number(e.amount) || 0; }
+          const net = green - red;
+          const balHtml = net === 0
+            ? `<b>${money(0)} — settled</b>`
+            : net < 0 ? `<b style="color:#dc2626">🔴 ${money(-net)} to be paid</b>`
+            : `<b style="color:#16a34a">🟢 ${money(net)} with teacher</b>`;
+          card.innerHTML = `<h2>💰 Finance</h2>
+            <p class="muted" style="font-size:.85rem">View-only. Only you can see your child's entries.</p>
+            ` + (f.entries.length ? f.entries.map(e => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-bottom:1px solid #f1f5f9">
+                <div><b>${esc(e.category)}</b>${e.note ? ` <span class="muted">— ${esc(e.note)}</span>` : ""}
+                  <div class="muted" style="font-size:.78rem">${fmtDateTime(e.created_at)}${e.paid_at ? " · ✅ Paid" : ""}</div></div>
+                <b style="font-size:1.05rem;color:${e.direction === "red" ? "#dc2626" : "#16a34a"}">${money(e.amount)}</b>
+              </div>`).join("") : `<p class="muted">No finance entries yet.</p>`) + `
+            <div style="display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-radius:10px;padding:12px 14px;margin-top:10px">
+              <b>Balance</b><span>${balHtml}</span></div>
+            <div class="legend" style="font-size:.8rem;color:#666;margin-top:8px;line-height:1.7">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#dc2626;margin-right:5px"></span>Red = to be paid to teacher<br>
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#16a34a;margin-right:5px"></span>Green = teacher holds / will pay back
+            </div>` +
+            ((f.upi.upi_id || f.upi.upi_qr) ? `<h3 style="margin-top:14px">📱 Pay the teacher</h3>
+              <div style="text-align:center;padding:8px">
+              ${f.upi.upi_qr ? `<img src="${f.upi.upi_qr}" style="max-width:170px;border-radius:8px" alt="UPI QR">` : ""}
+              ${f.upi.upi_id ? `<div style="font-size:.9rem;color:#555;margin-top:6px">UPI ID: <b>${esc(f.upi.upi_id)}</b></div>` : ""}
+              <div class="muted" style="font-size:.78rem">Scan with any UPI app to pay</div></div>` : ``);
+        } catch (e) { card.innerHTML = `<h2>💰 Finance</h2><p class="muted">Could not load finance entries.</p>`; }
+      }
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      card.style.display = "none";
+    }
+  };
 })();
 </script>
 </body></html>

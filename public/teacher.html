@@ -20,7 +20,7 @@ const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
-  ["messages","💬 Messages"],["notices","📢 Notices"]];
+  ["messages","💬 Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
 let cur = "approvals";
 (async () => {
   const user = await guard("teacher"); if (!user) return;
@@ -41,7 +41,7 @@ async function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
   ({ approvals: vApprovals, tasks: vTasks, challenges: vChallenges,
-     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices })[cur](p);
+     students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
 async function vApprovals(p) {
@@ -195,6 +195,109 @@ async function vNotices(p) {
   p.querySelectorAll("[data-ndel]").forEach(b => b.onclick = async () => {
     if (confirm("Delete this notice?")) { await api("POST", `/api/teacher/notice/${b.dataset.ndel}/delete`); render(); }
   });
+}
+
+async function vFinance(p) {
+  const [fdata, sdata, fset] = await Promise.all([
+    api("GET", "/api/teacher/finance"),
+    api("GET", "/api/teacher/students"),
+    api("GET", "/api/teacher/finance-settings")
+  ]);
+  const students = sdata.students.slice().sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const cats = fdata.categories || ["Store", "Medical", "Bus cash", "Book", "Trip", "Other"];
+  const bal = {};
+  for (const e of fdata.entries) {
+    if (!bal[e.student_id]) bal[e.student_id] = { name: e.student, red: 0, green: 0 };
+    bal[e.student_id][e.direction] += Number(e.amount) || 0;
+  }
+  const balList = Object.entries(bal).map(([sid, b]) => ({ sid: Number(sid), ...b, net: b.green - b.red }))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+  const money = n => "₹" + (Math.round(n * 100) / 100).toLocaleString("en-IN");
+  const dirPill = d => d === "red"
+    ? `<span class="pill" style="border:1px solid #dc2626;color:#dc2626">🔴 To receive</span>`
+    : `<span class="pill" style="border:1px solid #16a34a;color:#16a34a">🟢 To pay</span>`;
+  let selStudent = students.length ? students[0].id : null;
+  const renderLedger = () => {
+    const rows = fdata.entries.filter(e => e.student_id === selStudent);
+    const b = bal[selStudent] || { red: 0, green: 0 };
+    const net = b.green - b.red;
+    document.getElementById("fin_ledger").innerHTML =
+      `<h3>Ledger — ${esc((students.find(x => x.id === selStudent) || {}).display_name || "")}</h3>` +
+      (rows.length ? rows.map(e => `
+        <div class="card" style="margin:8px 0;padding:10px 14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <div><b>${esc(e.category)}</b> ${e.note ? `<span class="muted">— ${esc(e.note)}</span>` : ""}
+              <div class="muted" style="font-size:.78rem">${fmtDateTime(e.created_at)}${e.paid_at ? " · ✅ Paid" : ""}</div></div>
+            <div style="text-align:right"><b style="font-size:1.1rem;color:${e.direction === "red" ? "#dc2626" : "#16a34a"}">${money(e.amount)}</b><br>${dirPill(e.direction)}</div>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn small" data-fpaid="${e.id}">${e.paid_at ? "↩️ Mark unpaid" : "✅ Mark paid"}</button>
+            <button class="btn small danger" data-fdel="${e.id}">Delete</button>
+          </div>
+        </div>`).join("") : `<div class="card"><p class="muted">No entries yet for this student.</p></div>`) +
+      `<div class="card" style="background:#f8fafc"><b>Balance: </b>
+        <b style="color:${net < 0 ? "#dc2626" : net > 0 ? "#16a34a" : "#64748b"}">${net === 0 ? money(0) + " — settled" : (net < 0 ? "🔴 " + money(-net) + " to receive" : "🟢 " + money(net) + " to pay")}</b></div>`;
+    document.querySelectorAll("[data-fpaid]").forEach(x => x.onclick = async () => {
+      await api("POST", `/api/teacher/finance/${x.dataset.fpaid}/paid`); toast("Updated."); location.reload();
+    });
+    document.querySelectorAll("[data-fdel]").forEach(x => x.onclick = async () => {
+      if (confirm("Delete this entry?")) { await api("POST", `/api/teacher/finance/${x.dataset.fdel}/delete`); toast("Deleted."); location.reload(); }
+    });
+  };
+  p.innerHTML = `<h2>💰 Finance</h2>
+    <div class="card"><h3>➕ Add entry</h3>
+      <div class="grid cols2">
+        <div><label>Student</label><select id="fin_student">${students.map(x => `<option value="${x.id}">${esc(x.display_name)}</option>`).join("")}</select></div>
+        <div><label>Category</label><select id="fin_cat">${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select></div>
+        <div><label>Amount (₹)</label><input id="fin_amt" type="number" min="1" step="any" placeholder="e.g. 120"></div>
+        <div><label>Direction</label><select id="fin_dir">
+          <option value="red">🔴 Parent pays me (to receive)</option>
+          <option value="green">🟢 I pay / hold for parent (to pay)</option></select></div>
+      </div>
+      <label>Note (optional)</label><input id="fin_note" placeholder="e.g. Medicines from pharmacy">
+      <button class="btn" id="fin_add">Add entry</button></div>
+    <div class="card"><h3>📒 Student ledger</h3>
+      <label>Student</label><select id="fin_view">${students.map(x => `<option value="${x.id}">${esc(x.display_name)}</option>`).join("")}</select>
+      <div id="fin_ledger"></div></div>
+    <h2>📊 All balances</h2>
+    <div class="card" style="padding:6px 14px">` + (balList.length ? balList.map(b => {
+        const net = b.net;
+        const txt = net === 0 ? `<span class="muted">settled</span>`
+          : net < 0 ? `<b style="color:#dc2626">🔴 ${money(-net)} to receive</b>`
+          : `<b style="color:#16a34a">🟢 ${money(net)} to pay</b>`;
+        return `<div style="display:flex;justify-content:space-between;padding:10px 4px;border-bottom:1px solid #f1f5f9">
+          <span>${esc(b.name)}</span><span>${txt}</span></div>`;
+      }).join("") : `<p class="muted">No finance entries yet.</p>`) + `</div>
+    <div class="card"><h3>📱 Payment details (shown to parents)</h3>
+      <p class="muted" style="font-size:.85rem">Your UPI ID and scanner QR appear on the parent's Finance page so they can pay you.</p>
+      <label>UPI ID / payable number</label><input id="fin_upi" placeholder="e.g. name@upi" value="${esc(fset.settings.upi_id || "")}">
+      <label>Scanner QR photo</label><input type="file" id="fin_qr" accept="image/*">
+      ${fset.settings.upi_qr ? `<img src="${fset.settings.upi_qr}" style="max-width:160px;border-radius:8px;margin:8px 0" alt="UPI QR">` : ""}
+      <button class="btn" id="fin_save_upi">Save payment details</button></div>`;
+  document.getElementById("fin_add").onclick = async () => {
+    const body = {
+      student_id: Number(document.getElementById("fin_student").value),
+      category: document.getElementById("fin_cat").value,
+      amount: document.getElementById("fin_amt").value,
+      direction: document.getElementById("fin_dir").value,
+      note: document.getElementById("fin_note").value
+    };
+    if (!body.amount || Number(body.amount) <= 0) { toast("Enter a valid amount.", false); return; }
+    try { await api("POST", "/api/teacher/finance", body); toast("Entry added. 💰"); location.reload(); }
+    catch (e) { toast(e.message, false); }
+  };
+  const vsel = document.getElementById("fin_view");
+  selStudent = Number(vsel.value);
+  vsel.onchange = () => { selStudent = Number(vsel.value); renderLedger(); };
+  renderLedger();
+  document.getElementById("fin_save_upi").onclick = async () => {
+    const upi_id = document.getElementById("fin_upi").value.trim();
+    const qf = document.getElementById("fin_qr").files[0];
+    let upi_qr = null;
+    if (qf) { try { const c = await compressPhoto(qf); upi_qr = c.data; } catch (e) { toast("QR photo failed.", false); return; } }
+    try { await api("POST", "/api/teacher/finance-settings", { upi_id, upi_qr }); toast("Payment details saved. 📱"); }
+    catch (e) { toast(e.message, false); }
+  };
 }
 
 async function vTasks(p) {
