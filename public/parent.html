@@ -38,6 +38,10 @@
 <button class="btn" id="fin_toggle" style="width:100%;margin-bottom:12px;font-size:1.05rem">💰 Finance</button>
 <div class="card" id="fincard" style="display:none"><p class="muted">Loading finance…</p></div>
 
+<div class="card" id="diarycard" style="display:none"></div>
+
+<div class="card" id="noticecard" style="display:none"><h2>📢 Notice Board</h2><div id="notices"></div></div>
+
 <div class="card" id="childcard"><p class="muted">Loading your child's progress…</p></div>
 
 <div class="card" id="classtasks"><p class="muted">Loading class tasks…</p></div>
@@ -73,6 +77,73 @@
     <h3>📊 Marks</h3><div id="pmarks"><p class="muted">Loading…</p></div>
     <p style="margin-top:16px"><a class="btn" href="/certificate.html">🏅 View / Download Certificate</a></p><p style="margin-top:8px" id="compcertlink"></p><p style="margin-top:8px"><a class="btn ghost" href="/top10-learning.html">🏆 Top 10 Learning Completers</a></p>`;
   const myId = s.id;
+
+  // ---- Holiday Diary checklist (parent ticks; diary text is private) ----
+  const DIARY_ITEMS = ["5 prayers", "3 meals on time", "Evening play", "Evening bath", "Slept before 10 PM", "No fight with Umma", "Helped at home", "Read Quran after Maghrib", "Read Quran after Fajr", "Haddad", "Tahajjud", "Spoke to Uppa", "Spoke to Umma", "Spoke to Uppappas", "Spoke to Ummammas", "Asked Uppa about his life experiences", "Less screen time"];
+  try {
+    const hd = await api("GET", "/api/parent/holiday-diary");
+    const dc = document.getElementById("diarycard");
+    if (hd.tasks && hd.tasks.length) {
+      dc.style.display = "";
+      dc.innerHTML = `<h2>🏖️ ${esc(s.display_name)}'s Holiday Diary</h2>
+        <p class="muted" style="font-size:.9rem">🔒 Your child's diary writing is private — only your child and the teacher can read it. Please tick what your child did today. Your tick verifies the diary.</p>` +
+        hd.tasks.map(tk => {
+          if (!tk.open) return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0"><b>${esc(tk.title)}</b><p class="muted">🔒 Opens ${esc(tk.start_date)} morning.</p></div>`;
+          const done = tk.checklist;
+          const items = done && done.items ? done.items : DIARY_ITEMS.map(() => false);
+          const cnt = done ? done.ticked_count : 0;
+          const entryTxt = tk.entryStatus === "none" ? "not written yet ⏳" : tk.entryStatus === "approved" ? "✅ approved by teacher" : tk.entryStatus === "rejected" ? "❌ not approved" : "✅ written — waiting for teacher";
+          return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0">
+            <b>${esc(tk.title)}</b> <span class="muted">(${esc(tk.day_label)})</span>
+            <p class="muted" style="font-size:.85rem">Diary: ${entryTxt}</p>
+            <p style="font-weight:700;color:#0b6e5d;font-size:.9rem"><span id="dcnt${tk.id}">${cnt} of 17 ticked</span></p>
+            <div style="height:8px;background:#e3ebe8;border-radius:6px;overflow:hidden;margin-bottom:10px"><i id="dbar${tk.id}" style="display:block;height:100%;background:#0b6e5d;width:${Math.round(cnt / 17 * 100)}%"></i></div>
+            ${DIARY_ITEMS.map((it, i) => `<div class="ditem" data-t="${tk.id}" data-i="${i}" style="display:flex;align-items:center;gap:10px;border:1.5px solid ${items[i] ? "#0b6e5d" : "#d8e4e0"};border-radius:12px;padding:10px 12px;margin-bottom:7px;cursor:pointer;font-size:13.5px;${items[i] ? "background:#e8f5f1" : ""}"><span class="box" style="flex-shrink:0;width:22px;height:22px;border:2px solid ${items[i] ? "#0b6e5d" : "#9db3ac"};border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;background:${items[i] ? "#0b6e5d" : "#fff"}">${items[i] ? "✓" : ""}</span><span>${i + 1}. ${esc(it)}</span></div>`).join("")}
+            <button class="btn" id="dverify${tk.id}">${done ? "✓ Verified — tap to update" : "✓ Verify & Submit"}</button>
+            ${done ? `<p class="muted" style="font-size:.85rem;margin-top:6px">✓ Verified ${fmtDateTime(done.ticked_at)} — ${done.ticked_count} of 17 items.</p>` : ""}</div>`;
+        }).join("");
+      const state = {};
+      hd.tasks.forEach(tk => { if (tk.open) state[tk.id] = (tk.checklist && tk.checklist.items) ? [...tk.checklist.items] : DIARY_ITEMS.map(() => false); });
+      dc.querySelectorAll(".ditem").forEach(el => el.onclick = () => {
+        const tid = +el.dataset.t, i = +el.dataset.i;
+        state[tid][i] = !state[tid][i];
+        const on = state[tid][i];
+        el.style.background = on ? "#e8f5f1" : "";
+        el.style.borderColor = on ? "#0b6e5d" : "#d8e4e0";
+        const box = el.querySelector(".box");
+        box.textContent = on ? "✓" : "";
+        box.style.background = on ? "#0b6e5d" : "#fff";
+        box.style.borderColor = on ? "#0b6e5d" : "#9db3ac";
+        const c = state[tid].filter(Boolean).length;
+        document.getElementById("dcnt" + tid).textContent = c + " of 17 ticked";
+        document.getElementById("dbar" + tid).style.width = Math.round(c / 17 * 100) + "%";
+      });
+      hd.tasks.forEach(tk => {
+        if (!tk.open) return;
+        document.getElementById("dverify" + tk.id).onclick = async (ev) => {
+          const btn = ev.target;
+          btn.disabled = true; btn.textContent = "⏳ Saving…";
+          try {
+            const r = await api("POST", "/api/parent/holiday-checklist", { task_id: tk.id, items: state[tk.id] });
+            toast(`Verified! ${r.ticked_count} of 17 items ticked for ${s.display_name}. ✅`);
+            btn.textContent = "✓ Verified";
+          } catch (e) { toast(e.message, false); btn.disabled = false; btn.textContent = "✓ Verify & Submit"; }
+        };
+      });
+    }
+  } catch (e) {}
+  // ---- Notices (parents see the same notice board) ----
+  try {
+    const nd = await api("GET", "/api/notices");
+    const nc = document.getElementById("noticecard");
+    if (nd.notices.length) {
+      nc.style.display = "";
+      document.getElementById("notices").innerHTML = nd.notices.map(n =>
+        `<div style="border:1px solid #fbbf24;background:#fffbeb;border-radius:8px;padding:10px;margin:8px 0">
+        <p><b>📌 ${esc(n.title || "Notice")}</b></p><p style="white-space:pre-wrap">${esc(n.text)}</p>
+        <p class="muted" style="font-size:.78rem">${fmtDateTime(n.created_at)}${n.author_name ? " · " + esc(n.author_name) : ""}</p></div>`).join("");
+    }
+  } catch (e) {}
 
   // Parent's view of child's marks (private)
   try {

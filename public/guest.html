@@ -74,6 +74,7 @@
 
 <div class="card">
   <h2>✍️ Write for a Student</h2>
+  <div id="glock"></div>
   <p class="muted">Choose a student and write a story, poem or any work in their name. It goes to the teacher for approval, just like the student's own writing.</p>
   <label style="display:block;font-weight:700;margin:10px 0 4px">Student</label>
   <select id="w_student" style="width:100%;padding:10px;border:2px solid #e8f2f6;border-radius:10px"></select>
@@ -137,6 +138,15 @@ function barHTML(pct) {
   const me = await api("GET", "/api/me");
   if (!me.user || me.user.role !== "guest") { location.href = "/index.html"; return; }
   document.getElementById("gname").textContent = "Welcome, " + me.user.display_name + " — tick what each student has completed.";
+  // Holiday-leave writing lock: mentors cannot write for students while locked.
+  try {
+    const wt = await api("GET", "/api/weekly-tasks");
+    if (wt.writing_locked) {
+      document.getElementById("w_submit").disabled = true;
+      document.getElementById("glock").innerHTML = `<div style="border:2px solid #d4a017;background:#fffbeb;border-radius:10px;padding:12px;margin:10px 0"><b>🔒 Writing is locked</b><br>Writing is locked during the holiday leave (7–9 Nov) so nobody copies at home. It will open again on Tuesday 10 Nov.</div>`;
+      document.getElementById("w_msg").textContent = "🔒 Writing is locked during the holiday leave.";
+    }
+  } catch (e) {}
   // Load my profile
   try {
     const pr = await api("GET", "/api/mentor/profile");

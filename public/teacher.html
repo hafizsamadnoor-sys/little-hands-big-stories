@@ -16,7 +16,7 @@
 <div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
 </div>
 <script>
-const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],
+const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["diary","🏖️ Holiday Diary"],
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
@@ -40,7 +40,7 @@ let cur = "approvals";
 async function render() {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, challenges: vChallenges,
+  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, challenges: vChallenges,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
@@ -141,10 +141,15 @@ async function vMessages(p) {
     <label>Message</label><textarea id="msg_text" rows="3" style="width:100%" placeholder="Write your message... (YouTube links become videos)"></textarea>
     <label>Photo (optional)</label><input type="file" id="msg_photo" accept="image/*">
     <button class="btn" id="msg_send">Send 💬</button></div>
-    <h2>📨 Sent messages</h2><div id="msglist">` + (mdata.messages.length ? mdata.messages.map(m =>
-      `<div class="card"><p><b>${esc(m.student)}</b> <span class="muted" style="font-size:.8rem">${fmtDateTime(m.created_at)}${m.read_at ? " · ✅ read" : " · ⏳ unread"}</span></p>
-      <p>${richText(m.text)}</p>${mediaHtml(m)}<button class="btn small danger" data-mdel="${m.id}">Delete</button></div>`).join("")
-    : `<div class="card"><p class="muted">No messages sent yet.</p></div>`) + `</div>`;
+    <h2>📨 Messages</h2><div id="msglist">` + (mdata.messages.length ? mdata.messages.map(m =>
+      `<div class="card"><p>${m.sender_role === "student"
+        ? `<span class="pill" style="border:1px solid #15803d;color:#15803d">👦 ${esc(m.student)} → You</span>`
+        : `<span class="pill" style="border:1px solid #1d4ed8;color:#1d4ed8">You → ${esc(m.student)}</span>`}
+      <span class="muted" style="font-size:.8rem">${fmtDateTime(m.created_at)}${m.sender_role === "student" ? "" : (m.read_at ? " · ✅ read" : " · ⏳ unread")}</span></p>
+      <p>${richText(m.text)}</p>${mediaHtml(m)}
+      ${m.sender_role === "student" ? `<button class="btn small" data-mreply="${m.sid}">↩️ Reply</button> ` : ""}
+      <button class="btn small danger" data-mdel="${m.id}">Delete</button></div>`).join("")
+    : `<div class="card"><p class="muted">No messages yet.</p></div>`) + `</div>`;
   document.getElementById("msg_all").onchange = e => {
     document.querySelectorAll(".msg_stu").forEach(c => c.checked = false);
     document.getElementById("msg_students").style.opacity = e.target.checked ? .4 : 1;
@@ -166,18 +171,27 @@ async function vMessages(p) {
   p.querySelectorAll("[data-mdel]").forEach(b => b.onclick = async () => {
     if (confirm("Delete this message?")) { await api("POST", `/api/teacher/message/${b.dataset.mdel}/delete`); render(); }
   });
+  // Reply to a boy's message: pre-picks him in the send form above.
+  p.querySelectorAll("[data-mreply]").forEach(b => b.onclick = () => {
+    document.getElementById("msg_all").checked = false;
+    document.getElementById("msg_students").style.opacity = 1;
+    document.querySelectorAll(".msg_stu").forEach(c => c.checked = String(c.value) === String(b.dataset.mreply));
+    document.getElementById("msg_text").focus();
+    window.scrollTo(0, 0);
+  });
 }
 
 async function vNotices(p) {
   const d = await api("GET", "/api/notices");
   p.innerHTML = `<h2>📢 Notice board</h2><div class="card">
-    <p class="muted" style="font-size:.85rem">Everyone (all students) will see this on their dashboard.</p>
+    <p class="muted" style="font-size:.85rem">Students see it on their dashboard; parents see it on the Parents' Corner. Choose who sees it below.</p>
     <label>Title (optional)</label><input id="nt_title" placeholder="e.g. Tomorrow's class">
     <label>Notice</label><textarea id="nt_text" rows="3" style="width:100%" placeholder="Write the notice... (YouTube links become videos)"></textarea>
+    <label>Who sees this?</label><select id="nt_aud"><option value="all">Everyone — students + parents</option><option value="students">Students only</option><option value="parents">Parents only</option></select>
     <label>Photo (optional)</label><input type="file" id="nt_photo" accept="image/*">
     <button class="btn" id="nt_post">Post 📢</button></div>
     <h2>📌 Posted notices</h2>` + (d.notices.length ? d.notices.map(n =>
-      `<div class="card"><h3>${esc(n.title || "Notice")}</h3><p>${richText(n.text)}</p>${mediaHtml(n)}
+      `<div class="card"><h3>${esc(n.title || "Notice")} <span class="pill">${n.audience === "students" ? "👦 Students only" : n.audience === "parents" ? "👪 Parents only" : "🌍 Everyone"}</span></h3><p>${richText(n.text)}</p>${mediaHtml(n)}
       <p class="muted" style="font-size:.8rem">${fmtDateTime(n.created_at)}</p>
       <button class="btn small danger" data-ndel="${n.id}">Delete</button></div>`).join("")
     : `<div class="card"><p class="muted">No notices yet.</p></div>`);
@@ -188,7 +202,7 @@ async function vNotices(p) {
     if (pf) { try { const c = await compressPhoto(pf); media_data = c.data; media_type = c.type; } catch (e) { toast("Photo failed.", false); return; } }
     if (!text && !media_data) { toast("Write the notice or add a photo.", false); return; }
     try {
-      await api("POST", "/api/teacher/notice", { title: document.getElementById("nt_title").value, text, media_data, media_type });
+      await api("POST", "/api/teacher/notice", { title: document.getElementById("nt_title").value, text, media_data, media_type, audience: document.getElementById("nt_aud").value });
       toast("Posted! 📢"); render();
     } catch (e) { toast(e.message, false); }
   };
@@ -198,10 +212,11 @@ async function vNotices(p) {
 }
 
 async function vFinance(p) {
-  const [fdata, sdata, fset] = await Promise.all([
+  const [fdata, sdata, fset, gdata] = await Promise.all([
     api("GET", "/api/teacher/finance"),
     api("GET", "/api/teacher/students"),
-    api("GET", "/api/teacher/finance-settings")
+    api("GET", "/api/teacher/finance-settings"),
+    api("GET", "/api/teacher/general-expenses")
   ]);
   const students = sdata.students.slice().sort((a, b) => a.display_name.localeCompare(b.display_name));
   const cats = fdata.categories || ["Store", "Medical", "Bus cash", "Book", "Trip", "Other"];
@@ -244,7 +259,26 @@ async function vFinance(p) {
       if (confirm("Delete this entry?")) { await api("POST", `/api/teacher/finance/${x.dataset.fdel}/delete`); toast("Deleted."); location.reload(); }
     });
   };
+  const nStudents = students.length || 38;
+  const fundBal = gdata.fund_balance || 0;
+  const gexpHtml = (gdata.expenses || []).length ? (gdata.expenses || []).map(g => `
+    <div style="display:flex;justify-content:space-between;padding:8px 4px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap;gap:4px;align-items:center">
+      <span><b>₹${g.amount}</b> ${esc(g.category)}${g.note ? ` — ${esc(g.note)}` : ""} <span class="muted" style="font-size:.78rem">${fmtDateTime(g.created_at)}</span></span>
+      <span><span class="muted" style="font-size:.85rem">₹${g.per_child} × ${nStudents} = ₹${g.per_child * nStudents} · ₹${g.surplus} to fund</span>
+      <button class="btn small danger" data-gdel="${g.id}" style="margin-left:8px">Undo</button></span>
+    </div>`).join("") : `<p class="muted">No general expenses yet.</p>`;
   p.innerHTML = `<h2>💰 Finance</h2>
+    <div class="card" style="border:2px solid #0e7c8c"><h3>🏫 General Expense — split among all ${nStudents} students</h3>
+      <p class="muted" style="font-size:.85rem">Spent for the whole class? Enter the amount — it is divided equally among all ${nStudents} students, rounded up to the nearest rupee per child. The extra goes to the class General Fund.</p>
+      <div class="grid cols2">
+        <div><label>Amount spent (₹)</label><input id="gen_amt" type="number" min="1" step="any" placeholder="e.g. 170"></div>
+        <div><label>Category</label><select id="gen_cat">${cats.map(c => `<option>${esc(c)}</option>`).join("")}</select></div>
+      </div>
+      <label>What was it for? (optional)</label><input id="gen_note" placeholder="e.g. Chart paper for class">
+      <div id="gen_preview" class="muted" style="margin:8px 0;font-size:.9rem"></div>
+      <button class="btn" id="gen_add">Split among all ${nStudents} students</button>
+      <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:8px"><b>🏦 General Fund balance: ₹${fundBal}</b> <span class="muted" style="font-size:.85rem">(surplus from rounded-up splits)</span></div>
+      <div style="margin-top:10px"><h3 style="margin:6px 0">General expense history</h3>${gexpHtml}</div></div>
     <div class="card"><h3>➕ Add entry</h3>
       <div class="grid cols2">
         <div><label>Student</label><select id="fin_student">${students.map(x => `<option value="${x.id}">${esc(x.display_name)}</option>`).join("")}</select></div>
@@ -286,6 +320,33 @@ async function vFinance(p) {
     try { await api("POST", "/api/teacher/finance", body); toast("Entry added. 💰"); location.reload(); }
     catch (e) { toast(e.message, false); }
   };
+  const genAmt = document.getElementById("gen_amt");
+  const genPrev = document.getElementById("gen_preview");
+  const updateGenPreview = () => {
+    const a = parseFloat(genAmt.value) || 0;
+    if (!a || a <= 0) { genPrev.textContent = ""; return; }
+    const pc = Math.ceil(a / nStudents);
+    const tot = pc * nStudents;
+    const sur = Math.round((tot - a) * 100) / 100;
+    genPrev.innerHTML = `₹${a} ÷ ${nStudents} = <b>₹${pc} per child</b> · Total ₹${tot}${sur > 0 ? ` · <b>₹${sur} to General Fund</b>` : ""}`;
+  };
+  genAmt.oninput = updateGenPreview;
+  document.getElementById("gen_add").onclick = async () => {
+    const amt = parseFloat(genAmt.value) || 0;
+    if (!amt || amt <= 0) { toast("Enter a valid amount.", false); return; }
+    const body = { amount: amt, category: document.getElementById("gen_cat").value, note: document.getElementById("gen_note").value };
+    if (!confirm(`Split ₹${amt} among all ${nStudents} students? Each child gets ₹${Math.ceil(amt / nStudents)}.`)) return;
+    try {
+      const r = await api("POST", "/api/teacher/general-expense", body);
+      toast(`Split done! ₹${r.per_child} × ${r.count} students. ₹${r.surplus} to General Fund. 💰`);
+      location.reload();
+    } catch (e) { toast(e.message, false); }
+  };
+  document.querySelectorAll("[data-gdel]").forEach(x => x.onclick = async () => {
+    if (!confirm("Undo this general expense? It will remove all 38 child entries and take the surplus back out of the General Fund.")) return;
+    try { await api("POST", `/api/teacher/general-expense/${x.dataset.gdel}/delete`); toast("General expense undone."); location.reload(); }
+    catch (e) { toast(e.message, false); }
+  });
   const vsel = document.getElementById("fin_view");
   selStudent = Number(vsel.value);
   vsel.onchange = () => { selStudent = Number(vsel.value); renderLedger(); };
@@ -351,6 +412,54 @@ async function vTasks(p) {
       d.attempts.map(a => `<tr><td>${esc(a.display_name)}</td><td>${a.score}/${a.total}</td><td>${a.points_awarded}</td>
         <td style="font-size:.8rem">${a.answers.map(x => `${x.correct ? "✅" : "❌"} ${esc(x.given || "—")}`).join("<br>")}</td></tr>`).join("")
       + `</tbody></table>` : `<p class="muted">No attempts yet.</p>`;
+  });
+}
+
+async function vDiary(p) {
+  const d = await api("GET", "/api/teacher/holiday-diary");
+  const lk = await api("GET", "/api/teacher/writing-lock");
+  p.innerHTML = `
+    <div class="card"><h2>🔒 Writing lock (holiday leave)</h2>
+      <p>General writing (Story, Diary, Letter, Poem, Manifesto, Write Anything, Book Review) is currently <b>${lk.locked ? "🔒 LOCKED" : "🔓 open"}</b> for students and mentors. Holiday Diary submissions are never blocked by this lock.</p>
+      <button class="btn" id="locktoggle">${lk.locked ? "🔓 Unlock writing" : "🔒 Lock writing for the leave"}</button></div>
+    <h2>🏖️ Holiday Diary — 7, 8, 9 November</h2>
+    <p class="muted">Diary text is private — only you and the child can read it. Approving gives points + stars (typed points + star points). Best good deed of the day gets +5 bonus.</p>
+    ${d.tasks.map(tk => `
+    <div class="card"><h3>${esc(tk.title)} <span class="tag">${esc(tk.day_label)}</span> <span class="muted" style="font-size:.85rem">${tk.open ? "● Open" : "🔒 Opens " + esc(tk.start_date)}</span></h3>
+      ${tk.entries.length ? tk.entries.map(e => `
+      <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0">
+        <p><b>${esc(e.student_name)}</b> <span class="muted">Ad ${e.ad_no} · ${fmtDateTime(e.created_at)}</span>
+        ${e.status === "approved" ? ` <span class="pill">✅ Approved · ⭐ ${e.stars} · +${e.points_awarded} pts</span>` : e.status === "rejected" ? ` <span class="pill">❌ Not approved</span>` : ` <span class="pill">⏳ Waiting</span>`}
+        <br><span class="muted" style="font-size:.85rem">📋 Parent checklist: ${e.checklist_count === null || e.checklist_count === undefined ? "not ticked yet" : e.checklist_count + " of 17 ticked"}</span></p>
+        <p><b>1. My Diary</b></p><p style="white-space:pre-wrap">${esc(e.diary_text)}</p>
+        <p><b>2. My Best Moment</b></p><p style="white-space:pre-wrap">${esc(e.best_moment)}</p>
+        <p><b>3. My Good Deed</b></p><p style="white-space:pre-wrap">${esc(e.good_deed)}</p>
+        ${e.status !== "approved" ? `
+        <label>Stars (0–5)</label>
+        <select id="dst${e.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
+        <label>Points (your choice — 5 per day)</label>
+        <input id="dpt${e.id}" type="number" min="0" value="5" style="width:90px">
+        <button class="btn small" data-da="${e.id}">✅ Approve</button>
+        <button class="btn small ghost" data-dr="${e.id}">❌ Reject</button>` : `
+        ${e.bonus_given ? `<span class="pill">⭐ Best good deed +5 given</span>` : `<button class="btn small" data-db="${e.id}">⭐ Best good deed +5</button>`}`}
+      </div>`).join("") : `<p class="muted">No diaries submitted yet for this day.</p>`}
+    </div>`).join("")}`;
+  document.getElementById("locktoggle").onclick = async () => {
+    try { const r = await api("POST", "/api/teacher/writing-lock", { locked: !lk.locked }); toast(r.locked ? "Writing locked for the leave. 🔒" : "Writing unlocked. 🔓"); render(); }
+    catch (e) { toast(e.message, false); }
+  };
+  p.querySelectorAll("[data-da]").forEach(b => b.onclick = async () => {
+    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.da}/review`, { decision: "approve", stars: document.getElementById("dst" + b.dataset.da).value, points: document.getElementById("dpt" + b.dataset.da).value }); toast("Diary approved! ⭐"); render(); }
+    catch (e) { toast(e.message, false); }
+  });
+  p.querySelectorAll("[data-dr]").forEach(b => b.onclick = async () => {
+    if (!confirm("Reject this diary? The child will see it was not approved.")) return;
+    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.dr}/review`, { decision: "reject" }); toast("Diary rejected."); render(); }
+    catch (e) { toast(e.message, false); }
+  });
+  p.querySelectorAll("[data-db]").forEach(b => b.onclick = async () => {
+    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.db}/good-deed-bonus`); toast("Best good deed +5 given! ⭐"); render(); }
+    catch (e) { toast(e.message, false); }
   });
 }
 

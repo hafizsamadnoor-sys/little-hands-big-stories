@@ -11,7 +11,8 @@
 <body><div id="nav"></div><div class="wrap">
 <h1>✍️ Write</h1>
 <div id="taskinfo"></div>
-<div class="card">
+<div id="lockbanner" style="display:none"></div>
+<div class="card" id="writeform">
   <label>Writing type</label>
   <select id="type">
     <option value="story">📖 Story</option>
@@ -43,9 +44,18 @@
   const params = new URLSearchParams(location.search);
   const taskId = params.get("task");
   let isTaskWrite = false;
+  let wt = null;
+  try { wt = await api("GET", "/api/weekly-tasks"); } catch (e) {}
+  // Holiday-leave writing lock: the form stays hidden while locked.
+  if (wt && wt.writing_locked) {
+    document.getElementById("writeform").style.display = "none";
+    const lb = document.getElementById("lockbanner");
+    lb.style.display = "";
+    lb.innerHTML = `<div class="card" style="border:2px solid #d4a017;background:#fffbeb"><h2>🔒 Writing is locked</h2><p>Writing is locked during the holiday leave (7–9 Nov) so nobody copies at home. Enjoy your leave! 🌼</p><p>Write your <b>Holiday Diary</b> on your dashboard instead — it is open today. 📖</p><a class="btn" href="/dashboard.html">Go to my Holiday Diary →</a></div>`;
+  }
   if (taskId) {
     try {
-      const t = await api("GET", "/api/weekly-tasks");
+      const t = wt || await api("GET", "/api/weekly-tasks");
       const all = [t.current, ...(t.archive || [])].filter(Boolean);
       const task = all.find(x => String(x.id) === String(taskId));
       if (task && task.kind !== "quiz") {

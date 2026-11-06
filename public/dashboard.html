@@ -11,20 +11,24 @@
 <body><div id="nav"></div><div class="wrap">
 <h1 id="hello">👋</h1>
 <div class="statrow" id="stats"></div>
+<div class="card" id="msgcard" style="display:none"><h2>💬 Messages from Teacher</h2><div id="mymsgs"></div></div>
+<div class="card" id="noticecard" style="display:none"><h2>📢 Notice Board</h2><div id="notices"></div></div>
 <div class="card"><h2>🏆 My Club Journey</h2><div id="clubjourney"><p class="muted">Loading…</p></div></div>
 <div class="card"><h2>📊 My Total Progress</h2><div id="totalprog"><p class="muted">Loading…</p></div></div>
 <div id="taskcard"></div>
+<div id="diarycard"></div>
 <div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
 <div id="compcert"></div>
 <div class="card"><h2>📊 My Marks</h2><div id="mymarks"><p class="muted">Loading…</p></div></div>
 <div class="card">
   <h2>✍️ Start creating</h2>
-  <a class="btn" href="/write.html">✍️ Write now</a>
+  <a class="btn" id="writenow" href="/write.html">✍️ Write now</a>
   <a class="btn ghost" href="/works.html">📖 Read stories</a>
   <a class="btn ghost" href="/board.html">🏆 Points Board</a>
 </div>
 <div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
 <div class="card"><h2>🏅 My badges</h2><div id="badges"></div></div>
+
 <div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
 </div>
 <script>
@@ -120,6 +124,44 @@
       <a class="btn" href="${c.kind === "quiz" ? "/quiz.html?task=" + c.id : "/write.html?task=" + c.id}">Start →</a>
     </div>`;
   }
+  // Holiday-leave writing lock: hide the Write button while locked.
+  if (t.writing_locked) {
+    const w = document.getElementById("writenow");
+    if (w) w.outerHTML = `<p>🔒 <b>Writing is locked during the holiday leave (7–9 Nov).</b><br><span class="muted">Enjoy your leave — write your Holiday Diary above! 🌼</span></p>`;
+  }
+  // ---- Holiday Diary (7–9 Nov leave) — private, never published ----
+  try {
+    const hd = await api("GET", "/api/holiday-diary-tasks");
+    const dc = document.getElementById("diarycard");
+    if (hd.tasks && hd.tasks.length) {
+      const dayName = (ds) => { try { return new Date(ds + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }); } catch (e) { return ds; } };
+      dc.innerHTML = `<div class="card" style="border:2px solid #0b6e5d"><h2>🏖️ Holiday Diary</h2>
+        <p class="muted" style="font-size:.9rem">One small diary each day at home. 🔒 Private — only you and your teacher can read it. It is never published.</p>
+        ${hd.tasks.map(tk => {
+          if (!tk.open) return `<div class="card" style="box-shadow:none"><h3>${esc(tk.title)}</h3><p class="muted">🔒 Opens ${dayName(tk.start_date)} morning — it will not open today.</p></div>`;
+          if (tk.myEntry) return `<div class="card" style="box-shadow:none"><h3>${esc(tk.title)}</h3><p>${tk.myEntry.status === "approved" ? `✅ Approved! ⭐ ${tk.myEntry.stars} · +${tk.myEntry.points_awarded} points` : tk.myEntry.status === "rejected" ? "❌ Not approved" : "✅ Submitted — waiting for teacher"}</p></div>`;
+          return `<div class="card" style="box-shadow:none"><h3>${esc(tk.title)}</h3>
+            <p><span class="pill">⏳ Due today</span> <span class="pill">+${tk.points} pts + ⭐</span></p>
+            <label>1. My Diary</label><textarea id="d_diary_${tk.id}" rows="3" placeholder="What happened today? What news did you hear at home or in your village? What do you think about it? (3–4 lines)"></textarea>
+            <label>2. My Best Moment</label><textarea id="d_best_${tk.id}" rows="2" placeholder="Your best moment today — or a bitter moment and what you learned from it (2 lines)"></textarea>
+            <label>3. My Good Deed</label><textarea id="d_deed_${tk.id}" rows="2" placeholder="One good deed you did today"></textarea>
+            <p class="muted" style="font-size:.85rem">All 3 boxes must be filled. 📋 Your parents will tick your day checklist (17 items) — you don't tick it.</p>
+            <p style="font-weight:700;color:#0b6e5d;font-size:.9rem">Points: ${tk.points} + stars on approval · Best good deed of the day gets +5 bonus</p>
+            <button class="btn" data-diary="${tk.id}">✍️ Submit My Diary</button></div>`;
+        }).join("")}</div>`;
+      dc.querySelectorAll("[data-diary]").forEach(b => b.onclick = async () => {
+        const id = b.dataset.diary;
+        try {
+          await api("POST", "/api/student/holiday-diary", { task_id: +id,
+            diary_text: document.getElementById("d_diary_" + id).value,
+            best_moment: document.getElementById("d_best_" + id).value,
+            good_deed: document.getElementById("d_deed_" + id).value });
+          toast("Diary submitted! Your teacher will read it soon. ⭐");
+          location.reload();
+        } catch (e) { toast(e.message, false); }
+      });
+    }
+  } catch (e) {}
   const w = await api("GET", "/api/writer-of-week");
   document.getElementById("wow").innerHTML = w.writer
     ? `<p style="font-size:1.1rem">🌟 <b>${esc(w.writer.display_name)}</b></p><p class="muted">${esc(w.writer.note)}</p>`
@@ -199,19 +241,22 @@
   // Unread badge counts
   let unread = { messages: 0, notices: 0 };
   try { unread = await api("GET", "/api/my/unread"); } catch (e) {}
-  // Private messages from teacher (only this student's)
+  // Private messages from teacher (only this student's) — read-only here;
+  // the 💬 chat in the top bar is where the boy replies to the teacher.
   try {
     const md = await api("GET", "/api/my/messages");
-    if (md.messages.length) {
+    const teacherMsgs = md.messages.filter(m => m.sender_role !== "student");
+    if (teacherMsgs.length) {
       document.getElementById("msgcard").style.display = "block";
-      const newCount = md.messages.filter(m => !m.read_at).length;
+      const newCount = teacherMsgs.filter(m => !m.read_at).length;
       document.querySelector("#msgcard h2").innerHTML =
         `💬 Messages from Teacher${newCount ? ` <span style="background:#ef4444;color:#fff;border-radius:12px;padding:2px 10px;font-size:.8rem">${newCount} new</span>` : ""}`;
-      document.getElementById("mymsgs").innerHTML = md.messages.map(m =>
+      document.getElementById("mymsgs").innerHTML = teacherMsgs.map(m =>
         `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin:8px 0;${m.read_at ? "" : "background:#eff6ff;border-color:#93c5fd"}">
         <p>${richText(m.text)}</p>${mediaHtml(m)}
-        <p class="muted" style="font-size:.78rem">${fmtDateTime(m.created_at)}${m.read_at ? "" : ' · <b style="color:#1d4ed8">NEW</b>'}</p></div>`).join("");
-      for (const m of md.messages.filter(x => !x.read_at)) {
+        <p class="muted" style="font-size:.78rem">${fmtDateTime(m.created_at)}${m.read_at ? "" : ' · <b style="color:#1d4ed8">NEW</b>'}</p></div>`).join("") +
+        `<p style="margin-top:10px"><button class="btn small" onclick="openChat()">💬 Reply / chat with Teacher →</button></p>`;
+      for (const m of teacherMsgs.filter(x => !x.read_at)) {
         try { await api("POST", `/api/my/messages/${m.id}/read`); } catch (e) {}
       }
     }
