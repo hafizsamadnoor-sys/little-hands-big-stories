@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT DEFAULT (datetime('now')),
   read_at TEXT,
   media_data TEXT,
-  media_type TEXT
+  media_type TEXT,
+  sender_role TEXT NOT NULL DEFAULT 'teacher'
 );
 CREATE TABLE IF NOT EXISTS notices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +83,8 @@ CREATE TABLE IF NOT EXISTS notices (
   created_at TEXT DEFAULT (datetime('now')),
   media_data TEXT,
   media_type TEXT,
-  author_name TEXT DEFAULT ''
+  author_name TEXT DEFAULT '',
+  audience TEXT NOT NULL DEFAULT 'all'
 );
 CREATE TABLE IF NOT EXISTS notice_reads (
   notice_id INTEGER NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
@@ -186,6 +188,11 @@ try { db.exec("ALTER TABLE works ADD COLUMN edited_by_class TEXT DEFAULT ''"); }
 try { db.exec("ALTER TABLE works ADD COLUMN content_original TEXT"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE works ADD COLUMN proofread_at TEXT"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE works ADD COLUMN reject_reason TEXT"); } catch (e) { /* already there */ }
+// Student → teacher messages: who sent it ('teacher' for old rows).
+// (Placed here — after the messages table is created above.)
+try { db.exec("ALTER TABLE messages ADD COLUMN sender_role TEXT NOT NULL DEFAULT 'teacher'"); } catch (e) { /* already there */ }
+// Notice audience: 'all' (students + parents), 'students', or 'parents'.
+try { db.exec("ALTER TABLE notices ADD COLUMN audience TEXT NOT NULL DEFAULT 'all'"); } catch (e) { /* already there */ }
 // Migration: allow 'guest' role in users table (for DBs created before the guest feature).
 try {
   var urow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get();
@@ -274,6 +281,40 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
   points_awarded INTEGER NOT NULL DEFAULT 0,
   answers_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(task_id, student_id)
+);
+-- Holiday Diary (7-9 Nov 2026 leave): diary text is PRIVATE (child + teacher
+-- only), NEVER published. Parent ticks the 17-item day checklist.
+CREATE TABLE IF NOT EXISTS holiday_diary_tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  day_label TEXT NOT NULL DEFAULT '',
+  start_date TEXT NOT NULL,
+  points INTEGER NOT NULL DEFAULT 5,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS holiday_diary_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES holiday_diary_tasks(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  diary_text TEXT NOT NULL DEFAULT '',
+  best_moment TEXT NOT NULL DEFAULT '',
+  good_deed TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pending',
+  stars INTEGER NOT NULL DEFAULT 0,
+  points_awarded INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  reviewed_at TEXT,
+  UNIQUE(task_id, student_id)
+);
+CREATE TABLE IF NOT EXISTS holiday_checklists (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id INTEGER NOT NULL REFERENCES holiday_diary_tasks(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  items_json TEXT NOT NULL DEFAULT '[]',
+  ticked_count INTEGER NOT NULL DEFAULT 0,
+  ticked_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(task_id, student_id)
 );
 CREATE TABLE IF NOT EXISTS mysteries (
@@ -731,6 +772,10 @@ const WORK_TYPES = ["story", "diary", "letter", "poem", "manifesto", "review", "
 const LANGUAGES = ["English", "Malayalam", "Manglish", "Arabic", "Urdu", "Kannada"];
 
 app.post("/api/works", requireStudent, (req, res) => {
+  // Holiday-leave writing lock (7–9 Nov): general writing is locked so
+  // nobody copies at home. Holiday Diary submissions use their own
+  // endpoint and are never blocked by this lock.
+  if (writingLocked()) return res.status(403).json({ error: DIARY_LOCK_MSG });
   const { type, language, title, content, weekly_task_id, edited_by, edited_by_class } = req.body || {};
   if (!WORK_TYPES.includes(type)) return res.status(400).json({ error: "Invalid writing type." });
   if (!LANGUAGES.includes(language)) return res.status(400).json({ error: "Invalid language." });
@@ -752,6 +797,8 @@ app.post("/api/works", requireStudent, (req, res) => {
 
 // Mentor (guest) writes a work in a student's name → goes to the teacher's approval queue as that student's work
 app.post("/api/guest/works", requireGuest, (req, res) => {
+  // Same holiday-leave writing lock as for students (see /api/works).
+  if (writingLocked()) return res.status(403).json({ error: DIARY_LOCK_MSG });
   const { student_id, type, language, title, content, edited_by, edited_by_class } = req.body || {};
   if (!WORK_TYPES.includes(type)) return res.status(400).json({ error: "Invalid writing type." });
   if (!LANGUAGES.includes(language)) return res.status(400).json({ error: "Invalid language." });
@@ -890,7 +937,7 @@ app.get("/api/weekly-tasks", requireLogin, (req, res) => {
   const archive = tasks.slice(1).map(withDeadline);
   if (current && current.kind === "quiz")
     current.questionCount = db.prepare("SELECT COUNT(*) c FROM quiz_questions WHERE task_id=?").get(current.id).c;
-  res.json({ current, archive });
+  res.json({ current, archive, writing_locked: writingLocked() });
 });
 app.get("/api/quiz/:id/questions", requireLogin, (req, res) => {
   const t = db.prepare("SELECT * FROM weekly_tasks WHERE id=? AND kind='quiz'").get(req.params.id);
@@ -921,6 +968,189 @@ app.post("/api/quiz/:id/attempt", requireStudent, (req, res) => {
     .run(t.id, req.user.id, score, qs.length, pts, JSON.stringify(detail));
   awardPoints(req.user.id, pts, `Quiz: ${t.title} (${score}/${qs.length})`, "quiz", t.id);
   res.json({ ok: true, score, total: qs.length, points: pts, detail });
+});
+
+// ── Holiday Diary (7–9 Nov 2026 leave) ────────────────────────
+// Diary text is PRIVATE: only the writing child + teacher can read it.
+// It is NEVER published, never appears in works/books/points-board or
+// parent views. Parent tick = diary verified. Teacher approval gives
+// points + stars (same model as works: typed points + star points).
+const DIARY_CHECKLIST = [
+  "5 prayers",
+  "3 meals on time",
+  "Evening play",
+  "Evening bath",
+  "Slept before 10 PM",
+  "No fight with Umma",
+  "Helped at home",
+  "Read Quran after Maghrib",
+  "Read Quran after Fajr",
+  "Haddad",
+  "Tahajjud",
+  "Spoke to Uppa",
+  "Spoke to Umma",
+  "Spoke to Uppappas",
+  "Spoke to Ummammas",
+  "Asked Uppa about his life experiences",
+  "Less screen time",
+];
+function istToday() { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
+function diaryOpen(t) { return t.start_date <= istToday(); }
+function writingLocked() {
+  const r = db.prepare("SELECT value FROM app_settings WHERE key='writing_locked'").get();
+  return !!(r && r.value === "1");
+}
+function setWritingLocked(v) {
+  db.prepare("INSERT INTO app_settings (key, value) VALUES ('writing_locked', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(v ? "1" : "0");
+}
+const DIARY_LOCK_MSG = "Writing is locked during the holiday leave (7–9 Nov). Enjoy your leave — write your Holiday Diary instead! 🌼";
+
+// Teacher creates one diary task per day (Day 1/2/3).
+app.post("/api/teacher/holiday-diary-task", requireTeacher, (req, res) => {
+  const title = ((req.body || {}).title || "").toString().trim().slice(0, 120);
+  const day_label = ((req.body || {}).day_label || "").toString().trim().slice(0, 60);
+  const start_date = ((req.body || {}).start_date || "").toString().trim();
+  const points = Math.max(0, parseInt((req.body || {}).points) || 5);
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(start_date))
+    return res.status(400).json({ error: "Title and start date (YYYY-MM-DD) are required." });
+  const r = db.prepare("INSERT INTO holiday_diary_tasks (title, day_label, start_date, points) VALUES (?,?,?,?)")
+    .run(title, day_label, start_date, points);
+  logActivity(req.user.id, "teacher", "created holiday diary task", title, "holiday_diary_task", r.lastInsertRowid);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
+// Everyone logged in: the 3 diary tasks with open/locked state.
+// Students also get their own entry status (no diary text here).
+app.get("/api/holiday-diary-tasks", requireLogin, (req, res) => {
+  const tasks = db.prepare("SELECT * FROM holiday_diary_tasks ORDER BY start_date").all();
+  const out = tasks.map(t => {
+    const row = { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, points: t.points, open: diaryOpen(t) };
+    if (req.user.role === "student") {
+      const e = db.prepare("SELECT status, stars, points_awarded FROM holiday_diary_entries WHERE task_id=? AND student_id=?").get(t.id, req.user.id);
+      row.myEntry = e || null;
+    }
+    return row;
+  });
+  res.json({ tasks: out, checklist: DIARY_CHECKLIST });
+});
+
+// Student submits one diary per task (3 boxes, all required). Private —
+// creates NO work, NO book, and is never published.
+app.post("/api/student/holiday-diary", requireStudent, (req, res) => {
+  const { task_id, diary_text, best_moment, good_deed } = req.body || {};
+  const t = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(task_id);
+  if (!t) return res.status(404).json({ error: "Diary task not found." });
+  if (!diaryOpen(t)) return res.status(403).json({ error: `This diary opens on ${t.start_date} — it is not open yet. 🔒` });
+  const d = (diary_text || "").toString().trim();
+  const b = (best_moment || "").toString().trim();
+  const g = (good_deed || "").toString().trim();
+  if (!d || !b || !g) return res.status(400).json({ error: "Please fill all 3 boxes — My Diary, My Best Moment and My Good Deed." });
+  const ex = db.prepare("SELECT id FROM holiday_diary_entries WHERE task_id=? AND student_id=?").get(t.id, req.user.id);
+  if (ex) return res.status(400).json({ error: "You have already submitted this diary. ✅" });
+  const r = db.prepare(`INSERT INTO holiday_diary_entries (task_id, student_id, diary_text, best_moment, good_deed)
+    VALUES (?,?,?,?,?)`).run(t.id, req.user.id, d.slice(0, 3000), b.slice(0, 1000), g.slice(0, 1000));
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
+// Parent: the 3 tasks + own child's checklist state + entry status.
+// Diary TEXT is never sent here — parents see only the checklist.
+app.get("/api/parent/holiday-diary", requireParent, (req, res) => {
+  const me = db.prepare("SELECT parent_of FROM users WHERE id=?").get(req.user.id);
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const sid = me.parent_of;
+  const tasks = db.prepare("SELECT * FROM holiday_diary_tasks ORDER BY start_date").all();
+  const out = tasks.map(t => {
+    const c = db.prepare("SELECT items_json, ticked_count, ticked_at FROM holiday_checklists WHERE task_id=? AND student_id=?").get(t.id, sid);
+    const e = db.prepare("SELECT status FROM holiday_diary_entries WHERE task_id=? AND student_id=?").get(t.id, sid);
+    let items = null;
+    try { items = c ? JSON.parse(c.items_json) : null; } catch (_) { items = null; }
+    return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, points: t.points,
+      open: diaryOpen(t), checklist: c ? { items, ticked_count: c.ticked_count, ticked_at: c.ticked_at } : null,
+      entryStatus: e ? e.status : "none" };
+  });
+  res.json({ tasks: out, checklist: DIARY_CHECKLIST });
+});
+
+// Parent ticks the 17-item checklist (own child only). Parent tick = verified.
+app.post("/api/parent/holiday-checklist", requireParent, (req, res) => {
+  const me = db.prepare("SELECT parent_of FROM users WHERE id=?").get(req.user.id);
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const sid = me.parent_of;
+  const { task_id, items } = req.body || {};
+  const t = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(task_id);
+  if (!t) return res.status(404).json({ error: "Diary task not found." });
+  if (!diaryOpen(t)) return res.status(403).json({ error: "This day's diary is not open yet." });
+  if (!Array.isArray(items) || items.length !== DIARY_CHECKLIST.length)
+    return res.status(400).json({ error: `Checklist must have ${DIARY_CHECKLIST.length} items.` });
+  const bools = items.map(x => !!x);
+  const count = bools.filter(Boolean).length;
+  db.prepare(`INSERT INTO holiday_checklists (task_id, student_id, items_json, ticked_count, ticked_at, updated_at)
+    VALUES (?,?,?,?,datetime('now'),datetime('now'))
+    ON CONFLICT(task_id, student_id) DO UPDATE SET items_json=excluded.items_json, ticked_count=excluded.ticked_count, ticked_at=datetime('now'), updated_at=datetime('now')`)
+    .run(t.id, sid, JSON.stringify(bools), count);
+  res.json({ ok: true, ticked_count: count });
+});
+
+// Teacher: all diary entries (private text) + parent checklist counts.
+app.get("/api/teacher/holiday-diary", requireTeacher, (req, res) => {
+  const tasks = db.prepare("SELECT * FROM holiday_diary_tasks ORDER BY start_date").all();
+  const out = tasks.map(t => {
+    const entries = db.prepare(`SELECT e.*, u.display_name AS student_name, u.ad_no,
+        (SELECT ticked_count FROM holiday_checklists c WHERE c.task_id=e.task_id AND c.student_id=e.student_id) AS checklist_count,
+        (SELECT COUNT(*) FROM points_log p WHERE p.ref_type='good_deed_bonus' AND p.ref_id=e.id) AS bonus_given
+      FROM holiday_diary_entries e JOIN users u ON u.id=e.student_id
+      WHERE e.task_id=? ORDER BY u.display_name`).all(t.id);
+    return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, points: t.points, open: diaryOpen(t), entries };
+  });
+  res.json({ tasks: out, checklist: DIARY_CHECKLIST });
+});
+
+// Teacher reviews a diary entry: approval gives typed points + stars.
+// NEVER publishes anything (no work, no book is created here).
+app.post("/api/teacher/holiday-diary/:id/review", requireTeacher, (req, res) => {
+  const e = db.prepare("SELECT * FROM holiday_diary_entries WHERE id=?").get(req.params.id);
+  if (!e) return res.status(404).json({ error: "Diary entry not found." });
+  const { decision, stars, points } = req.body || {};
+  if (!["approve", "reject"].includes(decision)) return res.status(400).json({ error: "Invalid decision." });
+  const st = Math.max(0, Math.min(5, parseInt(stars) || 0));
+  const was = e.status;
+  db.prepare("UPDATE holiday_diary_entries SET status=?, stars=?, reviewed_at=datetime('now') WHERE id=?")
+    .run(decision === "approve" ? "approved" : "rejected", decision === "approve" ? st : 0, e.id);
+  if (decision === "approve" && was !== "approved") {
+    const t = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(e.task_id);
+    const entered = (points !== undefined && points !== null && points !== "")
+      ? Math.max(0, parseInt(points) || 0) : (t ? t.points : 5);
+    const pts = entered + st * getSetting("per_star");
+    db.prepare("UPDATE holiday_diary_entries SET points_awarded=? WHERE id=?").run(pts, e.id);
+    awardPoints(e.student_id, pts, `Holiday Diary: ${t ? t.title : ""}`, "holiday_diary", e.id);
+  }
+  const stu = db.prepare("SELECT display_name FROM users WHERE id=?").get(e.student_id);
+  logActivity(req.user.id, "teacher", decision === "approve" ? "approved holiday diary" : "rejected holiday diary",
+    `${stu ? stu.display_name : "?"}${decision === "approve" ? ` (${st} stars)` : ""}`, "holiday_diary", e.id);
+  res.json({ ok: true });
+});
+
+// Teacher awards the +5 best-good-deed bonus for a day (once per entry).
+app.post("/api/teacher/holiday-diary/:id/good-deed-bonus", requireTeacher, (req, res) => {
+  const e = db.prepare("SELECT * FROM holiday_diary_entries WHERE id=?").get(req.params.id);
+  if (!e) return res.status(404).json({ error: "Diary entry not found." });
+  const ex = db.prepare("SELECT id FROM points_log WHERE ref_type='good_deed_bonus' AND ref_id=?").get(e.id);
+  if (ex) return res.status(400).json({ error: "Best-good-deed bonus already given for this diary." });
+  const t = db.prepare("SELECT title FROM holiday_diary_tasks WHERE id=?").get(e.task_id);
+  awardPoints(e.student_id, 5, `Best good deed: ${t ? t.title : ""}`, "good_deed_bonus", e.id);
+  logActivity(req.user.id, "teacher", "best good deed +5", `entry ${e.id}`, "holiday_diary", e.id);
+  res.json({ ok: true });
+});
+
+// Writing lock (holiday leave): blocks general writing, never diary tasks.
+app.get("/api/teacher/writing-lock", requireTeacher, (req, res) => {
+  res.json({ locked: writingLocked() });
+});
+app.post("/api/teacher/writing-lock", requireTeacher, (req, res) => {
+  const locked = !!(req.body || {}).locked;
+  setWritingLocked(locked);
+  logActivity(req.user.id, "teacher", locked ? "locked writing (holiday leave)" : "unlocked writing", "", null, null);
+  res.json({ ok: true, locked });
 });
 
 // ── Mystery room ──────────────────────────────────────────────
@@ -1092,7 +1322,7 @@ app.post("/api/teacher/message", requireTeacher, (req, res) => {
   res.json({ ok: true, sent: ids.length });
 });
 app.get("/api/teacher/messages", requireTeacher, (req, res) => {
-  const rows = db.prepare(`SELECT m.id, m.text, m.created_at, m.read_at, u.display_name AS student
+  const rows = db.prepare(`SELECT m.id, m.student_id AS sid, m.text, m.created_at, m.read_at, m.sender_role, u.display_name AS student
     FROM messages m JOIN users u ON u.id=m.student_id ORDER BY m.created_at DESC LIMIT 100`).all();
   res.json({ messages: rows });
 });
@@ -1100,9 +1330,9 @@ app.post("/api/teacher/message/:id/delete", requireTeacher, (req, res) => {
   db.prepare("DELETE FROM messages WHERE id=?").run(req.params.id);
   res.json({ ok: true });
 });
-// Student: only their own messages
+// Student: only their own messages (both directions — teacher's and their own)
 app.get("/api/my/messages", requireStudent, (req, res) => {
-  const rows = db.prepare("SELECT id, text, created_at, read_at, media_data, media_type FROM messages WHERE student_id=? ORDER BY created_at DESC LIMIT 50").all(req.user.id);
+  const rows = db.prepare("SELECT id, text, created_at, read_at, media_data, media_type, sender_role FROM messages WHERE student_id=? ORDER BY created_at DESC LIMIT 50").all(req.user.id);
   res.json({ messages: rows });
 });
 app.post("/api/my/messages/:id/read", requireStudent, (req, res) => {
@@ -1110,8 +1340,24 @@ app.post("/api/my/messages/:id/read", requireStudent, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Student → teacher private messages ──
+// A boy can message the teacher (e.g. doubts about the Holiday Diary).
+// Only the teacher sees these — never other students, never public.
+app.post("/api/my/message-teacher", requireStudent, (req, res) => {
+  const msg = ((req.body || {}).text || "").toString().trim().slice(0, 1000);
+  if (!msg) return res.status(400).json({ error: "Write your message first." });
+  // Light anti-spam: one message per 30 seconds (also stops double-taps).
+  const recent = db.prepare(`SELECT COUNT(*) c FROM messages WHERE student_id=? AND sender_role='student'
+    AND created_at > datetime('now', '-30 seconds')`).get(req.user.id).c;
+  if (recent) return res.status(429).json({ error: "Please wait a few seconds before sending another message." });
+  const r = db.prepare("INSERT INTO messages (student_id, text, sender_role) VALUES (?,?,'student')").run(req.user.id, msg);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+
 // ── Notice board ──
-// Teacher posts notices; every student can read (and listen to) them.
+// Teacher posts notices; students and parents read them (audience picks
+// who sees it: 'all' = students + parents, 'students', or 'parents').
+const NOTICE_AUD = (b) => ["all", "students", "parents"].includes((b || {}).audience) ? (b || {}).audience : "all";
 app.post("/api/teacher/notice", requireTeacher, (req, res) => {
   const title = ((req.body || {}).title || "").toString().trim().slice(0, 120);
   const text = ((req.body || {}).text || "").toString().trim().slice(0, 2000);
@@ -1119,7 +1365,7 @@ app.post("/api/teacher/notice", requireTeacher, (req, res) => {
   const mtype = ((req.body || {}).media_type || "").toString().slice(0, 20);
   if (!text && !media) return res.status(400).json({ error: "Notice text or photo is required." });
   const author = req.user.display_name || "Teacher";
-  const r = db.prepare("INSERT INTO notices (title, text, media_data, media_type, author_name) VALUES (?,?,?,?,?)").run(title, text, media || null, mtype || null, author);
+  const r = db.prepare("INSERT INTO notices (title, text, media_data, media_type, author_name, audience) VALUES (?,?,?,?,?,?)").run(title, text, media || null, mtype || null, author, NOTICE_AUD(req.body));
   logActivity(req.user.id, "teacher", "posted notice", title || text.slice(0, 60), "notice", r.lastInsertRowid);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
@@ -1131,16 +1377,25 @@ app.post("/api/admin/notice", requireAdmin, (req, res) => {
   const mtype = ((req.body || {}).media_type || "").toString().slice(0, 20);
   if (!text && !media) return res.status(400).json({ error: "Notice text or photo is required." });
   const author = req.user.display_name || req.user.username;
-  const r = db.prepare("INSERT INTO notices (title, text, media_data, media_type, author_name) VALUES (?,?,?,?,?)").run(title, text, media || null, mtype || null, author);
+  const r = db.prepare("INSERT INTO notices (title, text, media_data, media_type, author_name, audience) VALUES (?,?,?,?,?,?)").run(title, text, media || null, mtype || null, author, NOTICE_AUD(req.body));
   logActivity(req.user.id, req.user.role, "posted notice", title || text.slice(0, 60), "notice", r.lastInsertRowid);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 app.get("/api/notices", requireLogin, (req, res) => {
-  const rows = db.prepare("SELECT id, title, text, created_at, media_data, media_type, author_name FROM notices ORDER BY created_at DESC LIMIT 30").all();
+  const role = req.user.role;
+  let rows;
+  if (role === "student")
+    rows = db.prepare("SELECT id, title, text, created_at, media_data, media_type, author_name, audience FROM notices WHERE audience IN ('all','students') ORDER BY created_at DESC LIMIT 30").all();
+  else if (role === "parent")
+    rows = db.prepare("SELECT id, title, text, created_at, media_data, media_type, author_name, audience FROM notices WHERE audience IN ('all','parents') ORDER BY created_at DESC LIMIT 30").all();
+  else
+    rows = db.prepare("SELECT id, title, text, created_at, media_data, media_type, author_name, audience FROM notices ORDER BY created_at DESC LIMIT 30").all();
   res.json({ notices: rows });
 });
 app.get("/api/my/unread", requireStudent, (req, res) => {
-  const m = db.prepare("SELECT COUNT(*) c FROM messages WHERE student_id=? AND read_at IS NULL").get(req.user.id).c;
+  // Only the teacher's messages count as unread for the student — the
+  // boy's own messages to the teacher never count.
+  const m = db.prepare("SELECT COUNT(*) c FROM messages WHERE student_id=? AND read_at IS NULL AND sender_role='teacher'").get(req.user.id).c;
   const n = db.prepare(`SELECT COUNT(*) c FROM notices WHERE id NOT IN
     (SELECT notice_id FROM notice_reads WHERE student_id=?)`).get(req.user.id).c;
   res.json({ messages: m, notices: n });
@@ -1439,7 +1694,8 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "weekly_tasks","quiz_questions","quiz_attempts","mysteries","mystery_solves",
   "challenges","challenge_entries","writer_of_week","point_settings","books",
   "learning_tasks","learning_task_done","completion_certs","completion_exams","student_marks",
-  "messages","notices","notice_reads","finance_entries","general_expenses","app_settings"];
+  "messages","notices","notice_reads","finance_entries","general_expenses","app_settings",
+  "holiday_diary_tasks","holiday_diary_entries","holiday_checklists"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
