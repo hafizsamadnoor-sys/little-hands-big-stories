@@ -11,7 +11,11 @@
 <body><div id="nav"></div><div class="wrap">
 <h1>🧑‍🏫 Teacher Panel</h1>
 <div class="statrow" id="ov"></div>
-<div class="tabs" id="tabs"></div>
+<div id="tiles">
+  <div id="tiles-main" class="tiles"></div>
+  <div class="section-label" style="margin-top:14px">More</div>
+  <div id="tiles-more" class="tiles small"></div>
+</div>
 <div id="panel"></div>
 <div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
 </div>
@@ -22,6 +26,20 @@ const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["dia
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
   ["messages","💬 Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
 let cur = "approvals";
+// Tile Grid (Model 1) — order, color and subtitle per section.
+const TILE_COLOR = { approvals: "g-teal", diary: "g-pink", learning: "g-gold", messages: "g-purple",
+  students: "g-indigo", parents: "g-purple", completion: "g-green", points: "g-amber",
+  books: "g-orange", challenges: "g-red", marks: "g-teal", finance: "g-green",
+  tasks: "g-blue", wow: "g-yellow", notices: "g-pink", settings: "g-grey", activity: "g-blue", account: "g-grey" };
+const TILE_SUB = { approvals: "Works waiting for you", diary: "3 days · Day 1 open", learning: "Tick completions",
+  messages: "Chat with students", students: "All 38 boys", parents: "Parent logins & PINs",
+  completion: "Certificates", points: "Give points", books: "Illustrated books",
+  challenges: "Fun challenges", marks: "Exam marks", finance: "Money & balances",
+  tasks: "Tasks for this week", wow: "This week's star", notices: "Notices for all",
+  settings: "App settings", activity: "Recent activity", account: "Your profile" };
+// Main tiles first, then the smaller "More" tiles.
+const TILE_MAIN = ["approvals", "diary", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "marks", "finance"];
+const TILE_MORE = ["tasks", "wow", "notices", "settings", "activity", "account"];
 // Deep link: /teacher.html#messages opens the Messages tab (used by the 🔔 bell).
 if (location.hash === "#messages") cur = "messages";
 // Bell handler (the 🔔 in the top bar): open the Messages tab.
@@ -35,16 +53,61 @@ window.openTeacherMessages = () => { cur = "messages"; render(); window.scrollTo
     <div class="stat" style="--sc:#2563eb;--sc2:#60a5fa"><b>${o.students}</b><span>Students</span></div>
     <div class="stat" style="--sc:#7c3aed;--sc2:#a78bfa"><b>${o.published}</b><span>Published</span></div>
     <div class="stat" style="--sc:#059669;--sc2:#34d399"><b>${o.noPw}</b><span>Need passwords</span></div>`;
-  const tb = document.getElementById("tabs");
-  tb.innerHTML = TABS.map(([k, t]) => `<button data-t="${k}" class="${k === cur ? "on" : ""}${k === "learning" ? " hl" : ""}">${t}</button>`).join("");
-  tb.onclick = (e) => { const b = e.target.closest("button"); if (b) { cur = b.dataset.t; render(); } };
+  const tabByKey = Object.fromEntries(TABS);
+  const tileHtml = (k) => {
+    const t = tabByKey[k] || "";
+    const sp = t.indexOf(" ");
+    const ico = sp > -1 ? t.slice(0, sp) : "📌";
+    const label = sp > -1 ? t.slice(sp + 1) : t;
+    return `<div class="tile ${TILE_COLOR[k] || "g-teal"}" data-t="${k}">
+      <div class="tile-top"><span class="tile-ic">${ico}</span><span class="tile-n" id="tn-${k}"></span></div>
+      <div><div class="tile-t">${esc(label)}</div><div class="tile-s">${TILE_SUB[k] || ""}</div></div></div>`;
+  };
+  document.getElementById("tiles-main").innerHTML = TILE_MAIN.map(tileHtml).join("");
+  document.getElementById("tiles-more").innerHTML = TILE_MORE.map(tileHtml).join("");
+  document.getElementById("tiles").onclick = (e) => {
+    const b = e.target.closest("[data-t]");
+    if (b) { cur = b.dataset.t; render(); document.getElementById("panel").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  };
+  updateTileCounts(o);
   await render();
 })();
+
+// Tile Grid live counts — failures leave the static subtitles in place.
+async function updateTileCounts(o) {
+  const set = (k, txt) => { const el = document.getElementById("tn-" + k); if (el && txt) el.textContent = txt; };
+  set("approvals", o.pending + " waiting");
+  set("students", o.students + " boys");
+  set("parents", o.students + " parents");
+  try {
+    const [m, l, d, b] = await Promise.allSettled([
+      api("GET", "/api/teacher/messages"),
+      api("GET", "/api/teacher/learning-progress"),
+      api("GET", "/api/teacher/holiday-diary"),
+      api("GET", "/api/books"),
+    ]);
+    if (m.status === "fulfilled") {
+      const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
+      const fresh = (m.value.messages || []).filter(x => x.sender_role === "student" && x.id > seen).length;
+      set("messages", fresh + " new");
+    }
+    if (l.status === "fulfilled") {
+      const list = l.value.students || [];
+      const done = list.filter(s => s.pct === 100).length;
+      set("learning", done + " / " + (list.length || 38) + " at 100%");
+    }
+    if (d.status === "fulfilled") {
+      const entries = (d.value.tasks || []).reduce((a, t) => a + ((t.entries || []).length), 0);
+      set("diary", entries ? entries + " entries" : "Day 1 open");
+    }
+    if (b.status === "fulfilled") set("books", (b.value.books || []).length + " books");
+  } catch (e) { /* static subtitles stay */ }
+}
 
 async function render() {
   // Opening the Messages tab marks the boys' messages as seen (clears the 🔔 badge).
   if (cur === "messages" && typeof markTeacherMsgsSeen === "function") markTeacherMsgsSeen();
-  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
+  document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
   ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, challenges: vChallenges,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
