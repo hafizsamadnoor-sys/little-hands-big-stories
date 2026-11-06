@@ -31,7 +31,10 @@
 <body><div class="wrap">
 <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0">
   <h1 style="margin:0">👪 Parents' Corner</h1>
-  <a class="btn ghost small" href="/api/logout">Logout</a>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button id="parentbell" class="bell-btn" title="Notices" style="background:#e8f2f6;color:#0b3c46">🔔<span class="bell-badge" id="parentbellbadge" style="display:none"></span></button>
+    <a class="btn ghost small" href="/api/logout">Logout</a>
+  </div>
 </div>
 <p class="muted">View-only access. You can see everything published, but cannot write, edit or complete anything.</p>
 
@@ -62,11 +65,11 @@
   const s = d.student;
   document.getElementById("childcard").innerHTML = `
     <h2>🌟 ${esc(s.display_name)}'s progress</h2>
-    <div class="grid cols2">
-      <div class="stat"><b>${d.points}</b><span>Total points</span></div>
-      <div class="stat"><b>⭐ ${d.stars}</b><span>Stars earned</span></div>
-      <div class="stat"><b>${d.worksCount}</b><span>Published pieces</span></div>
-      <div class="stat"><b>🎖️ ${d.badgeCount}</b><span>Badges</span></div>
+    <div class="statrow">
+      <div class="stat" style="--sc:#d4a017;--sc2:#f59e0b"><b>${d.points}</b><span>Total points</span></div>
+      <div class="stat" style="--sc:#ea580c;--sc2:#fb923c"><b>⭐ ${d.stars}</b><span>Stars earned</span></div>
+      <div class="stat" style="--sc:#7c3aed;--sc2:#a78bfa"><b>${d.worksCount}</b><span>Published pieces</span></div>
+      <div class="stat" style="--sc:#059669;--sc2:#34d399"><b>🎖️ ${d.badgeCount}</b><span>Badges</span></div>
     </div>
     <h3>📅 Weekly tasks</h3>
     ${d.taskProgress.length ? d.taskProgress.map(t =>
@@ -143,6 +146,17 @@
         <p><b>📌 ${esc(n.title || "Notice")}</b></p><p style="white-space:pre-wrap">${esc(n.text)}</p>
         <p class="muted" style="font-size:.78rem">${fmtDateTime(n.created_at)}${n.author_name ? " · " + esc(n.author_name) : ""}</p></div>`).join("");
     }
+    // Parent bell: badge = notices not yet seen (seen tracked on this device only).
+    const seen = +(localStorage.getItem("lhbs_parent_seen_notice") || 0);
+    const fresh = (nd.notices || []).filter(n => n.id > seen);
+    const pb = document.getElementById("parentbellbadge");
+    if (pb && fresh.length) { pb.textContent = fresh.length > 9 ? "9+" : String(fresh.length); pb.style.display = ""; }
+    document.getElementById("parentbell").onclick = () => {
+      const ids = (nd.notices || []).map(n => n.id);
+      if (ids.length) localStorage.setItem("lhbs_parent_seen_notice", String(Math.max(...ids)));
+      if (pb) pb.style.display = "none";
+      if (nc) nc.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
   } catch (e) {}
 
   // Parent's view of child's marks (private)

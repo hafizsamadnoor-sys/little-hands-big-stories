@@ -22,15 +22,19 @@ const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["dia
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
   ["messages","💬 Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
 let cur = "approvals";
+// Deep link: /teacher.html#messages opens the Messages tab (used by the 🔔 bell).
+if (location.hash === "#messages") cur = "messages";
+// Bell handler (the 🔔 in the top bar): open the Messages tab.
+window.openTeacherMessages = () => { cur = "messages"; render(); window.scrollTo(0, 0); };
 (async () => {
   const user = await guard("teacher"); if (!user) return;
   document.getElementById("nav").innerHTML = teacherNav("teacher.html");
   const o = await api("GET", "/api/teacher/overview");
   document.getElementById("ov").innerHTML = `
-    <div class="stat"><b>${o.pending}</b><span>Waiting approval</span></div>
-    <div class="stat"><b>${o.students}</b><span>Students</span></div>
-    <div class="stat"><b>${o.published}</b><span>Published</span></div>
-    <div class="stat"><b>${o.noPw}</b><span>Need passwords</span></div>`;
+    <div class="stat" style="--sc:#ea580c;--sc2:#fb923c"><b>${o.pending}</b><span>Waiting approval</span></div>
+    <div class="stat" style="--sc:#2563eb;--sc2:#60a5fa"><b>${o.students}</b><span>Students</span></div>
+    <div class="stat" style="--sc:#7c3aed;--sc2:#a78bfa"><b>${o.published}</b><span>Published</span></div>
+    <div class="stat" style="--sc:#059669;--sc2:#34d399"><b>${o.noPw}</b><span>Need passwords</span></div>`;
   const tb = document.getElementById("tabs");
   tb.innerHTML = TABS.map(([k, t]) => `<button data-t="${k}" class="${k === cur ? "on" : ""}${k === "learning" ? " hl" : ""}">${t}</button>`).join("");
   tb.onclick = (e) => { const b = e.target.closest("button"); if (b) { cur = b.dataset.t; render(); } };
@@ -38,6 +42,8 @@ let cur = "approvals";
 })();
 
 async function render() {
+  // Opening the Messages tab marks the boys' messages as seen (clears the 🔔 badge).
+  if (cur === "messages" && typeof markTeacherMsgsSeen === "function") markTeacherMsgsSeen();
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
   ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, challenges: vChallenges,

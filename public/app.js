@@ -66,6 +66,7 @@ function teacherNav(active) {
   return `<header class="top"><div class="top-in">
     <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:12px;object-fit:cover;display:block"></div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
     <div style="flex:1"></div>
+    <button id="teacherbell" class="bell-btn" title="Messages from students" style="display:none">🔔<span class="bell-badge" id="teacherbellbadge" style="display:none"></span></button>
     <button class="btn small ghost" id="stulogin" style="margin:0 6px 0 0">🧑‍🎓 Student Login</button>
     <a href="/api/logout" class="btn small ghost" style="margin:0">Logout</a>
   </div><nav class="main">${links.map(([h, t]) =>
@@ -142,6 +143,37 @@ async function updateNotifBell(retries) {
     }
   } catch (e) { bell.style.display = "none"; const cb0 = document.getElementById("chatbtn"); if (cb0) cb0.style.display = "none"; }
 }
+// Teacher bell — red badge = student messages not yet seen (seen tracked on
+// this device only; there is no teacher-side mark-read endpoint).
+async function updateTeacherBell(retries) {
+  if (retries === undefined) retries = 12;
+  const bell = document.getElementById("teacherbell");
+  if (!bell) {
+    if (retries > 0) setTimeout(() => updateTeacherBell(retries - 1), 300);
+    return;
+  }
+  try {
+    const user = await currentUser();
+    if (!user || user.role !== "teacher") { bell.style.display = "none"; return; }
+    bell.style.display = "";
+    const d = await api("GET", "/api/teacher/messages");
+    const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
+    const fresh = (d.messages || []).filter(m => m.sender_role === "student" && m.id > seen);
+    const badge = document.getElementById("teacherbellbadge");
+    if (badge) {
+      if (fresh.length > 0) { badge.textContent = fresh.length > 9 ? "9+" : String(fresh.length); badge.style.display = ""; }
+      else { badge.style.display = "none"; }
+    }
+  } catch (e) { bell.style.display = "none"; }
+}
+function markTeacherMsgsSeen() {
+  api("GET", "/api/teacher/messages").then(d => {
+    const ids = (d.messages || []).filter(m => m.sender_role === "student").map(m => m.id);
+    if (ids.length) localStorage.setItem("lhbs_teacher_seen_msg", String(Math.max(...ids)));
+    const b = document.getElementById("teacherbellbadge");
+    if (b) b.style.display = "none";
+  }).catch(() => {});
+}
 // Bell dropdown — tap the bell to see messages + notices.
 async function toggleBellDrop() {
   const drop = document.getElementById("belldrop");
@@ -177,6 +209,13 @@ async function toggleBellDrop() {
 document.addEventListener("click", (e) => {
   const chatBtn = e.target.closest("#chatbtn");
   if (chatBtn) { e.preventDefault(); openChat(); return; }
+  const tbell = e.target.closest("#teacherbell");
+  if (tbell) {
+    e.preventDefault();
+    if (typeof window.openTeacherMessages === "function" && location.pathname.endsWith("/teacher.html")) { window.openTeacherMessages(); }
+    else { location.href = "/teacher.html#messages"; }
+    return;
+  }
   const bell = e.target.closest("#notifbell");
   const drop = document.getElementById("belldrop");
   if (bell) { e.preventDefault(); toggleBellDrop(); return; }
@@ -268,6 +307,7 @@ async function sendChatMsg() {
 // Floating refresh button on all pages
 document.addEventListener("DOMContentLoaded", () => {
   updateNotifBell();
+  updateTeacherBell();
   if (!document.querySelector(".fab-refresh")) {
     const fab = document.createElement("button");
     fab.className = "fab-refresh btn-refresh no-print";
