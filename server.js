@@ -352,7 +352,9 @@ CREATE TABLE IF NOT EXISTS challenge_entries (
 CREATE TABLE IF NOT EXISTS writer_of_week (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  work_id INTEGER REFERENCES works(id) ON DELETE SET NULL,
   note TEXT NOT NULL DEFAULT '',
+  published_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS point_settings (
@@ -374,6 +376,10 @@ try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } cat
 
 // Which teacher session an impersonated student session came from (for "back to teacher").
 try { db.exec("ALTER TABLE sessions ADD COLUMN impersonated_from TEXT"); } catch (e) { /* already there */ }
+// Writer of the week: which work won + whether it was published (notice +
+// winner message). Added 2026-11-07; older DBs get the columns here.
+try { db.exec("ALTER TABLE writer_of_week ADD COLUMN work_id INTEGER"); } catch (e) { /* already there */ }
+try { db.exec("ALTER TABLE writer_of_week ADD COLUMN published_at TEXT"); } catch (e) { /* already there */ }
 
 // ── Point settings defaults ───────────────────────────────────
 // No fixed per-type points since 2026-10-30 (teacher enters points at approval).
@@ -1241,10 +1247,27 @@ app.get("/api/author/:id", requireLogin, (req, res) => {
   res.json({ author: a, stats: st, badges, works });
 });
 app.get("/api/writer-of-week", requireLogin, (req, res) => {
-  const w = db.prepare(`SELECT w.note, w.created_at, u.display_name, u.photo, u.id AS student_id
-    FROM writer_of_week w JOIN users u ON u.id=w.student_id ORDER BY w.id DESC LIMIT 1`).get();
-  res.json({ writer: w || null });
+  const pick = `SELECT w.id, w.student_id, w.work_id, w.note, w.published_at, w.created_at,
+      u.display_name, u.photo, u.ad_no, wk.title AS work_title, wk.type AS work_type
+    FROM writer_of_week w JOIN users u ON u.id=w.student_id
+    LEFT JOIN works wk ON wk.id=w.work_id`;
+  const w = db.prepare(`${pick} ORDER BY w.id DESC LIMIT 1`).get();
+  const history = db.prepare(`${pick} ORDER BY w.id DESC LIMIT 6`).all().slice(1);
+  res.json({ writer: w || null, history });
 });
+// Publish a Writer of the Week pick: a 📢 notice to everyone (students +
+// parents) + a 💬 congratulations message to the winner himself. Once only.
+function publishWriterOfWeek(row) {
+  if (!row || row.published_at) return false;
+  const workBit = row.work_title ? ` for ${row.work_type === "story" ? "his story" : "his " + row.work_type} “${row.work_title}”` : "";
+  const noteBit = row.note ? ` ${row.note}` : "";
+  db.prepare("INSERT INTO notices (title, text, author_name, audience) VALUES (?,?,?,?)")
+    .run("🌟 Writer of the Week", `${row.display_name} is this week's Writer of the Week${workBit}!${noteBit} Congratulations! 👏`, "Teacher", "all");
+  db.prepare("INSERT INTO messages (student_id, text, sender_role) VALUES (?,?,'teacher')")
+    .run(row.student_id, `Congratulations! 🎉 You are this week's Writer of the Week${workBit}. Keep writing — your class is proud of you. 🌟`);
+  db.prepare("UPDATE writer_of_week SET published_at=datetime('now') WHERE id=?").run(row.id);
+  return true;
+}
 // Teacher-only: award or revoke the Best Story badge.
 app.post("/api/teacher/badge", requireTeacher, (req, res) => {
   const { student_id, award } = req.body || {};
@@ -2454,11 +2477,36 @@ app.post("/api/teacher/challenge/:id/delete", requireTeacher, (req, res) => {
 
 // Writer of the week
 app.post("/api/teacher/writer-of-week", requireTeacher, (req, res) => {
-  const { student_id, note } = req.body || {};
-  const s = db.prepare("SELECT id FROM users WHERE id=? AND role='student'").get(student_id);
+  const { student_id, work_id, note, publish } = req.body || {};
+  const s = db.prepare("SELECT id, display_name FROM users WHERE id=? AND role='student'").get(student_id);
   if (!s) return res.status(404).json({ error: "Student not found." });
-  db.prepare("INSERT INTO writer_of_week (student_id, note) VALUES (?,?)").run(s.id, (note || "").trim());
-  res.json({ ok: true });
+  let wid = null;
+  if (work_id) {
+    const wk = db.prepare("SELECT id, title, type FROM works WHERE id=? AND student_id=? AND status='approved'").get(work_id, s.id);
+    if (!wk) return res.status(400).json({ error: "That work is not one of this boy's published works." });
+    wid = wk.id;
+  }
+  const r = db.prepare("INSERT INTO writer_of_week (student_id, work_id, note) VALUES (?,?,?)")
+    .run(s.id, wid, (note || "").trim());
+  const row = db.prepare(`SELECT w.id, w.student_id, w.work_id, w.note, w.published_at, w.created_at,
+      u.display_name, wk.title AS work_title, wk.type AS work_type
+    FROM writer_of_week w JOIN users u ON u.id=w.student_id
+    LEFT JOIN works wk ON wk.id=w.work_id WHERE w.id=?`).get(r.lastInsertRowid);
+  let published = false;
+  if (publish) published = publishWriterOfWeek(row);
+  res.json({ ok: true, id: r.lastInsertRowid, published });
+});
+// Publish the latest Writer of the Week pick (notice + winner message), if
+// it has not been published yet.
+app.post("/api/teacher/writer-of-week/publish", requireTeacher, (req, res) => {
+  const row = db.prepare(`SELECT w.id, w.student_id, w.work_id, w.note, w.published_at, w.created_at,
+      u.display_name, wk.title AS work_title, wk.type AS work_type
+    FROM writer_of_week w JOIN users u ON u.id=w.student_id
+    LEFT JOIN works wk ON wk.id=w.work_id ORDER BY w.id DESC LIMIT 1`).get();
+  if (!row) return res.status(404).json({ error: "No Writer of the Week picked yet." });
+  if (row.published_at) return res.status(400).json({ error: "Already published." });
+  publishWriterOfWeek(row);
+  res.json({ ok: true, published: true });
 });
 
 // Point settings
