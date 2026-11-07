@@ -141,7 +141,12 @@
         };
       });
     }
-  } catch (e) {}
+  } catch (e) {
+    // Never fail silently: if the checklist cannot load (slow network),
+    // show the parent a message instead of hiding the card completely.
+    const dc = document.getElementById("diarycard");
+    if (dc) { dc.style.display = ""; dc.innerHTML = `<h2>🏖️ Holiday Diary</h2><p class="muted">The checklist could not be loaded — please close this page and open it again. If it still does not show, tell your teacher.</p>`; }
+  }
   // ---- Notices (parents see the same notice board) ----
   try {
     const nd = await api("GET", "/api/notices");
