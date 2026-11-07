@@ -55,6 +55,8 @@
 
 <div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"><p class="muted">Loading…</p></div></div>
 
+<div class="card"><h2>✅ Your Child's Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
+
 <div class="card"><h2>📚 Books — all students</h2><div id="books"></div></div>
 
 <div class="card"><h2>📖 Writings — all students</h2><div id="works"></div></div>
@@ -233,6 +235,12 @@
     const w = await api("GET", "/api/writer-of-week");
     document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || []);
   } catch (e) { document.getElementById("wow").innerHTML = ""; }
+
+  // ---- Your child's approved works (own child only) ----
+  try {
+    const mw = await api("GET", "/api/parent/works");
+    document.getElementById("myworks").innerHTML = window.myWorksCardHtml(mw.works, { emptyHint: "Your child has no approved works yet — when the teacher approves one, it will appear here with its stars and points." });
+  } catch (e) { document.getElementById("myworks").innerHTML = ""; }
 
   // ---- Books (public to parents) ----
   const bk = await api("GET", "/api/books");

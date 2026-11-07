@@ -946,7 +946,19 @@ app.post("/api/work/:id/like", requireStudent, (req, res) => {
 });
 
 app.get("/api/my/works", requireStudent, (req, res) => {
-  const rows = db.prepare("SELECT id, type, language, title, status, stars, points_awarded, created_at, reject_reason FROM works WHERE student_id=? ORDER BY created_at DESC").all(req.user.id);
+  const rows = db.prepare(`SELECT id, type, language, title, status, stars, points_awarded, created_at, reviewed_at, reject_reason,
+      (SELECT b.id FROM books b WHERE b.work_id=w.id ORDER BY b.id DESC LIMIT 1) AS book_id
+    FROM works w WHERE student_id=? ORDER BY created_at DESC`).all(req.user.id);
+  res.json({ works: rows });
+});
+
+// Parent: their own child's approved works only (same shape as /api/my/works).
+app.get("/api/parent/works", requireParent, (req, res) => {
+  const me = db.prepare("SELECT parent_of FROM users WHERE id=?").get(req.user.id);
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const rows = db.prepare(`SELECT id, type, language, title, status, stars, points_awarded, created_at, reviewed_at, reject_reason,
+      (SELECT b.id FROM books b WHERE b.work_id=w.id ORDER BY b.id DESC LIMIT 1) AS book_id
+    FROM works w WHERE student_id=? AND status='approved' ORDER BY created_at DESC`).all(me.parent_of);
   res.json({ works: rows });
 });
 

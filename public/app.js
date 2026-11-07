@@ -388,6 +388,34 @@ window.wowCardHtml = function (writer, history) {
 };
 // champions: [{display_name, ad_no, completed_at, exam_passed, cert_issued}].
 // showAd: the teacher sees Ad numbers; students and parents see names only.
+// "Your Approved Works" card (shared by the student dashboard + parent page).
+// works: rows from /api/my/works or /api/parent/works — already own-child
+// only. Shows the latest 5 approved works, newest approval first; the newest
+// approval (within 7 days) gets a 🎉 NEW badge. opts: {seeAll, writeLink,
+// emptyHint}.
+window.myWorksCardHtml = function (works, opts) {
+  opts = opts || {};
+  const approved = ((works || []).filter(w => w.status === "approved")).slice()
+    .sort((a, b) => String(b.reviewed_at || b.created_at || "").localeCompare(String(a.reviewed_at || a.created_at || "")));
+  if (!approved.length)
+    return `<p class="muted">${esc(opts.emptyHint || "No approved works yet — write your first story, and when your teacher approves it, it will appear here with its stars and points.")}</p>${opts.writeLink ? `<a class="btn" href="/write.html" style="display:block;text-align:center">✍️ Write now</a>` : ""}`;
+  const stars = approved.reduce((a, w) => a + (w.stars || 0), 0);
+  const points = approved.reduce((a, w) => a + (w.points_awarded || 0), 0);
+  const typeIcon = { story: "📖", poem: "📝", diary: "📔", letter: "✉️", manifesto: "📜", anything: "✨", review: "⭐" };
+  const fmtDate = iso => {
+    if (!iso) return "";
+    const d = new Date(iso + "Z");
+    return isNaN(d) ? "" : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
+  const rows = approved.slice(0, 5).map((w, i) => {
+    const isNew = i === 0 && w.reviewed_at && (Date.now() - new Date(w.reviewed_at + "Z").getTime()) < 7 * 86400000;
+    const typeLabel = w.type ? w.type.charAt(0).toUpperCase() + w.type.slice(1) : "Work";
+    const s = w.stars || 0;
+    return `<div class="work-row"><div class="work-ic">${typeIcon[w.type] || "📖"}</div><div class="work-main"><b>${esc(w.title)}</b>${isNew ? `<span class="new-badge">🎉 NEW</span>` : ""}<span>${typeLabel} · Approved ${fmtDate(w.reviewed_at || w.created_at)}</span><span class="stars">${"★".repeat(s)}${"☆".repeat(Math.max(0, 5 - s))}</span><span>${w.points_awarded || 0} points${w.book_id ? " · 📖 Book ready!" : ""}</span><div class="work-links"><a class="btn small" href="/work.html?id=${w.id}">📕 Read</a>${w.book_id ? `<a class="btn small ghost" href="/api/books/${w.book_id}/file" target="_blank">📖 Read as Book</a>` : ""}</div></div></div>`;
+  }).join("");
+  return `<p class="muted">${approved.length} approved ${approved.length === 1 ? "work" : "works"} · ${stars} stars · ${points} points</p>${rows}${opts.seeAll ? `<a class="btn ghost" href="${opts.seeAll}" style="display:block;text-align:center">See all my works →</a>` : ""}`;
+};
+
 window.championsListHtml = function (champions, showAd) {
   if (!champions || !champions.length)
     return `<p class="muted">No boy has completed 100% yet — the first champions will appear here. 🎓</p>`;
