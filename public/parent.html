@@ -53,6 +53,8 @@
 
 <div class="card"><h2>🎓 Completion Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
 
+<div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"><p class="muted">Loading…</p></div></div>
+
 <div class="card"><h2>📚 Books — all students</h2><div id="books"></div></div>
 
 <div class="card"><h2>📖 Writings — all students</h2><div id="works"></div></div>
@@ -225,6 +227,12 @@
       `<p class="muted">${ch.completed_count} of ${ch.total_students} boys finished all ${ch.total_tasks} Learning Tasks. 🎓</p>` +
       window.championsListHtml(ch.champions, false);
   } catch (e) { document.getElementById("champions").innerHTML = ""; }
+
+  // ---- Writer of the Week (public to parents) ----
+  try {
+    const w = await api("GET", "/api/writer-of-week");
+    document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || []);
+  } catch (e) { document.getElementById("wow").innerHTML = ""; }
 
   // ---- Books (public to parents) ----
   const bk = await api("GET", "/api/books");

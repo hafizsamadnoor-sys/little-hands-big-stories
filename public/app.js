@@ -351,7 +351,41 @@ function msgMediaHtml(m) {
   if (m.media_data && m.media_type === "audio") return `<audio controls preload="metadata" src="${m.media_data}" style="width:100%;max-width:230px;height:36px;display:block;margin:4px 0"></audio>`;
   return "";
 }
-// Completion Champions list (shared by the teacher / student / parent pages).
+// Writer of the Week card (shared by the student / parent pages).
+// writer: {display_name, photo, work_title, work_type, note, created_at};
+// history: earlier picks [{display_name, work_title, created_at}].
+window.wowWeekLabel = function (iso) {
+  if (!iso) return "";
+  const d = new Date(iso.slice(0, 10) + "T00:00:00Z");
+  if (isNaN(d)) return "";
+  const day = (d.getUTCDay() + 6) % 7; // Monday = 0
+  const mon = new Date(d); mon.setUTCDate(d.getUTCDate() - day);
+  const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
+  const f = x => x.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${f(mon)} – ${f(sun)}`;
+};
+window.wowCardHtml = function (writer, history) {
+  if (!writer)
+    return `<p class="muted">No Writer of the Week picked yet — the teacher will pick one soon. 🌟</p>`;
+  const workBit = writer.work_title
+    ? `for <b>“${esc(writer.work_title)}”</b>${writer.work_type ? " — " + esc(writer.work_type) : ""}`
+    : "";
+  const past = (history || []).map(h => {
+    const d = h.created_at ? new Date(h.created_at + "Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+    return `<div class="wow-past"><div class="wow-av">🌟</div><div><b>${esc(h.display_name)}</b><span>${h.work_title ? "“" + esc(h.work_title) + "” · " : ""}${d}</span></div></div>`;
+  }).join("");
+  return `<div class="wow-card">
+    <div class="wow-medal">🌟</div>
+    <div class="wow-week">Writer of the Week · ${esc(window.wowWeekLabel(writer.created_at))}</div>
+    <div class="wow-name">${esc(writer.display_name)}</div>
+    ${workBit ? `<div class="wow-work">${workBit}</div>` : ""}
+    ${writer.note ? `<div class="wow-note">“${esc(writer.note)}”<br><span>— Teacher</span></div>` : ""}
+    <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <a class="btn small gold" href="/wow-cert.html" target="_blank">📜 View Certificate</a>
+      ${writer.work_id ? `<a class="btn small ghost" href="/work.html?id=${writer.work_id}">📕 Read the ${esc(writer.work_type || "work")}</a>` : ""}
+    </div>
+  </div>${past ? `<h3 style="margin:14px 0 4px">🕰️ Past writers</h3>${past}` : ""}`;
+};
 // champions: [{display_name, ad_no, completed_at, exam_passed, cert_issued}].
 // showAd: the teacher sees Ad numbers; students and parents see names only.
 window.championsListHtml = function (champions, showAd) {

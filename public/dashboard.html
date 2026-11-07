@@ -163,10 +163,11 @@
       });
     }
   } catch (e) {}
-  const w = await api("GET", "/api/writer-of-week");
-  document.getElementById("wow").innerHTML = w.writer
-    ? `<p style="font-size:1.1rem">🌟 <b>${esc(w.writer.display_name)}</b></p><p class="muted">${esc(w.writer.note)}</p>`
-    : `<p class="muted">No writer of the week yet.</p>`;
+  // Writer of the Week — every boy can see the winner + past writers
+  try {
+    const w = await api("GET", "/api/writer-of-week");
+    document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || []);
+  } catch (e) { document.getElementById("wow").innerHTML = ""; }
   const b = await api("GET", "/api/my/badges");
   const mine = new Set(b.mine.map(x => x.badge_key));
   document.getElementById("badges").innerHTML = b.badges.map(x =>
