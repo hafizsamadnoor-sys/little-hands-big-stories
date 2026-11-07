@@ -235,3 +235,19 @@ tr:last-child td{border-bottom:none;}
 .champ-pill{display:inline-block;font-size:.68rem;font-weight:700;border-radius:8px;padding:2px 7px;margin-left:3px;white-space:nowrap;}
 .champ-pill.ok{background:#dcfce7;color:#15803d;}
 .champ-pill.wait{background:#fef9c3;color:#854d0e;}
+
+/* Writer of the Week gold card (student / parent / teacher pages). */
+.wow-card{border:2px solid #d4a017;border-radius:14px;background:linear-gradient(180deg,#fffbeb,#fff);padding:16px 14px;text-align:center}
+.wow-medal{width:52px;height:52px;border-radius:50%;background:#fef3c7;color:#b45309;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 8px}
+.wow-week{font-size:11px;font-weight:800;letter-spacing:1px;color:#b45309;text-transform:uppercase}
+.wow-name{font-size:19px;font-weight:800;margin-top:4px;color:#1e3a4c}
+.wow-work{font-size:13px;color:#475569;margin-top:2px}
+.wow-work b{color:#0b3c46}
+.wow-note{font-size:13px;line-height:1.55;color:#334155;margin-top:10px;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:10px}
+.wow-note span{font-size:11px;color:#94a3b8}
+.wow-past{display:flex;gap:10px;align-items:center;padding:9px 2px;border-bottom:1px solid #eef2f5}
+.wow-past:last-child{border-bottom:none}
+.wow-av{width:34px;height:34px;border-radius:50%;background:#fef3c7;color:#b45309;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+.wow-past b{font-size:13.5px;color:#1e3a4c}
+.wow-past span{display:block;font-size:12px;color:#667781}
+.btn.gold{background:linear-gradient(135deg,#b45309,#d97706);color:#fff}

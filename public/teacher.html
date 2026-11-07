@@ -1142,16 +1142,55 @@ async function vMarks(p) {
 }
 
 async function vWow(p) {
-  const d = await api("GET", "/api/teacher/students");
-  const w = await api("GET", "/api/writer-of-week");
+  const [d, wd, wdata] = await Promise.all([
+    api("GET", "/api/teacher/students"),
+    api("GET", "/api/writer-of-week"),
+    api("GET", "/api/works"),
+  ]);
+  const students = d.students || [];
+  const works = (wdata.works || []);
+  const w = wd.writer, hist = wd.history || [];
+  const fillWorks = (sid) => {
+    const mine = works.filter(x => String(x.author_id) === String(sid));
+    document.getElementById("w_w").innerHTML =
+      `<option value="">— No work (just the writer) —</option>` +
+      mine.map(x => `<option value="${x.id}">“${esc(x.title)}” — ${esc(x.type)}</option>`).join("");
+  };
   p.innerHTML = `<div class="card"><h2>🌟 Select Writer of the Week</h2>
-    ${w.writer ? `<p class="muted">Current: <b>${esc(w.writer.display_name)}</b></p>` : ""}
-    <label>Student</label><select id="w_s">${d.students.map(s => `<option value="${s.id}">${esc(s.display_name)}</option>`).join("")}</select>
+    <label>Student</label><select id="w_s">${students.map(s => `<option value="${s.id}">${esc(s.display_name)}</option>`).join("")}</select>
+    <label>Winning work</label><select id="w_w"></select>
     <label>Message</label><input id="w_n" placeholder="Why is he this week's writer?">
-    <button class="btn" id="w_go">Set Writer of the Week</button></div>`;
-  document.getElementById("w_go").onclick = async () => {
-    try { await api("POST", "/api/teacher/writer-of-week", { student_id: document.getElementById("w_s").value, note: document.getElementById("w_n").value });
-      toast("Writer of the Week set! 🌟"); } catch (e) { toast(e.message, false); }
+    <button class="btn" id="w_go_pub">🌟 Set + Publish everywhere</button>
+    <button class="btn ghost" id="w_go" style="margin-top:8px">Set only (no post yet)</button>
+    <p class="muted" style="margin-top:10px">Publishing sends, in one tap: 📢 a notice to <b>all students + all parents</b> · 💬 a congratulations message to <b>the winner</b> · 🌟 the card on <b>student + parent pages</b>.</p></div>
+  ${w ? `<div class="card"><h2>🌟 Current Writer of the Week</h2>
+    ${window.wowCardHtml(w, [])}
+    <p class="muted" style="margin-top:10px">${w.published_at ? "✅ Published on " + fmtDateTime(w.published_at) + " — notice sent, winner messaged." : "⏳ Not published yet — no notice or message sent."}</p>
+    ${w.published_at ? "" : `<button class="btn" id="w_pub">📢 Publish now</button>`}
+  </div>` : ""}
+  ${hist.length ? `<div class="card"><h2>🕰️ Past writers</h2>${hist.map(h => {
+    const dd = h.created_at ? new Date(h.created_at + "Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+    return `<div class="wow-past"><div class="wow-av">🌟</div><div><b>${esc(h.display_name)}</b><span>${h.work_title ? "“" + esc(h.work_title) + "” · " : ""}${dd}</span></div></div>`;
+  }).join("")}</div>` : ""}`;
+  fillWorks(document.getElementById("w_s").value);
+  document.getElementById("w_s").onchange = (e) => fillWorks(e.target.value);
+  const setWow = async (publish) => {
+    try {
+      const r = await api("POST", "/api/teacher/writer-of-week", {
+        student_id: document.getElementById("w_s").value,
+        work_id: document.getElementById("w_w").value || null,
+        note: document.getElementById("w_n").value, publish,
+      });
+      toast(publish ? "Writer of the Week published everywhere! 🌟" : "Writer of the Week set! 🌟");
+      render();
+    } catch (e) { toast(e.message, false); }
+  };
+  document.getElementById("w_go_pub").onclick = () => setWow(true);
+  document.getElementById("w_go").onclick = () => setWow(false);
+  const pb = document.getElementById("w_pub");
+  if (pb) pb.onclick = async () => {
+    try { await api("POST", "/api/teacher/writer-of-week/publish", {}); toast("Published! 🌟"); render(); }
+    catch (e) { toast(e.message, false); }
   };
 }
 
