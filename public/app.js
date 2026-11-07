@@ -171,6 +171,10 @@ async function updateTeacherBell(retries) {
       if (total > 0) { badge.textContent = total > 9 ? "9+" : String(total); badge.style.display = ""; }
       else { badge.style.display = "none"; }
     }
+    // Keep the Messages tile's red dot in sync with the bell: it clears
+    // when the teacher opens a boy's chat thread (markTeacherMsgsSeen).
+    const mdot = document.getElementById("dot-messages");
+    if (mdot) mdot.hidden = !(fresh > 0);
   } catch (e) { bell.style.display = "none"; }
 }
 function markTeacherMsgsSeen() {

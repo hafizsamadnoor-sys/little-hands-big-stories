@@ -150,7 +150,7 @@ tr:last-child td{border-bottom:none;}
 .tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:14px 0 4px;}
 .tiles.small{grid-template-columns:repeat(4,1fr);}
 .tile{background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:12px 4px 10px;
-  text-align:center; box-shadow:0 1px 4px rgba(0,0,0,.06); cursor:pointer;
+  text-align:center; box-shadow:0 1px 4px rgba(0,0,0,.06); cursor:pointer; position:relative;
   transition:transform .12s, box-shadow .12s, border-color .12s;}
 .tiles.small .tile{padding:10px 4px 8px;}
 .tile:active{transform:scale(.97);}
@@ -163,6 +163,9 @@ tr:last-child td{border-bottom:none;}
 .tiles.small .tile-t{font-size:.72rem;}
 .tile-n{font-size:.66rem; font-weight:700; color:#6f8f57; margin-top:2px; white-space:nowrap;}
 .tile-n:empty{display:none;}
+/* Red dot on a tile = something new the teacher has not looked at yet. */
+.tile-dot{position:absolute; top:8px; right:9px; width:12px; height:12px; border-radius:50%;
+  background:#e11d48; border:2px solid #fff; box-shadow:0 0 0 1px #e11d48; z-index:1;}
 /* Print */
 @media print{
   header.top, nav.main, .btn, .fab-refresh, .no-print{display:none !important;}
@@ -295,6 +298,16 @@ tr:last-child td{border-bottom:none;}
 .ckitem .mk{flex-shrink:0;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 .ckitem.yes .mk{background:#0b6e5d;color:#fff}
 .ckitem.no{color:#8aa39c}
+.namerow .cnt{font-size:12.5px;font-weight:700;color:#0b6e5d}
+.ckbar{height:8px;background:#e3ebe8;border-radius:6px;overflow:hidden;margin:9px 0 0 20px}
+.ckbar i{display:block;height:100%;background:#0b6e5d}
+.pts-pill{background:#fef3c7;color:#92400e;border-radius:20px;padding:1px 8px;font-size:.72rem;font-weight:800;white-space:nowrap}
+.cksum{background:#e8f5f1;border:1.5px solid #0b6e5d;border-radius:12px;padding:11px 12px;margin:8px 0 12px}
+.cksum b{font-size:15px}
+.cksum p{font-size:12.5px;color:#5a6b66;margin-top:3px}
+.cksumbar{height:10px;background:#cfe0da;border-radius:6px;overflow:hidden;margin-top:8px}
+.cksumbar i{display:block;height:100%;background:#0b6e5d}
+.dstat{font-size:12.5px;color:#5a6b66;margin-top:10px}
 .ckitem.no .mk{background:#e3ebe8;color:#8aa39c}
 .chkline{font-size:13.5px;margin-top:8px;padding:9px 11px;border-radius:10px;background:#f2f7f5;color:#5a6b66}
 .chkline.yes{background:#e8f5f1;color:#0b6e5d;font-weight:700;border:1.5px solid #0b6e5d}
