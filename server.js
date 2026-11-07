@@ -314,6 +314,7 @@ CREATE TABLE IF NOT EXISTS holiday_checklists (
   student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   items_json TEXT NOT NULL DEFAULT '[]',
   ticked_count INTEGER NOT NULL DEFAULT 0,
+  points_awarded INTEGER NOT NULL DEFAULT 0,
   ticked_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(task_id, student_id)
@@ -380,6 +381,7 @@ try { db.exec("ALTER TABLE sessions ADD COLUMN impersonated_from TEXT"); } catch
 // winner message). Added 2026-11-07; older DBs get the columns here.
 try { db.exec("ALTER TABLE writer_of_week ADD COLUMN work_id INTEGER"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE writer_of_week ADD COLUMN published_at TEXT"); } catch (e) { /* already there */ }
+try { db.exec("ALTER TABLE holiday_checklists ADD COLUMN points_awarded INTEGER NOT NULL DEFAULT 0"); } catch (e) { /* already there */ }
 
 // ── Point settings defaults ───────────────────────────────────
 // No fixed per-type points since 2026-10-30 (teacher enters points at approval).
@@ -1162,11 +1164,26 @@ app.post("/api/parent/holiday-checklist", requireParent, (req, res) => {
     return res.status(400).json({ error: `Checklist must have ${DIARY_CHECKLIST.length} items.` });
   const bools = items.map(x => !!x);
   const count = bools.filter(Boolean).length;
+  const prev = db.prepare("SELECT points_awarded FROM holiday_checklists WHERE task_id=? AND student_id=?").get(t.id, sid);
   db.prepare(`INSERT INTO holiday_checklists (task_id, student_id, items_json, ticked_count, ticked_at, updated_at)
     VALUES (?,?,?,?,datetime('now'),datetime('now'))
     ON CONFLICT(task_id, student_id) DO UPDATE SET items_json=excluded.items_json, ticked_count=excluded.ticked_count, ticked_at=datetime('now'), updated_at=datetime('now')`)
     .run(t.id, sid, JSON.stringify(bools), count);
-  res.json({ ok: true, ticked_count: count });
+  // 1 tick = 1 point: award only the CHANGE since the last tick — parents
+  // can update until the 10 AM close, so ticking more adds points and
+  // unticking takes them back the same way. A points failure must never
+  // break the tick save itself, so this is guarded.
+  try {
+    const prevPts = prev ? (prev.points_awarded || 0) : 0;
+    const delta = count - prevPts;
+    if (delta !== 0) {
+      db.prepare("UPDATE holiday_checklists SET points_awarded=? WHERE task_id=? AND student_id=?").run(count, t.id, sid);
+      db.prepare("INSERT INTO points_log (student_id, points, reason, ref_type, ref_id) VALUES (?,?,?,?,?)")
+        .run(sid, delta, `Holiday Diary checklist: ${t.title} (${count} of 17 ticked)`, "checklist", t.id);
+      if (delta > 0) checkBadges(sid);
+    }
+  } catch (e) { console.log("checklist points:", e.message); }
+  res.json({ ok: true, ticked_count: count, points_awarded: count });
 });
 
 // Teacher: all diary entries (private text) + parent checklist counts.
@@ -1192,15 +1209,38 @@ app.get("/api/teacher/checklists", requireTeacher, (req, res) => {
   const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY display_name").all();
   const out = tasks.map(t => {
     const rows = students.map(s => {
-      const c = db.prepare("SELECT ticked_count, items_json, ticked_at FROM holiday_checklists WHERE task_id=? AND student_id=?").get(t.id, s.id);
+      const c = db.prepare("SELECT ticked_count, items_json, ticked_at, points_awarded FROM holiday_checklists WHERE task_id=? AND student_id=?").get(t.id, s.id);
       const e = db.prepare("SELECT status FROM holiday_diary_entries WHERE task_id=? AND student_id=?").get(t.id, s.id);
       return { id: s.id, display_name: s.display_name, ad_no: s.ad_no,
-        ticked_count: c ? c.ticked_count : 0, checklist_items: c ? c.items_json : null, ticked_at: c ? c.ticked_at : null,
+        ticked_count: c ? c.ticked_count : 0, points_awarded: c ? (c.points_awarded || 0) : 0, checklist_items: c ? c.items_json : null, ticked_at: c ? c.ticked_at : null,
         diary_status: e ? e.status : "none" };
     });
     return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, open: diaryOpen(t), students: rows };
   });
   res.json({ tasks: out, checklist: DIARY_CHECKLIST });
+});
+
+// Teacher: one-time backfill of checklist points (1 tick = 1 point) for
+// checklists ticked before this feature went live. Idempotent: the
+// points_log is the source of truth, so only the not-yet-awarded
+// difference is added — re-running it awards 0. Also repairs any
+// points_awarded column that drifted out of sync (e.g. after a restore).
+app.post("/api/teacher/checklist-points-backfill", requireTeacher, (req, res) => {
+  const rows = db.prepare("SELECT * FROM holiday_checklists WHERE ticked_count > 0").all();
+  let awardedRows = 0, total = 0;
+  for (const r of rows) {
+    const already = db.prepare("SELECT COALESCE(SUM(points),0) AS s FROM points_log WHERE ref_type='checklist' AND ref_id=? AND student_id=?").get(r.task_id, r.student_id).s;
+    const delta = r.ticked_count - already;
+    if (delta > 0) {
+      const t = db.prepare("SELECT title FROM holiday_diary_tasks WHERE id=?").get(r.task_id);
+      db.prepare("INSERT INTO points_log (student_id, points, reason, ref_type, ref_id) VALUES (?,?,?,?,?)")
+        .run(r.student_id, delta, `Holiday Diary checklist: ${t ? t.title : ""} (${r.ticked_count} of 17 ticked)`, "checklist", r.task_id);
+      checkBadges(r.student_id);
+      awardedRows++; total += delta;
+    }
+    db.prepare("UPDATE holiday_checklists SET points_awarded=? WHERE id=?").run(r.ticked_count, r.id);
+  }
+  res.json({ ok: true, awarded_rows: awardedRows, total_points: total });
 });
 
 // Teacher reviews a diary entry: approval gives typed points + stars.
