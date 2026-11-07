@@ -51,6 +51,8 @@
 
 <div class="card"><h2>🏆 Scoreboard — all students</h2><div id="board"></div></div>
 
+<div class="card"><h2>🎓 Completion Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
+
 <div class="card"><h2>📚 Books — all students</h2><div id="books"></div></div>
 
 <div class="card"><h2>📖 Writings — all students</h2><div id="works"></div></div>
@@ -215,6 +217,14 @@
       <td>${i + 1}</td><td>${esc(r.display_name)}${r.id === myId ? " 👈" : ""}</td>
       <td>${r.points}</td><td>${r.stars}</td><td>${r.works}</td></tr>`).join("") +
     `</tbody></table></div>`;
+
+  // ---- Completion Champions (public to parents) ----
+  try {
+    const ch = await api("GET", "/api/completion-champions");
+    document.getElementById("champions").innerHTML =
+      `<p class="muted">${ch.completed_count} of ${ch.total_students} boys finished all ${ch.total_tasks} Learning Tasks. 🎓</p>` +
+      window.championsListHtml(ch.champions, false);
+  } catch (e) { document.getElementById("champions").innerHTML = ""; }
 
   // ---- Books (public to parents) ----
   const bk = await api("GET", "/api/books");

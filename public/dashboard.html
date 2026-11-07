@@ -18,6 +18,7 @@
 <div id="taskcard"></div>
 <div id="diarycard"></div>
 <div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
+<div class="card"><h2>🎓 Our Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
 <div id="compcert"></div>
 <div class="card"><h2>📊 My Marks</h2><div id="mymarks"><p class="muted">Loading…</p></div></div>
 <div class="card">
@@ -238,6 +239,13 @@
     else if (cc.progress && cc.progress.pct === 100) el.innerHTML =
       `<div class="card"><h2>🎓 Completion</h2><p>🎉 100% of Learning Tasks done! Your teacher will conduct the exam soon.</p></div>`;
   } catch (e) {}
+  // Completion Champions — every boy can see who finished
+  try {
+    const ch = await api("GET", "/api/completion-champions");
+    document.getElementById("champions").innerHTML =
+      `<p class="muted">${ch.completed_count} of ${ch.total_students} boys finished all ${ch.total_tasks} Learning Tasks. 🎓</p>` +
+      window.championsListHtml(ch.champions, false);
+  } catch (e) { document.getElementById("champions").innerHTML = ""; }
   // My marks
   try {
     const md = await api("GET", "/api/my/marks");
