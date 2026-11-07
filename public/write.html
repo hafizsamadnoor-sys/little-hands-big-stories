@@ -29,6 +29,7 @@
   </select>
   <label>Title</label><input id="title" placeholder="Give your piece a lovely title">
   <label>Your writing</label><textarea id="content" placeholder="Once upon a time…"></textarea>
+  <p id="wordcount" class="muted" style="font-size:.85rem;margin-top:4px"></p>
   <div id="editedbyrow" style="display:flex;gap:8px"><div style="flex:2"><label>Edited by *</label><input id="editedby" placeholder="Who helped edit this? (required)"></div>
   <div style="flex:1"><label>Their class *</label><select id="editedbyclass"><option value="">—</option><option>SS1</option><option>SS2</option><option>D1</option><option>D2</option><option>D3</option><option>Teacher</option></select></div></div>
   <button class="btn" id="submit">Submit for approval 📮</button>
@@ -45,6 +46,24 @@
   const taskId = params.get("task");
   let isTaskWrite = false;
   let wt = null;
+  // Minimum story length (Samad: 70 words). The task prompt is pre-filled in
+  // the box for story completions — its words never count toward the minimum.
+  let taskPrompt = "";
+  const countWords = s => String(s || "").trim().split(/\s+/).filter(Boolean).length;
+  function ownWords() {
+    const c = document.getElementById("content").value;
+    if (taskPrompt && c.startsWith(taskPrompt)) return countWords(c.slice(taskPrompt.length));
+    return countWords(c);
+  }
+  function updateWordCount() {
+    const el = document.getElementById("wordcount");
+    if (document.getElementById("type").value !== "story") { el.textContent = ""; return; }
+    const n = ownWords();
+    el.textContent = n >= 70 ? `✅ ${n} words — good, you can submit!` : `Words: ${n} / 70 — please write at least 70 words.`;
+    el.style.color = n >= 70 ? "#15803d" : "#b45309";
+  }
+  document.getElementById("content").addEventListener("input", updateWordCount);
+  document.getElementById("type").addEventListener("change", updateWordCount);
   try { wt = await api("GET", "/api/weekly-tasks"); } catch (e) {}
   // Holiday-leave writing lock: the form stays hidden while locked.
   if (wt && wt.writing_locked) {
@@ -64,7 +83,11 @@
         document.getElementById("editedbyrow").style.display = "none";
         document.getElementById("taskinfo").innerHTML =
           `<div class="alert"><b>📅 Weekly task: ${esc(task.title)}</b><br>${esc(task.prompt)}</div>`;
-        if (task.kind === "story_start") document.getElementById("content").value = task.prompt + "\n\n";
+        if (task.kind === "story_start") {
+          taskPrompt = task.prompt;
+          document.getElementById("content").value = task.prompt + "\n\n";
+          updateWordCount();
+        }
       }
     } catch (e) {}
   }
@@ -94,6 +117,7 @@
     const ebName = isTaskWrite ? "" : document.getElementById("editedby").value.trim();
     const ebClass = isTaskWrite ? "" : document.getElementById("editedbyclass").value;
     if (!isTaskWrite && (!ebName || !ebClass)) { toast("Please write who edited your work and their class — both are required.", false); return; }
+    if (document.getElementById("type").value === "story" && ownWords() < 70) { toast(`Your story needs at least 70 words. You have written ${ownWords()} words — please write a little more!`, false); return; }
     try {
       await api("POST", "/api/works", {
         type: document.getElementById("type").value,
