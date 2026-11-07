@@ -319,6 +319,19 @@ CREATE TABLE IF NOT EXISTS holiday_checklists (
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(task_id, student_id)
 );
+-- Letter to Parents feedback (2026-11-08, Samad): parent ticks 9 items
+-- + 1-5 happiness stars for their own child only. The letter itself is
+-- NEVER in the app - teacher sees ticks + stars only. points_awarded is
+-- NULL until the teacher awards points once (no double-award).
+CREATE TABLE IF NOT EXISTS letter_feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  items TEXT NOT NULL DEFAULT '[]',
+  stars INTEGER NOT NULL DEFAULT 0,
+  submitted_at TEXT DEFAULT (datetime('now')),
+  points_awarded INTEGER,
+  awarded_at TEXT
+);
 CREATE TABLE IF NOT EXISTS mysteries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -1280,6 +1293,129 @@ app.post("/api/teacher/holiday-diary/:id/good-deed-bonus", requireTeacher, (req,
   res.json({ ok: true });
 });
 
+// ── Letter to Parents — parent feedback (2026-11-08, Samad) ──
+// Parent ticks 9 items + 1–5 happiness stars for their own child only.
+// The letter itself is NEVER in the app — teacher sees ticks + stars only.
+// NO auto-close (Samad 2026-11-08 00:55 IST: "don't close it, I will delete
+// it myself") — the card stays open until the teacher deletes it from the
+// Teacher Panel (POST /api/teacher/letter-feedback/delete), which removes
+// the feedback rows and hides the parent card. Points already awarded stay
+// on the Points Board. Points are awarded by the teacher ONCE per boy
+// (no double-award): 2 photos on time + parent confirms all 7 things 5 +
+// neat + happy + satisfied 3 = 10. Who-read ticks + happiness stars do
+// NOT change points.
+const LETTER_ITEMS = [
+  "My son gave me the letter",
+  "Uppa read the letter",
+  "Umma read the letter",
+  "We read it together",
+  "His letter has all 7 things",
+  "His handwriting is neat",
+  "I am happy with what my son wrote",
+  "I am happy with his letter",
+  "I am satisfied",
+];
+function letterFeedbackRemoved() {
+  const r = db.prepare("SELECT value FROM app_settings WHERE key='letter_feedback_removed'").get();
+  return !!(r && r.value === "1");
+}
+function letterFbOpen() { return !letterFeedbackRemoved(); }
+// Photos: image messages the boy sent on the letter day (Sun 8 Nov, IST).
+// On time = the 2nd photo arrived by 10 PM IST (16:30 UTC).
+function letterPhotos(student_id) {
+  const rows = db.prepare(`SELECT id, created_at FROM messages WHERE student_id=? AND sender_role='student'
+    AND media_type='image' AND created_at >= '2026-11-07 18:30:00' AND created_at < '2026-11-08 18:30:00'
+    ORDER BY created_at ASC`).all(student_id);
+  return { count: rows.length, on_time: rows.length >= 2 && rows[1].created_at <= "2026-11-08 16:30:00" };
+}
+// Points the teacher would award now (photos 2 + all-7 5 + neat/happy/satisfied 3).
+function letterPoints(fb, photos) {
+  let it = [];
+  try { it = JSON.parse(fb.items || "[]"); } catch (_) { it = []; }
+  return (photos && photos.on_time ? 2 : 0) + (it[4] ? 5 : 0) + ((it[5] && it[7] && it[8]) ? 3 : 0);
+}
+app.get("/api/parent/letter-feedback", requireParent, (req, res) => {
+  const me = db.prepare("SELECT parent_of FROM users WHERE id=?").get(req.user.id);
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const fb = db.prepare("SELECT * FROM letter_feedback WHERE student_id=?").get(me.parent_of);
+  const s = db.prepare("SELECT display_name FROM users WHERE id=?").get(me.parent_of);
+  res.json({ open: letterFbOpen(), closed: false, removed: letterFeedbackRemoved(),
+    items: LETTER_ITEMS, child_name: s ? s.display_name : "",
+    feedback: fb ? { items: JSON.parse(fb.items || "[]"), stars: fb.stars, submitted_at: fb.submitted_at, points_awarded: fb.points_awarded } : null });
+});
+app.post("/api/parent/letter-feedback", requireParent, (req, res) => {
+  const me = db.prepare("SELECT parent_of FROM users WHERE id=?").get(req.user.id);
+  if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
+  const sid = me.parent_of;
+  if (letterFeedbackRemoved()) return res.status(403).json({ error: "Feedback was removed by the teacher." });
+  const fb0 = db.prepare("SELECT points_awarded FROM letter_feedback WHERE student_id=?").get(sid);
+  if (fb0 && fb0.points_awarded != null) return res.status(403).json({ error: "Points have already been given by the teacher — feedback is now locked." });
+  const items = (req.body || {}).items;
+  const stars = parseInt((req.body || {}).stars) || 0;
+  if (!Array.isArray(items) || items.length !== LETTER_ITEMS.length || items.some(v => typeof v !== "boolean"))
+    return res.status(400).json({ error: "Please tick the 9 items." });
+  if (stars < 0 || stars > 5) return res.status(400).json({ error: "Stars must be 0–5." });
+  db.prepare(`INSERT INTO letter_feedback (student_id, items, stars, submitted_at)
+    VALUES (?,?,?,datetime('now'))
+    ON CONFLICT(student_id) DO UPDATE SET items=excluded.items, stars=excluded.stars, submitted_at=datetime('now')`)
+    .run(sid, JSON.stringify(items.map(x => !!x)), stars);
+  res.json({ ok: true, ticked: items.filter(Boolean).length, stars });
+});
+// Teacher: all 38 boys — photos received, parent ticks, happiness, points.
+app.get("/api/teacher/letter-feedback", requireTeacher, (req, res) => {
+  const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY display_name").all();
+  const rows = students.map(s => {
+    const fb = db.prepare("SELECT * FROM letter_feedback WHERE student_id=?").get(s.id);
+    const ph = letterPhotos(s.id);
+    let items = null;
+    try { items = fb ? JSON.parse(fb.items || "[]") : null; } catch (_) { items = null; }
+    return { id: s.id, display_name: s.display_name, ad_no: s.ad_no,
+      photos: ph.count, photos_on_time: ph.on_time,
+      ticks: items ? items.filter(Boolean).length : null, items,
+      stars: fb ? fb.stars : null, submitted_at: fb ? fb.submitted_at : null,
+      points_awarded: fb ? fb.points_awarded : null,
+      points_now: fb ? letterPoints(fb, ph) : 0 };
+  });
+  const ticked = rows.filter(r => r.ticks != null);
+  const starred = ticked.filter(r => (r.stars || 0) > 0);
+  res.json({ rows, items: LETTER_ITEMS, removed: letterFeedbackRemoved(), summary: {
+    letters_received: rows.filter(r => r.photos >= 2).length,
+    parents_ticked: ticked.length,
+    avg_happiness: starred.length ? Math.round(starred.reduce((a, r) => a + r.stars, 0) / starred.length * 10) / 10 : null,
+    full_10: rows.filter(r => r.points_awarded === 10).length,
+    total: rows.length } });
+});
+// Teacher awards the points once per boy (no double-award).
+app.post("/api/teacher/letter-feedback/:id/award", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const fb = db.prepare("SELECT * FROM letter_feedback WHERE student_id=?").get(sid);
+  if (!fb) return res.status(400).json({ error: "This parent has not sent feedback yet." });
+  if (fb.points_awarded != null) return res.status(400).json({ error: "Points already given for this boy." });
+  const ph = letterPhotos(sid);
+  const pts = letterPoints(fb, ph);
+  if (pts <= 0) return res.status(400).json({ error: "Nothing to award yet — no photos on time and no points ticks." });
+  let it = [];
+  try { it = JSON.parse(fb.items || "[]"); } catch (_) { it = []; }
+  const parts = [];
+  if (ph.on_time) parts.push("photos on time 2");
+  if (it[4]) parts.push("all 7 things 5");
+  if (it[5] && it[7] && it[8]) parts.push("neat + happy + satisfied 3");
+  awardPoints(sid, pts, "Letter to Parents (" + parts.join(" + ") + ")", "letter_feedback", sid);
+  db.prepare("UPDATE letter_feedback SET points_awarded=?, awarded_at=datetime('now') WHERE student_id=?").run(pts, sid);
+  logActivity(req.user.id, "teacher", "awarded letter points", pts + " pts", "letter_feedback", sid);
+  res.json({ ok: true, points: pts, parts });
+});
+// Teacher deletes the whole feedback (Samad: he reviews it, then deletes it
+// himself). Removes the feedback rows and hides the parent card. Points
+// already awarded stay on the Points Board (points_log is untouched).
+app.post("/api/teacher/letter-feedback/delete", requireTeacher, (req, res) => {
+  const n = db.prepare("SELECT COUNT(*) c FROM letter_feedback").get().c;
+  db.prepare("DELETE FROM letter_feedback").run();
+  db.prepare("INSERT INTO app_settings (key, value) VALUES ('letter_feedback_removed','1') ON CONFLICT(key) DO UPDATE SET value='1'").run();
+  logActivity(req.user.id, "teacher", "deleted letter feedback", n + " rows", "letter_feedback", null);
+  res.json({ ok: true, deleted: n });
+});
+
 // Writing lock (holiday leave): blocks general writing, never diary tasks.
 app.get("/api/teacher/writing-lock", requireTeacher, (req, res) => {
   res.json({ locked: writingLocked() });
@@ -1892,7 +2028,7 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "challenges","challenge_entries","writer_of_week","point_settings","books",
   "learning_tasks","learning_task_done","completion_certs","completion_exams","student_marks",
   "messages","notices","notice_reads","finance_entries","general_expenses","app_settings",
-  "holiday_diary_tasks","holiday_diary_entries","holiday_checklists"];
+  "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
