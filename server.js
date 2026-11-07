@@ -1040,6 +1040,25 @@ const DIARY_CHECKLIST = [
 ];
 function istToday() { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
 function diaryOpen(t) { return t.start_date <= istToday(); }
+// Parent checklist window (2026-11-07, Samad): a day's checklist is open on
+// its own day and until 10:00 IST the next morning — then it CLOSES and is
+// removed from the parent page, and the next day's fresh checklist takes
+// over. The tick DATA is kept in the DB (teacher still sees it for the
+// daily totals). Students' diary writing is NOT affected by this.
+function parentChecklistCloseAt(t) {
+  const c = new Date(t.start_date + "T00:00:00Z"); // shifted frame: UTC fields = IST wall clock
+  c.setUTCDate(c.getUTCDate() + 1);
+  c.setUTCHours(10, 0, 0, 0); // 10:00 IST the morning after the day
+  return c;
+}
+function parentChecklistOpen(t) {
+  if (t.start_date > istToday()) return false; // not yet open
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000) < parentChecklistCloseAt(t);
+}
+function parentChecklistClosed(t) {
+  if (t.start_date >= istToday()) return false;
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000) >= parentChecklistCloseAt(t);
+}
 function writingLocked() {
   const r = db.prepare("SELECT value FROM app_settings WHERE key='writing_locked'").get();
   return !!(r && r.value === "1");
@@ -1109,7 +1128,7 @@ app.get("/api/parent/holiday-diary", requireParent, (req, res) => {
     let items = null;
     try { items = c ? JSON.parse(c.items_json) : null; } catch (_) { items = null; }
     return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, points: t.points,
-      open: diaryOpen(t), checklist: c ? { items, ticked_count: c.ticked_count, ticked_at: c.ticked_at } : null,
+      open: parentChecklistOpen(t), closed: parentChecklistClosed(t), checklist: c ? { items, ticked_count: c.ticked_count, ticked_at: c.ticked_at } : null,
       entryStatus: e ? e.status : "none" };
   });
   res.json({ tasks: out, checklist: DIARY_CHECKLIST });
@@ -1123,7 +1142,7 @@ app.post("/api/parent/holiday-checklist", requireParent, (req, res) => {
   const { task_id, items } = req.body || {};
   const t = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(task_id);
   if (!t) return res.status(404).json({ error: "Diary task not found." });
-  if (!diaryOpen(t)) return res.status(403).json({ error: "This day's diary is not open yet." });
+  if (!parentChecklistOpen(t)) return res.status(403).json({ error: t.start_date > istToday() ? "This day's diary is not open yet." : "This day's checklist is closed now (it closed at 10 AM the next morning)." });
   if (!Array.isArray(items) || items.length !== DIARY_CHECKLIST.length)
     return res.status(400).json({ error: `Checklist must have ${DIARY_CHECKLIST.length} items.` });
   const bools = items.map(x => !!x);
