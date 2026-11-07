@@ -97,6 +97,7 @@
       dc.innerHTML = `<h2>🏖️ ${esc(s.display_name)}'s Holiday Diary</h2>
         <p class="muted" style="font-size:.9rem">🔒 Your child's diary writing is private — only your child and the teacher can read it. Please tick what your child did today. Your tick verifies the diary.</p>` +
         hd.tasks.map(tk => {
+          if (tk.closed) return ""; // past day: checklist closed at 10 AM next morning — removed from the page
           if (!tk.open) return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0"><b>${esc(tk.title)}</b><p class="muted">🔒 Opens ${esc(tk.start_date)} morning.</p></div>`;
           const done = tk.checklist;
           const items = done && done.items ? done.items : DIARY_ITEMS.map(() => false);
