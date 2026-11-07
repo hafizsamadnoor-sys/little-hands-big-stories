@@ -143,8 +143,8 @@ async function updateNotifBell(retries) {
     }
   } catch (e) { bell.style.display = "none"; const cb0 = document.getElementById("chatbtn"); if (cb0) cb0.style.display = "none"; }
 }
-// Teacher bell — red badge = student messages not yet seen (seen tracked on
-// this device only; there is no teacher-side mark-read endpoint).
+// Teacher bell — red badge = things waiting for the teacher: unread student
+// messages + pending diary approvals + pending works approvals (2026-11-07).
 async function updateTeacherBell(retries) {
   if (retries === undefined) retries = 12;
   const bell = document.getElementById("teacherbell");
@@ -156,12 +156,19 @@ async function updateTeacherBell(retries) {
     const user = await currentUser();
     if (!user || user.role !== "teacher") { bell.style.display = "none"; return; }
     bell.style.display = "";
-    const d = await api("GET", "/api/teacher/messages");
+    const [m, hd, pw] = await Promise.allSettled([
+      api("GET", "/api/teacher/messages"),
+      api("GET", "/api/teacher/holiday-diary"),
+      api("GET", "/api/teacher/pending"),
+    ]);
     const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
-    const fresh = (d.messages || []).filter(m => m.sender_role === "student" && m.id > seen);
+    const fresh = m.status === "fulfilled" ? (m.value.messages || []).filter(x => x.sender_role === "student" && x.id > seen).length : 0;
+    const diaryPend = hd.status === "fulfilled" ? (hd.value.tasks || []).reduce((a, t) => a + ((t.entries || []).filter(e => e.status === "pending").length), 0) : 0;
+    const worksPend = pw.status === "fulfilled" ? (pw.value.works || []).length : 0;
+    const total = fresh + diaryPend + worksPend;
     const badge = document.getElementById("teacherbellbadge");
     if (badge) {
-      if (fresh.length > 0) { badge.textContent = fresh.length > 9 ? "9+" : String(fresh.length); badge.style.display = ""; }
+      if (total > 0) { badge.textContent = total > 9 ? "9+" : String(total); badge.style.display = ""; }
       else { badge.style.display = "none"; }
     }
   } catch (e) { bell.style.display = "none"; }
@@ -170,8 +177,7 @@ function markTeacherMsgsSeen() {
   api("GET", "/api/teacher/messages").then(d => {
     const ids = (d.messages || []).filter(m => m.sender_role === "student").map(m => m.id);
     if (ids.length) localStorage.setItem("lhbs_teacher_seen_msg", String(Math.max(...ids)));
-    const b = document.getElementById("teacherbellbadge");
-    if (b) b.style.display = "none";
+    updateTeacherBell(); // recompute — diary/works pendings still show
   }).catch(() => {});
 }
 // Bell dropdown — tap the bell to see messages + notices.

@@ -579,36 +579,60 @@ async function vTasks(p) {
 async function vDiary(p) {
   const d = await api("GET", "/api/teacher/holiday-diary");
   const lk = await api("GET", "/api/teacher/writing-lock");
+  const labels = d.checklist || [];
+  const chkItems = (e) => { try { return e.checklist_items ? JSON.parse(e.checklist_items) : null; } catch (_) { return null; } };
+  const chkLine = (e) => {
+    const items = chkItems(e);
+    if (!items) return "📋 Parent checklist: not ticked yet";
+    return `📋 Parent checklist: <b>${items.filter(Boolean).length} of 17 ticked</b>`;
+  };
   p.innerHTML = `
     <div class="card"><h2>🔒 Writing lock (holiday leave)</h2>
       <p>General writing (Story, Diary, Letter, Poem, Manifesto, Write Anything, Book Review) is currently <b>${lk.locked ? "🔒 LOCKED" : "🔓 open"}</b> for students and mentors. Holiday Diary submissions are never blocked by this lock.</p>
       <button class="btn" id="locktoggle">${lk.locked ? "🔓 Unlock writing" : "🔒 Lock writing for the leave"}</button></div>
     <h2>🏖️ Holiday Diary — 7, 8, 9 November</h2>
-    <p class="muted">Diary text is private — only you and the child can read it. Approving gives points + stars (typed points + star points). Best good deed of the day gets +5 bonus.</p>
-    ${d.tasks.map(tk => `
-    <div class="card"><h3>${esc(tk.title)} <span class="tag">${esc(tk.day_label)}</span> <span class="muted" style="font-size:.85rem">${tk.open ? "● Open" : "🔒 Opens " + esc(tk.start_date)}</span></h3>
-      ${tk.entries.length ? tk.entries.map(e => `
-      <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0">
-        <p><b>${esc(e.student_name)}</b> <span class="muted">Ad ${e.ad_no} · ${fmtDateTime(e.created_at)}</span>
-        ${e.status === "approved" ? ` <span class="pill">✅ Approved · ⭐ ${e.stars} · +${e.points_awarded} pts</span>` : e.status === "rejected" ? ` <span class="pill">❌ Not approved</span>` : ` <span class="pill">⏳ Waiting</span>`}
-        <br><span class="muted" style="font-size:.85rem">📋 Parent checklist: ${e.checklist_count === null || e.checklist_count === undefined ? "not ticked yet" : e.checklist_count + " of 17 ticked"}</span></p>
-        <p><b>1. My Diary</b></p><p style="white-space:pre-wrap">${esc(e.diary_text)}</p>
-        <p><b>2. My Best Moment</b></p><p style="white-space:pre-wrap">${esc(e.best_moment)}</p>
-        <p><b>3. My Good Deed</b></p><p style="white-space:pre-wrap">${esc(e.good_deed)}</p>
-        ${e.status !== "approved" ? `
-        <label>Stars (0–5)</label>
-        <select id="dst${e.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
-        <label>Points (your choice — 5 per day)</label>
-        <input id="dpt${e.id}" type="number" min="0" value="5" style="width:90px">
-        <button class="btn small" data-da="${e.id}">✅ Approve</button>
-        <button class="btn small ghost" data-dr="${e.id}">❌ Reject</button>` : `
-        ${e.bonus_given ? `<span class="pill">⭐ Best good deed +5 given</span>` : `<button class="btn small" data-db="${e.id}">⭐ Best good deed +5</button>`}`}
-      </div>`).join("") : `<p class="muted">No diaries submitted yet for this day.</p>`}
-    </div>`).join("")}`;
+    <p class="muted">Diary text is private — only you and the child can read it. Tap a name to open that child's diary and the parent's checklist, then confirm and give points. 🔴 Red dot = waiting for approval.</p>
+    ${d.tasks.map(tk => {
+      const pend = tk.entries.filter(e => e.status === "pending").length;
+      return `
+    <div class="card"><h3>${esc(tk.title)} <span class="tag">${esc(tk.day_label)}</span> <span class="muted" style="font-size:.85rem">${tk.open ? "● Open" : "🔒 Opens " + esc(tk.start_date)}</span>${pend ? ` <span class="redbadge">${pend} pending</span>` : ""}</h3>
+      ${tk.entries.length ? tk.entries.map(e => {
+        const items = chkItems(e);
+        const isPend = e.status === "pending";
+        return `
+      <div class="namerow" data-nr="${e.id}">
+        <div class="top"><span class="dot${isPend ? "" : " none"}"></span><span class="nm">${esc(e.student_name)}</span><span class="chev">›</span></div>
+        <div class="st">${e.status === "approved" ? `✅ Approved · ⭐ ${e.stars} · +${e.points_awarded} pts` : e.status === "rejected" ? "❌ Not approved" : "⏳ Waiting"} · ${chkLine(e)}</div>
+        <div class="detail">
+          <p><b>1. My Diary</b></p><p style="white-space:pre-wrap">${esc(e.diary_text)}</p>
+          <p><b>2. My Best Moment</b></p><p style="white-space:pre-wrap">${esc(e.best_moment)}</p>
+          <p><b>3. My Good Deed</b></p><p style="white-space:pre-wrap">${esc(e.good_deed)}</p>
+          ${items ? `
+          <div class="chkhead">📋 Parent's checklist — what the parent ticked <span>(${items.filter(Boolean).length} of 17)</span></div>
+          ${labels.map((lab, i) => `<div class="ckitem ${items[i] ? "yes" : "no"}"><span class="mk">${items[i] ? "✓" : "–"}</span><span>${esc(lab)}</span></div>`).join("")}` : `
+          <div class="chkline">📋 Parent checklist: <b>not ticked yet</b> — the parent has not ticked the 17 items.</div>`}
+          ${e.status !== "approved" ? `
+          <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+            <label>Stars (0–5)</label>
+            <select id="dst${e.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
+            <label>Points (your choice — 5 per day)</label>
+            <input id="dpt${e.id}" type="number" min="0" value="5" style="width:90px">
+            <button class="btn small" data-da="${e.id}">✅ Approve</button>
+            <button class="btn small ghost" data-dr="${e.id}">❌ Reject</button>
+          </div>` : `
+          <div style="margin-top:12px">${e.bonus_given ? `<span class="pill">⭐ Best good deed +5 given</span>` : `<button class="btn small" data-db="${e.id}">⭐ Best good deed +5</button>`}</div>`}
+        </div>
+      </div>`; }).join("") : `<p class="muted">No diaries submitted yet for this day.</p>`}
+    </div>`; }).join("")}`;
   document.getElementById("locktoggle").onclick = async () => {
     try { const r = await api("POST", "/api/teacher/writing-lock", { locked: !lk.locked }); toast(r.locked ? "Writing locked for the leave. 🔒" : "Writing unlocked. 🔓"); render(); }
     catch (e) { toast(e.message, false); }
   };
+  // Tap a name row to expand / collapse (not when tapping a control inside it).
+  p.querySelectorAll(".namerow").forEach(row => row.onclick = (ev) => {
+    if (ev.target.closest("button, select, input, a")) return;
+    row.classList.toggle("open");
+  });
   p.querySelectorAll("[data-da]").forEach(b => b.onclick = async () => {
     try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.da}/review`, { decision: "approve", stars: document.getElementById("dst" + b.dataset.da).value, points: document.getElementById("dpt" + b.dataset.da).value }); toast("Diary approved! ⭐"); render(); }
     catch (e) { toast(e.message, false); }
