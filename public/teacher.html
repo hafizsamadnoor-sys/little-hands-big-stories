@@ -24,19 +24,28 @@ const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["dia
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
-  ["messages","💬 Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
+  ["messages","💬 Little Hands Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
 let cur = "approvals";
-// Tile Grid (Model 1) — order, color and subtitle per section.
-const TILE_COLOR = { approvals: "g-teal", diary: "g-pink", learning: "g-gold", messages: "g-purple",
-  students: "g-indigo", parents: "g-purple", completion: "g-green", points: "g-amber",
-  books: "g-orange", challenges: "g-red", marks: "g-teal", finance: "g-green",
-  tasks: "g-blue", wow: "g-yellow", notices: "g-pink", settings: "g-grey", activity: "g-blue", account: "g-grey" };
-const TILE_SUB = { approvals: "Works waiting for you", diary: "3 days · Day 1 open", learning: "Tick completions",
-  messages: "Chat with students", students: "All 38 boys", parents: "Parent logins & PINs",
-  completion: "Certificates", points: "Give points", books: "Illustrated books",
-  challenges: "Fun challenges", marks: "Exam marks", finance: "Money & balances",
-  tasks: "Tasks for this week", wow: "This week's star", notices: "Notices for all",
-  settings: "App settings", activity: "Recent activity", account: "Your profile" };
+// Tile Grid — white screenshot-style cards (Samad 2026-11-07, NHCE portal style).
+// Pale green circle + green line icon + navy label. The tiles ARE the navigation.
+const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9l9 6 9-6"/></svg>',
+  diary: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>',
+  learning: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9l2 2 4-4M8 15h8"/></svg>',
+  messages: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>',
+  students: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.5a3.5 3.5 0 0 1 0 7M17.5 14.5c2.3.8 3.5 2.8 3.5 5.5"/></svg>',
+  parents: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9.5A4 4 0 0 1 12 7a4 4 0 0 1 7 3.5C19 15.5 12 20 12 20z"/></svg>',
+  completion: '<svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5L2 9z"/><path d="M6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v5"/></svg>',
+  points: '<svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.7 6.6 19.8l1.1-6.1L3.2 9.4l6.1-.8L12 3z"/></svg>',
+  books: '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13M9 7h6"/></svg>',
+  challenges: '<svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a2 2 0 0 0 2 4h1M17 6h3a2 2 0 0 1-2 4h-1"/></svg>',
+  marks: '<svg viewBox="0 0 24 24"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/><path d="M14 6l4 4"/></svg>',
+  finance: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>',
+  tasks: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 15h4"/></svg>',
+  wow: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9L19 15z"/></svg>',
+  notices: '<svg viewBox="0 0 24 24"><path d="M3 11l14-5v12L3 13v-2z"/><path d="M7 13v5a2 2 0 0 0 4 0v-4M17 8a4 4 0 0 1 0 8"/></svg>',
+  settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>',
+  activity: '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
+  account: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>' };
 // Main tiles first, then the smaller "More" tiles.
 const TILE_MAIN = ["approvals", "diary", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "marks", "finance"];
 const TILE_MORE = ["tasks", "wow", "notices", "settings", "activity", "account"];
@@ -57,11 +66,10 @@ window.openTeacherMessages = () => { cur = "messages"; render(); window.scrollTo
   const tileHtml = (k) => {
     const t = tabByKey[k] || "";
     const sp = t.indexOf(" ");
-    const ico = sp > -1 ? t.slice(0, sp) : "📌";
     const label = sp > -1 ? t.slice(sp + 1) : t;
-    return `<div class="tile ${TILE_COLOR[k] || "g-teal"}" data-t="${k}">
-      <div class="tile-top"><span class="tile-ic">${ico}</span><span class="tile-n" id="tn-${k}"></span></div>
-      <div><div class="tile-t">${esc(label)}</div><div class="tile-s">${TILE_SUB[k] || ""}</div></div></div>`;
+    return `<div class="tile" data-t="${k}">
+      <div class="tile-circ">${TILE_ICON[k] || ""}</div>
+      <div class="tile-t">${esc(label)}</div><div class="tile-n" id="tn-${k}"></div></div>`;
   };
   document.getElementById("tiles-main").innerHTML = TILE_MAIN.map(tileHtml).join("");
   document.getElementById("tiles-more").innerHTML = TILE_MORE.map(tileHtml).join("");
@@ -105,8 +113,8 @@ async function updateTileCounts(o) {
 }
 
 async function render() {
-  // Opening the Messages tab marks the boys' messages as seen (clears the 🔔 badge).
-  if (cur === "messages" && typeof markTeacherMsgsSeen === "function") markTeacherMsgsSeen();
+  // Unread badges clear when the teacher opens a boy's chat thread (WhatsApp-style),
+  // not when the tab opens — see vMessages.
   document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
   ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, challenges: vChallenges,
@@ -168,23 +176,7 @@ async function vApprovals(p) {
   }
 }
 
-// Compress a photo client-side (max 1280px, JPEG) → {data, type}
-function compressPhoto(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const max = 1280;
-      let w = img.width, h = img.height;
-      if (w > max || h > max) { const r = max / Math.max(w, h); w = Math.round(w * r); h = Math.round(h * r); }
-      const c = document.createElement("canvas"); c.width = w; c.height = h;
-      c.getContext("2d").drawImage(img, 0, 0, w, h);
-      resolve({ data: c.toDataURL("image/jpeg", 0.82), type: "image" });
-      URL.revokeObjectURL(img.src);
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
-}
+// (compressPhoto lives in app.js — shared by teacher panel, notices, finance QR, and the student chat.)
 // Turn URLs into links; YouTube links become embedded players
 function richText(t) {
   let h = esc(t || "");
@@ -197,56 +189,156 @@ function mediaHtml(m) {
   if (m.media_data && m.media_type === "image") return `<img src="${m.media_data}" style="max-width:100%;border-radius:8px;margin:6px 0">`;
   return "";
 }
+// ── WhatsApp-style messages ──────────────────────────────────────────
+// Chat list (one row per boy: photo/initial, name, last message, time,
+// green unread badge) → tap a boy to open his thread with photo + voice.
+// Each boy still sees ONLY his own chat.
+let msgThreadId = null; // open chat (student id) or null = chat list
+let msgBroadcastOpen = false;
+const WA_AV_COLORS = ["#00a884", "#7c3aed", "#d97706", "#2563eb", "#dc2626", "#0891b2", "#db2777", "#65a30d"];
+function waAvatar(s) {
+  const c = WA_AV_COLORS[(s.id || 0) % WA_AV_COLORS.length];
+  if (s.photo) return `<div class="wa-av" style="padding:0"><img src="${esc(s.photo)}" alt=""></div>`;
+  return `<div class="wa-av" style="background:${c}">${esc((s.display_name || "?").trim().charAt(0))}</div>`;
+}
+function waPreview(m) {
+  if (!m) return "";
+  if (m.media_type === "image") return "📷 Photo";
+  if (m.media_type === "audio") return "🎤 Voice message";
+  return m.text || "";
+}
+function waListTime(ts) {
+  try {
+    const d = new Date(ts), now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return "Yesterday";
+    return d.toLocaleDateString([], { day: "numeric", month: "numeric" });
+  } catch (e) { return ""; }
+}
 async function vMessages(p) {
   const [sdata, mdata] = await Promise.all([api("GET", "/api/teacher/students"), api("GET", "/api/teacher/messages")]);
   const students = sdata.students || [];
-  p.innerHTML = `<h2>💬 Send a message</h2><div class="card">
-    <p class="muted" style="font-size:.85rem">Only the chosen student(s) will see it — private.</p>
-    <label><input type="checkbox" id="msg_all" style="width:auto"> Send to ALL 38 students</label>
-    <label>Or choose students</label>
-    <div id="msg_students" style="max-height:180px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:8px">
-      ${students.map(x => `<label style="display:block;font-weight:normal"><input type="checkbox" class="msg_stu" value="${x.id}" style="width:auto"> ${esc(x.display_name)}</label>`).join("")}
-    </div>
-    <label>Message</label><textarea id="msg_text" rows="3" style="width:100%" placeholder="Write your message... (YouTube links become videos)"></textarea>
-    <label>Photo (optional)</label><input type="file" id="msg_photo" accept="image/*">
-    <button class="btn" id="msg_send">Send 💬</button></div>
-    <h2>📨 Messages</h2><div id="msglist">` + (mdata.messages.length ? mdata.messages.map(m =>
-      `<div class="card"><p>${m.sender_role === "student"
-        ? `<span class="pill" style="border:1px solid #15803d;color:#15803d">👦 ${esc(m.student)} → You</span>`
-        : `<span class="pill" style="border:1px solid #1d4ed8;color:#1d4ed8">You → ${esc(m.student)}</span>`}
-      <span class="muted" style="font-size:.8rem">${fmtDateTime(m.created_at)}${m.sender_role === "student" ? "" : (m.read_at ? " · ✅ read" : " · ⏳ unread")}</span></p>
-      <p>${richText(m.text)}</p>${mediaHtml(m)}
-      ${m.sender_role === "student" ? `<button class="btn small" data-mreply="${m.sid}">↩️ Reply</button> ` : ""}
-      <button class="btn small danger" data-mdel="${m.id}">Delete</button></div>`).join("")
-    : `<div class="card"><p class="muted">No messages yet.</p></div>`) + `</div>`;
-  document.getElementById("msg_all").onchange = e => {
-    document.querySelectorAll(".msg_stu").forEach(c => c.checked = false);
-    document.getElementById("msg_students").style.opacity = e.target.checked ? .4 : 1;
-  };
-  document.getElementById("msg_send").onclick = async () => {
-    const text = document.getElementById("msg_text").value.trim();
-    const pf = document.getElementById("msg_photo").files[0];
+  const msgs = mdata.messages || [];
+  if (msgThreadId) return vMsgThread(p, students, msgThreadId);
+  const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
+  const last = {}, unread = {};
+  for (const m of msgs) { // newest first
+    if (!last[m.sid]) last[m.sid] = m;
+    if (m.sender_role === "student" && m.id > seen) unread[m.sid] = (unread[m.sid] || 0) + 1;
+  }
+  const rows = students.map(s => ({ s, m: last[s.id] || null, u: unread[s.id] || 0 }));
+  rows.sort((a, b) => {
+    if (a.m && b.m) return new Date(b.m.created_at) - new Date(a.m.created_at);
+    if (a.m) return -1; if (b.m) return 1;
+    return (a.s.display_name || "").localeCompare(b.s.display_name || "");
+  });
+  p.innerHTML = `<h2>💬 Little Hands Messages</h2>
+    <div class="wa-list">
+      <div class="wa-row" id="msg_bc_btn" style="background:#e7f8f1">
+        <div class="wa-av" style="background:#075e54">📣</div>
+        <div class="wa-mid"><div class="wa-nm">Send to all 38 boys</div><div class="wa-pv">One message to everyone</div></div>
+      </div>
+      <div id="msg_bc" style="display:${msgBroadcastOpen ? "" : "none"};padding:12px 14px;border-bottom:1px solid #f0f2f5">
+        <textarea id="msg_bc_text" rows="2" style="width:100%" placeholder="Write a message for all 38 boys..."></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+          <label class="btn small" style="cursor:pointer">📷 Photo<input type="file" id="msg_bc_photo" accept="image/*" style="display:none"></label>
+          <button class="btn small" id="msg_bc_send">Send to all 📣</button>
+        </div>
+      </div>
+      ${rows.map(({ s, m, u }) => `
+      <div class="wa-row" data-open="${s.id}">
+        ${waAvatar(s)}
+        <div class="wa-mid">
+          <div class="wa-nm">${esc(s.display_name)} <span class="wa-tm${u ? " un" : ""}">${m ? waListTime(m.created_at) : ""}</span></div>
+          <div class="wa-pv">${m ? esc(waPreview(m)) : "No messages yet — tap to say hi"}</div>
+        </div>
+        ${u ? `<span class="wa-badge">${u > 9 ? "9+" : u}</span>` : ""}
+      </div>`).join("")}
+    </div>`;
+  document.getElementById("msg_bc_btn").onclick = () => { msgBroadcastOpen = !msgBroadcastOpen; render(); };
+  document.getElementById("msg_bc_send").onclick = async (e) => {
+    if (e.currentTarget.disabled) return; // already sending
+    const text = document.getElementById("msg_bc_text").value.trim();
+    const pf = document.getElementById("msg_bc_photo").files[0];
     let media_data = null, media_type = null;
     if (pf) { try { const c = await compressPhoto(pf); media_data = c.data; media_type = c.type; } catch (e) { toast("Photo failed.", false); return; } }
     if (!text && !media_data) { toast("Write a message or add a photo.", false); return; }
-    const all = document.getElementById("msg_all").checked;
-    const ids = [...document.querySelectorAll(".msg_stu:checked")].map(c => +c.value);
-    if (!all && !ids.length) { toast("Choose at least one student.", false); return; }
+    e.currentTarget.disabled = true;
     try {
-      const r = await api("POST", "/api/teacher/message", { text, all, student_ids: ids, media_data, media_type });
-      toast(`Sent to ${r.sent} student(s)! 💬`); render();
-    } catch (e) { toast(e.message, false); }
+      const r = await api("POST", "/api/teacher/message", { text, all: true, student_ids: [], media_data, media_type });
+      toast(`Sent to ${r.sent} student(s)! 💬`); msgBroadcastOpen = false; render();
+    } catch (e) { toast(e.message, false); e.currentTarget.disabled = false; }
   };
-  p.querySelectorAll("[data-mdel]").forEach(b => b.onclick = async () => {
-    if (confirm("Delete this message?")) { await api("POST", `/api/teacher/message/${b.dataset.mdel}/delete`); render(); }
+  p.querySelectorAll("[data-open]").forEach(r => r.onclick = () => {
+    msgThreadId = +r.dataset.open;
+    if (typeof markTeacherMsgsSeen === "function") markTeacherMsgsSeen();
+    render();
   });
-  // Reply to a boy's message: pre-picks him in the send form above.
-  p.querySelectorAll("[data-mreply]").forEach(b => b.onclick = () => {
-    document.getElementById("msg_all").checked = false;
-    document.getElementById("msg_students").style.opacity = 1;
-    document.querySelectorAll(".msg_stu").forEach(c => c.checked = String(c.value) === String(b.dataset.mreply));
-    document.getElementById("msg_text").focus();
-    window.scrollTo(0, 0);
+}
+async function vMsgThread(p, students, sid) {
+  const s = students.find(x => x.id === sid) || { id: sid, display_name: "Student" };
+  const d = await api("GET", `/api/teacher/messages?student_id=${sid}`);
+  const thread = d.messages || [];
+  p.innerHTML = `<h2>💬 Little Hands Messages</h2>
+    <div class="wa-head">
+      <button id="msg_back" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer">←</button>
+      ${waAvatar(s)}
+      <div><div class="nm">${esc(s.display_name)}</div><div class="sb">Only you and this boy can see this</div></div>
+    </div>
+    <div class="wa-thread" id="msg_thread">${thread.length ? thread.map(m => {
+      const mine = m.sender_role !== "student";
+      return `<div class="wa-bub ${mine ? "out" : "in"}">${m.text ? richText(m.text) : ""}${msgMediaHtml(m)}
+        <span class="wt">${fmtDateTime(m.created_at)}${mine ? (m.read_at ? " · ✓✓" : " · ✓") : ""}</span>
+        ${mine ? `<br><a href="#" data-mdel="${m.id}" style="font-size:11px;color:#b91c1c">Delete</a>` : ""}</div>`;
+    }).join("") : `<p class="muted" style="align-self:center">No messages yet — say hi! 💬</p>`}</div>
+    <div class="wa-inputbar">
+      <input type="text" id="msg_text" placeholder="Message ${esc(s.display_name)}...">
+      <input type="file" id="msg_photo" accept="image/*" style="display:none">
+      <button class="wa-roundbtn" id="msg_photobtn" title="Send a photo">📷</button>
+      <button class="wa-roundbtn" id="msg_voicebtn" title="Voice message — tap to record, tap again to send">🎤</button>
+      <button class="wa-roundbtn send" id="msg_send">➤</button>
+    </div>`;
+  const th = document.getElementById("msg_thread");
+  if (th) th.scrollTop = th.scrollHeight;
+  document.getElementById("msg_back").onclick = () => { msgThreadId = null; render(); };
+  const sendText = async () => {
+    const inp = document.getElementById("msg_text");
+    const text = inp.value.trim();
+    if (!text) return;
+    const btn = document.getElementById("msg_send");
+    if (btn.disabled) return; // already sending — one tap = one message
+    btn.disabled = true;
+    try {
+      await api("POST", "/api/teacher/message", { text, all: false, student_ids: [sid] });
+      render();
+    } catch (e) { toast(e.message, false); btn.disabled = false; }
+  };
+  document.getElementById("msg_send").onclick = sendText;
+  document.getElementById("msg_text").addEventListener("keydown", e => { if (e.key === "Enter") sendText(); });
+  document.getElementById("msg_photobtn").onclick = () => document.getElementById("msg_photo").click();
+  document.getElementById("msg_photo").addEventListener("change", async e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      const c = await compressPhoto(f);
+      await api("POST", "/api/teacher/message", { text: "", all: false, student_ids: [sid], media_data: c.data, media_type: c.type });
+      render();
+    } catch (err) { toast(err.message, false); }
+  });
+  document.getElementById("msg_voicebtn").onclick = e => {
+    voiceNoteToggle(e.currentTarget, async (url, err) => {
+      if (err) { toast(err, false); return; }
+      if (!url) return;
+      try {
+        await api("POST", "/api/teacher/message", { text: "", all: false, student_ids: [sid], media_data: url, media_type: "audio" });
+        render();
+      } catch (e2) { toast(e2.message, false); }
+    });
+  };
+  p.querySelectorAll("[data-mdel]").forEach(b => b.onclick = async e => {
+    e.preventDefault();
+    if (confirm("Delete this message?")) { await api("POST", `/api/teacher/message/${b.dataset.mdel}/delete`); render(); }
   });
 }
 
@@ -938,9 +1030,20 @@ async function vLearning(p) {
 
 async function vCompletion(p) {
   const d = await api("GET", "/api/teacher/completion-eligible");
+  const ch = await api("GET", "/api/completion-champions");
   const rows = d.students || [];
+  const anyIssued = (ch.champions || []).some(c => c.cert_issued);
   p.innerHTML = `<h2>🎓 Completion Certificates</h2>
     <p class="muted">Boys who completed 100% of the Learning Tasks. Steps: 1) conduct the exam in class → 2) tick "Exam passed" → 3) issue the certificate. Nothing is issued automatically.</p>
+    <div class="card" style="margin:12px 0">
+      <h3 style="margin-top:0">🏆 Champions — ${ch.completed_count} of ${ch.total_students} boys</h3>
+      <p class="muted">Every student and parent can see this list. Download the combined certificates or the score board poster below.</p>
+      <div class="champ-dl">
+        ${anyIssued ? `<a class="btn" href="/api/teacher/completion-certificates-pdf" target="_blank">📥 All Certificates (PDF)</a>` : `<span class="btn" style="opacity:.5">📥 All Certificates (PDF) — none issued yet</span>`}
+        <a class="btn ghost" href="/api/teacher/completion-scoreboard-pdf" target="_blank">📥 Score Board (PDF)</a>
+      </div>
+      ${window.championsListHtml(ch.champions, true)}
+    </div>
     ${rows.length ? `<table style="width:100%;font-size:.9rem">
       <tr><th style="text-align:left">Student</th><th>Exam</th><th>Certificate</th><th>Action</th></tr>
       ${rows.map(r => `<tr>

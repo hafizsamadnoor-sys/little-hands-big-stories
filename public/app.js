@@ -64,7 +64,7 @@ function teacherNav(active) {
     ["board.html", "🏆 Board"], ["certificate.html", "🏅 Certificate"], ["books.html", "📚 Books"], ["authors.html", "👥 Authors"], ["about.html", "ℹ️ About"],
   ];
   return `<header class="top"><div class="top-in">
-    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:12px;object-fit:cover;display:block"></div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
+    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:0;object-fit:cover;display:block"></div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
     <div style="flex:1"></div>
     <button id="teacherbell" class="bell-btn" title="Messages from students" style="display:none">🔔<span class="bell-badge" id="teacherbellbadge" style="display:none"></span></button>
     <button class="btn small ghost" id="stulogin" style="margin:0 6px 0 0">🧑‍🎓 Student Login</button>
@@ -84,7 +84,7 @@ function teacherNav(active) {
 }
 function navHtml(links, active) {
   return `<header class="top"><div class="top-in">
-    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:12px;object-fit:cover;display:block"></div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
+    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:0;object-fit:cover;display:block"></div><div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Leading forward · S1 12th Batch</small></div>
     <div style="flex:1"></div>
     <div style="position:relative;flex:none">
       <button id="notifbell" class="bell-btn" title="Notifications" style="display:none;margin-right:8px">🔔<span class="bell-badge" id="bellbadge" style="display:none"></span></button>
@@ -249,8 +249,11 @@ function chatOverlayEl() {
       <button id="chatclose" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer">✕</button>
     </div>
     <div id="chatbody" style="flex:1;padding:14px;overflow-y:auto;background:#f4f8f6"></div>
-    <div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid #e3ebe8;background:#fff">
+    <div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid #e3ebe8;background:#fff;align-items:center">
       <input id="chattext" placeholder="Message your teacher..." style="flex:1;border:1.5px solid #cfe0da;border-radius:20px;padding:9px 13px;font-size:14px;min-width:0">
+      <input type="file" id="chatphoto" accept="image/*" style="display:none">
+      <button id="chatphotobtn" title="Send a photo" style="background:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:17px;cursor:pointer;flex-shrink:0">📷</button>
+      <button id="chatvoicebtn" title="Voice message" style="background:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:17px;cursor:pointer;flex-shrink:0">🎤</button>
       <button id="chatsend" style="background:#0b6e5d;color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:16px;cursor:pointer;flex-shrink:0">➤</button>
     </div></div>`;
   document.body.appendChild(ov);
@@ -259,6 +262,26 @@ function chatOverlayEl() {
   ov.onclick = (e) => { if (e.target === ov) closeChat(); };
   ov.querySelector("#chatsend").onclick = sendChatMsg;
   ov.querySelector("#chattext").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChatMsg(); });
+  ov.querySelector("#chatphotobtn").onclick = () => document.getElementById("chatphoto").click();
+  ov.querySelector("#chatphoto").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      const c = await compressPhoto(f);
+      await api("POST", "/api/my/message-teacher", { text: "", media_data: c.data, media_type: c.type });
+      await loadChatThread();
+    } catch (err) { alert(err.message); }
+  });
+  ov.querySelector("#chatvoicebtn").onclick = (e) => {
+    voiceNoteToggle(e.currentTarget, async (url, err) => {
+      if (err) { alert(err); return; }
+      if (!url) return;
+      try {
+        await api("POST", "/api/my/message-teacher", { text: "", media_data: url, media_type: "audio" });
+        await loadChatThread();
+      } catch (e2) { alert(e2.message); }
+    });
+  };
   return ov;
 }
 async function openChat() {
@@ -282,8 +305,9 @@ async function loadChatThread() {
     const msgs = (d.messages || []).slice().reverse();
     body.innerHTML = msgs.length ? msgs.map(m => {
       const mine = m.sender_role === "student";
+      const label = m.text ? `<b>${mine ? "You" : "Teacher"}:</b> ${esc(m.text)}` : "";
       return `<div style="border-radius:10px;padding:9px 11px;font-size:14px;line-height:1.5;margin-bottom:8px;${mine ? "background:#e3ecf7;margin-left:24px" : "background:#e8f5f1"}">
-        <b>${mine ? "You" : "Teacher"}:</b> ${esc(m.text)}<span style="display:block;font-size:11px;color:#8aa39c;margin-top:3px">${fmtDateTime(m.created_at)}</span></div>`;
+        ${label}${msgMediaHtml(m)}<span style="display:block;font-size:11px;color:#8aa39c;margin-top:3px">${fmtDateTime(m.created_at)}</span></div>`;
     }).join("") : `<p class="muted">No messages yet — say hi to your teacher! 💬</p>`;
     body.scrollTop = body.scrollHeight;
     for (const m of (d.messages || []).filter(x => x.sender_role !== "student" && !x.read_at)) {
@@ -303,6 +327,78 @@ async function sendChatMsg() {
     await loadChatThread();
   } catch (e) { alert(e.message); }
   btn.disabled = false;
+}
+// Compress a photo client-side (max 1280px, JPEG) → {data, type}
+function compressPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1280;
+      let w = img.width, h = img.height;
+      if (w > max || h > max) { const r = max / Math.max(w, h); w = Math.round(w * r); h = Math.round(h * r); }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve({ data: c.toDataURL("image/jpeg", 0.82), type: "image" });
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+// Render a message's photo / voice note (WhatsApp-style chat bubbles).
+function msgMediaHtml(m) {
+  if (m.media_data && m.media_type === "image") return `<img src="${m.media_data}" style="max-width:100%;border-radius:8px;margin:4px 0;display:block">`;
+  if (m.media_data && m.media_type === "audio") return `<audio controls preload="metadata" src="${m.media_data}" style="width:100%;max-width:230px;height:36px;display:block;margin:4px 0"></audio>`;
+  return "";
+}
+// Completion Champions list (shared by the teacher / student / parent pages).
+// champions: [{display_name, ad_no, completed_at, exam_passed, cert_issued}].
+// showAd: the teacher sees Ad numbers; students and parents see names only.
+window.championsListHtml = function (champions, showAd) {
+  if (!champions || !champions.length)
+    return `<p class="muted">No boy has completed 100% yet — the first champions will appear here. 🎓</p>`;
+  return champions.map(c => {
+    const d = c.completed_at ? new Date(c.completed_at + "Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+    return `<div class="champ-row"><div class="champ-medal">🏅</div><div class="champ-nm"><b>${esc(c.display_name)}</b><span>${showAd && c.ad_no ? "Ad " + esc(c.ad_no) + " · " : ""}Completed ${d || "—"}</span></div><div class="champ-pills"><span class="champ-pill ${c.exam_passed ? "ok" : "wait"}">${c.exam_passed ? "✓ Exam" : "⏳ Exam"}</span><span class="champ-pill ${c.cert_issued ? "ok" : "wait"}">${c.cert_issued ? "✓ Cert" : "⏳ Cert"}</span></div></div>`;
+  }).join("");
+};
+// Voice notes: tap 🎤 to start recording, tap ⏹ to stop and send. Max 60 seconds
+// (keeps the recording under the 1.5MB message size limit).
+let __voice = null; // {rec, btn, onDone, timer}
+async function voiceNoteToggle(btn, onDone) {
+  if (__voice) { // stop now and send
+    const v = __voice; __voice = null;
+    clearTimeout(v.timer);
+    v.btn.textContent = "🎤"; v.btn.classList.remove("rec");
+    if (v.rec.state !== "inactive") v.rec.stop();
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+    onDone(null, "Voice messages are not supported on this device.");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const rec = new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+      if (!blob.size) return onDone(null, "No audio recorded — try again.");
+      const rd = new FileReader();
+      rd.onload = () => {
+        const url = String(rd.result);
+        if (url.length > 1500000) onDone(null, "Voice note is too long — please keep it under a minute.");
+        else onDone(url);
+      };
+      rd.onerror = () => onDone(null, "Could not read the recording.");
+      rd.readAsDataURL(blob);
+    };
+    rec.start();
+    __voice = { rec, btn, timer: setTimeout(() => voiceNoteToggle(btn, onDone), 60000) };
+    btn.textContent = "⏹"; btn.classList.add("rec");
+  } catch (e) { onDone(null, "Microphone is not available. Please allow microphone access and try again."); }
 }
 // Floating refresh button on all pages
 document.addEventListener("DOMContentLoaded", () => {
