@@ -520,6 +520,21 @@ function logActivity(user_id, role, action, detail, ref_type, ref_id) {
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 
+// ── Old site (Render) redirects to the new site (Replit) ─────────────
+// The Render copy is the OLD site: it still shows the removed Puzzle game's
+// points (Thalha 384, Uwais 1334). Anyone opening it must land on the
+// daily Replit app instead. Host-gated, so the same code is safe on both
+// deployments: on Replit the host never matches, so nothing redirects.
+// API calls are left alone (the teacher purge endpoints still need to work).
+const NEW_SITE = "https://little-hands-big-stories--hafizsamadnoor.replit.app";
+app.use((req, res, next) => {
+  const host = (req.get("host") || "").toLowerCase();
+  if (host.includes("onrender.com") && !req.path.startsWith("/api/")) {
+    return res.redirect(301, NEW_SITE + req.originalUrl);
+  }
+  next();
+});
+
 function getSessionUser(req) {
   const cookie = req.headers.cookie || "";
   const m = cookie.match(/(?:^|;\s*)lhbs_session=([^;]+)/);
@@ -1165,6 +1180,25 @@ app.get("/api/teacher/holiday-diary", requireTeacher, (req, res) => {
       FROM holiday_diary_entries e JOIN users u ON u.id=e.student_id
       WHERE e.task_id=? ORDER BY u.display_name`).all(t.id);
     return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, points: t.points, open: diaryOpen(t), entries };
+  });
+  res.json({ tasks: out, checklist: DIARY_CHECKLIST });
+});
+
+// Teacher's Checklist view: ALL 38 children per day, whether or not they
+// wrote a diary — parents can tick the checklist independently, so a child
+// whose diary is not written yet still shows here with the parent's ticks.
+app.get("/api/teacher/checklists", requireTeacher, (req, res) => {
+  const tasks = db.prepare("SELECT * FROM holiday_diary_tasks ORDER BY start_date").all();
+  const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY display_name").all();
+  const out = tasks.map(t => {
+    const rows = students.map(s => {
+      const c = db.prepare("SELECT ticked_count, items_json, ticked_at FROM holiday_checklists WHERE task_id=? AND student_id=?").get(t.id, s.id);
+      const e = db.prepare("SELECT status FROM holiday_diary_entries WHERE task_id=? AND student_id=?").get(t.id, s.id);
+      return { id: s.id, display_name: s.display_name, ad_no: s.ad_no,
+        ticked_count: c ? c.ticked_count : 0, checklist_items: c ? c.items_json : null, ticked_at: c ? c.ticked_at : null,
+        diary_status: e ? e.status : "none" };
+    });
+    return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, open: diaryOpen(t), students: rows };
   });
   res.json({ tasks: out, checklist: DIARY_CHECKLIST });
 });
