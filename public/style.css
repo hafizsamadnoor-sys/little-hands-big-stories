@@ -166,6 +166,26 @@ tr:last-child td{border-bottom:none;}
 /* Red dot on a tile = something new the teacher has not looked at yet. */
 .tile-dot{position:absolute; top:8px; right:9px; width:12px; height:12px; border-radius:50%;
   background:#e11d48; border:2px solid #fff; box-shadow:0 0 0 1px #e11d48; z-index:1;}
+/* Student dashboard — new order (Samad 2026-11-07): Notices first, then 6 rainbow
+   tiles (Points · Rank · Learning Tasks · Badges · Total Progress · Club Journey),
+   then the "How far to go?" card, then white tiles like the Teacher Panel.
+   Tap a tile to open its section below (accordion — one open at a time). */
+.tiles.dash3{grid-template-columns:repeat(3,1fr);}
+.tile .tile-circ{font-size:1.35rem;}
+.rtile{border:0; border-radius:14px; padding:13px 5px 11px; display:flex; flex-direction:column;
+  align-items:center; gap:4px; cursor:pointer; font-family:inherit; color:#fff;
+  box-shadow:0 3px 10px rgba(0,0,0,.18); transition:transform .12s;}
+.rtile:active{transform:scale(.97);}
+.rtile.on{box-shadow:0 0 0 3px #fff, 0 0 0 5px #0b3c46; transform:scale(1.03);}
+.rtic{font-size:24px; line-height:1;}
+.rtlab{font-size:11px; font-weight:800; color:#fff; text-align:center; line-height:1.25;}
+.rtcnt{font-size:10px; color:rgba(255,255,255,.92); text-align:center; font-weight:600;}
+.dsec{background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin:10px 0;}
+.dsec h2{margin-top:0;}
+.target{background:#fff; border:2px solid #f59e0b; border-radius:14px; padding:14px; margin:14px 0; box-shadow:var(--shadow);}
+.target h3{margin:0 0 2px;}
+.tbar{height:12px; background:#e2e8f0; border-radius:8px; overflow:hidden; margin-top:5px;}
+.tfill{height:100%; border-radius:8px;}
 /* Print */
 @media print{
   header.top, nav.main, .btn, .fab-refresh, .no-print{display:none !important;}
