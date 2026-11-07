@@ -11,6 +11,8 @@
 <body><div id="nav"></div><div class="wrap">
 <h1 id="hello">👋</h1>
 <div class="statrow" id="stats"></div>
+<div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
+<div class="card"><h2>✅ Your Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
 <div class="card" id="msgcard" style="display:none"><h2>💬 Messages from Teacher</h2><div id="mymsgs"></div></div>
 <div class="card" id="noticecard" style="display:none"><h2>📢 Notice Board</h2><div id="notices"></div></div>
 <div class="card"><h2>🏆 My Club Journey</h2><div id="clubjourney"><p class="muted">Loading…</p></div></div>
@@ -27,7 +29,6 @@
   <a class="btn ghost" href="/works.html">📖 Read stories</a>
   <a class="btn ghost" href="/board.html">🏆 Points Board</a>
 </div>
-<div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
 <div class="card"><h2>🏅 My badges</h2><div id="badges"></div></div>
 
 <div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
@@ -168,6 +169,11 @@
     const w = await api("GET", "/api/writer-of-week");
     document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || []);
   } catch (e) { document.getElementById("wow").innerHTML = ""; }
+  // My approved works — the child sees his own approvals with stars + points
+  try {
+    const mw = await api("GET", "/api/my/works");
+    document.getElementById("myworks").innerHTML = window.myWorksCardHtml(mw.works, { seeAll: "/write.html", writeLink: true });
+  } catch (e) { document.getElementById("myworks").innerHTML = ""; }
   const b = await api("GET", "/api/my/badges");
   const mine = new Set(b.mine.map(x => x.badge_key));
   document.getElementById("badges").innerHTML = b.badges.map(x =>

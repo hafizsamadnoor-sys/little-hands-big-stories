@@ -251,3 +251,14 @@ tr:last-child td{border-bottom:none;}
 .wow-past b{font-size:13.5px;color:#1e3a4c}
 .wow-past span{display:block;font-size:12px;color:#667781}
 .btn.gold{background:linear-gradient(135deg,#b45309,#d97706);color:#fff}
+
+/* "Your Approved Works" card rows (student dashboard + parent page). */
+.work-row{display:flex;gap:10px;padding:11px 2px;border-bottom:1px solid #eef2f5;align-items:flex-start}
+.work-row:last-child{border-bottom:none}
+.work-ic{width:38px;height:38px;border-radius:10px;background:#e0f2f7;color:#0e7c8c;display:flex;align-items:center;justify-content:center;font-size:19px;flex:0 0 auto}
+.work-main{flex:1;min-width:0}
+.work-main b{font-size:14px}
+.work-main span{display:block;font-size:12px;color:#667781;margin-top:2px}
+.work-main .stars{color:#d97706;font-size:13px;letter-spacing:1px}
+.work-links{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.new-badge{display:inline-block;background:#dcfce7;color:#15803d;font-size:10px;font-weight:800;border-radius:8px;padding:2px 7px;margin-left:5px;vertical-align:middle}
