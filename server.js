@@ -292,6 +292,11 @@ CREATE TABLE IF NOT EXISTS holiday_diary_tasks (
   day_label TEXT NOT NULL DEFAULT '',
   start_date TEXT NOT NULL,
   points INTEGER NOT NULL DEFAULT 5,
+  -- Teacher manual override (2026-11-08, Samad): per day, diary + checklist
+  -- each have a state — 'auto' (follow the date rule), 'locked' (closed),
+  -- 'open' (open). NULL on old rows means 'auto'.
+  diary_state TEXT NOT NULL DEFAULT 'auto',
+  checklist_state TEXT NOT NULL DEFAULT 'auto',
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS holiday_diary_entries (
@@ -395,6 +400,9 @@ try { db.exec("ALTER TABLE sessions ADD COLUMN impersonated_from TEXT"); } catch
 try { db.exec("ALTER TABLE writer_of_week ADD COLUMN work_id INTEGER"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE writer_of_week ADD COLUMN published_at TEXT"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE holiday_checklists ADD COLUMN points_awarded INTEGER NOT NULL DEFAULT 0"); } catch (e) { /* already there */ }
+// Diary/checklist manual lock-open (2026-11-08): older DBs get the columns here.
+try { db.exec("ALTER TABLE holiday_diary_tasks ADD COLUMN diary_state TEXT NOT NULL DEFAULT 'auto'"); } catch (e) { /* already there */ }
+try { db.exec("ALTER TABLE holiday_diary_tasks ADD COLUMN checklist_state TEXT NOT NULL DEFAULT 'auto'"); } catch (e) { /* already there */ }
 
 // ── Point settings defaults ───────────────────────────────────
 // No fixed per-type points since 2026-10-30 (teacher enters points at approval).
@@ -1069,7 +1077,17 @@ const DIARY_CHECKLIST = [
   "Less screen time",
 ];
 function istToday() { return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10); }
-function diaryOpen(t) { return t.start_date <= istToday(); }
+// Teacher manual override (2026-11-08, Samad): per day, diary + checklist each
+// have a state — 'auto' (follow the date rule below), 'locked' (closed),
+// 'open' (open). NULL on old rows means 'auto'.
+function diaryState(t) { return (t.diary_state === "locked" || t.diary_state === "open") ? t.diary_state : "auto"; }
+function checklistState(t) { return (t.checklist_state === "locked" || t.checklist_state === "open") ? t.checklist_state : "auto"; }
+function diaryOpen(t) {
+  const s = diaryState(t);
+  if (s === "locked") return false;
+  if (s === "open") return true;
+  return t.start_date <= istToday();
+}
 // Parent checklist window (2026-11-07, Samad): a day's checklist is open on
 // its own day and until 10:00 IST the next morning — then it CLOSES and is
 // removed from the parent page, and the next day's fresh checklist takes
@@ -1082,10 +1100,16 @@ function parentChecklistCloseAt(t) {
   return c;
 }
 function parentChecklistOpen(t) {
+  const s = checklistState(t);
+  if (s === "locked") return false;
+  if (s === "open") return true;
   if (t.start_date > istToday()) return false; // not yet open
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000) < parentChecklistCloseAt(t);
 }
 function parentChecklistClosed(t) {
+  const s = checklistState(t);
+  if (s === "open") return false;
+  if (s === "locked") return true;
   if (t.start_date >= istToday()) return false;
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000) >= parentChecklistCloseAt(t);
 }
@@ -1112,6 +1136,22 @@ app.post("/api/teacher/holiday-diary-task", requireTeacher, (req, res) => {
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
+// Teacher sets one day's diary or checklist state: 'auto' (follow the date
+// rule), 'locked' (closed) or 'open' (open). 2026-11-08, Samad's ask.
+app.post("/api/teacher/holiday-diary-task/:id/state", requireTeacher, (req, res) => {
+  const target = ((req.body || {}).target || "").toString();
+  const state = ((req.body || {}).state || "").toString();
+  if ((target !== "diary" && target !== "checklist") || !["auto", "locked", "open"].includes(state))
+    return res.status(400).json({ error: "target must be diary or checklist; state must be auto, locked or open." });
+  const t = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(req.params.id);
+  if (!t) return res.status(404).json({ error: "No such diary day." });
+  db.prepare(`UPDATE holiday_diary_tasks SET ${target === "diary" ? "diary_state" : "checklist_state"}=? WHERE id=?`).run(state, t.id);
+  const after = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(t.id);
+  logActivity(req.user.id, "teacher", `set ${target} ${state} for ${t.title}`, "", "holiday_diary_task", t.id);
+  res.json({ ok: true, id: t.id, diary_state: diaryState(after), checklist_state: checklistState(after),
+    diary_open: diaryOpen(after), checklist_open: parentChecklistOpen(after) });
+});
+
 // Everyone logged in: the 3 diary tasks with open/locked state.
 // Students also get their own entry status (no diary text here).
 app.get("/api/holiday-diary-tasks", requireLogin, (req, res) => {
@@ -1133,7 +1173,7 @@ app.post("/api/student/holiday-diary", requireStudent, (req, res) => {
   const { task_id, diary_text, best_moment, good_deed } = req.body || {};
   const t = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(task_id);
   if (!t) return res.status(404).json({ error: "Diary task not found." });
-  if (!diaryOpen(t)) return res.status(403).json({ error: `This diary opens on ${t.start_date} — it is not open yet. 🔒` });
+  if (!diaryOpen(t)) return res.status(403).json({ error: diaryState(t) === "locked" ? "This diary is locked by the teacher. 🔒" : `This diary opens on ${t.start_date} — it is not open yet. 🔒` });
   const d = (diary_text || "").toString().trim();
   const b = (best_moment || "").toString().trim();
   const g = (good_deed || "").toString().trim();
@@ -1172,7 +1212,7 @@ app.post("/api/parent/holiday-checklist", requireParent, (req, res) => {
   const { task_id, items } = req.body || {};
   const t = db.prepare("SELECT * FROM holiday_diary_tasks WHERE id=?").get(task_id);
   if (!t) return res.status(404).json({ error: "Diary task not found." });
-  if (!parentChecklistOpen(t)) return res.status(403).json({ error: t.start_date > istToday() ? "This day's diary is not open yet." : "This day's checklist is closed now (it closed at 10 AM the next morning)." });
+  if (!parentChecklistOpen(t)) return res.status(403).json({ error: checklistState(t) === "locked" ? "This day's checklist is locked by the teacher." : t.start_date > istToday() ? "This day's diary is not open yet." : "This day's checklist is closed now (it closed at 10 AM the next morning)." });
   if (!Array.isArray(items) || items.length !== DIARY_CHECKLIST.length)
     return res.status(400).json({ error: `Checklist must have ${DIARY_CHECKLIST.length} items.` });
   const bools = items.map(x => !!x);
@@ -1209,7 +1249,7 @@ app.get("/api/teacher/holiday-diary", requireTeacher, (req, res) => {
         (SELECT COUNT(*) FROM points_log p WHERE p.ref_type='good_deed_bonus' AND p.ref_id=e.id) AS bonus_given
       FROM holiday_diary_entries e JOIN users u ON u.id=e.student_id
       WHERE e.task_id=? ORDER BY u.display_name`).all(t.id);
-    return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, points: t.points, open: diaryOpen(t), entries };
+    return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, points: t.points, open: diaryOpen(t), diary_state: diaryState(t), checklist_state: checklistState(t), entries };
   });
   res.json({ tasks: out, checklist: DIARY_CHECKLIST });
 });
@@ -1228,7 +1268,7 @@ app.get("/api/teacher/checklists", requireTeacher, (req, res) => {
         ticked_count: c ? c.ticked_count : 0, points_awarded: c ? (c.points_awarded || 0) : 0, checklist_items: c ? c.items_json : null, ticked_at: c ? c.ticked_at : null,
         diary_status: e ? e.status : "none" };
     });
-    return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, open: diaryOpen(t), students: rows };
+    return { id: t.id, title: t.title, day_label: t.day_label, start_date: t.start_date, open: diaryOpen(t), diary_state: diaryState(t), checklist_state: checklistState(t), checklist_open: parentChecklistOpen(t), students: rows };
   });
   res.json({ tasks: out, checklist: DIARY_CHECKLIST });
 });
