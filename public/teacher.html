@@ -105,8 +105,11 @@ async function updateTileCounts(o) {
       set("learning", done + " / " + (list.length || 38) + " at 100%");
     }
     if (d.status === "fulfilled") {
-      const entries = (d.value.tasks || []).reduce((a, t) => a + ((t.entries || []).length), 0);
+      const tasks = d.value.tasks || [];
+      const entries = tasks.reduce((a, t) => a + ((t.entries || []).length), 0);
+      const pend = tasks.reduce((a, t) => a + ((t.entries || []).filter(e => e.status === "pending").length), 0);
       set("diary", entries ? entries + " entries" : "Day 1 open");
+      set("approvals", (o.pending + pend) + " waiting");
     }
     if (b.status === "fulfilled") set("books", (b.value.books || []).length + " books");
   } catch (e) { /* static subtitles stay */ }
@@ -123,7 +126,17 @@ async function render() {
 
 async function vApprovals(p) {
   const d = await api("GET", "/api/teacher/pending");
-  p.innerHTML = `<h2>📮 Waiting for approval (${d.works.length})</h2>` + (d.works.length ? d.works.map(w => `
+  const hd = await api("GET", "/api/teacher/holiday-diary");
+  const labels = hd.checklist || [];
+  // Diary entries the teacher has not looked at yet (status pending).
+  const diaryPend = [];
+  (hd.tasks || []).forEach(tk => (tk.entries || []).forEach(e => {
+    if (e.status === "pending") diaryPend.push({ ...e, taskTitle: tk.title, dayLabel: tk.day_label });
+  }));
+  const total = d.works.length + diaryPend.length;
+  const chkItems = (e) => { try { return e.checklist_items ? JSON.parse(e.checklist_items) : null; } catch (_) { return null; } };
+  p.innerHTML = `<h2>📮 Waiting for approval (${total})</h2>`
+    + (d.works.length ? `<h3>✍️ Writings (${d.works.length})</h3>` + d.works.map(w => `
     <div class="card"><h3>${esc(w.title)}</h3>
       <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
       <span class="muted" style="font-size:.85rem">by ${esc(w.author)} · ${fmtDate(w.created_at)}</span>
@@ -142,8 +155,27 @@ async function vApprovals(p) {
         <button class="btn small danger" id="rejgo${w.id}">Confirm reject</button>
         <button class="btn small ghost" id="rejcancel${w.id}">Cancel</button>
       </div>
-      <button class="btn small danger" data-d="${w.id}">🗑 Delete</button></div>`).join("")
-    : `<div class="card"><p class="muted">Nothing waiting. 🎉</p></div>`);
+      <button class="btn small danger" data-d="${w.id}">🗑 Delete</button></div>`).join("") : "")
+    + (diaryPend.length ? `<h3>🏖️ Holiday Diary — not yet seen (${diaryPend.length})</h3>` + diaryPend.map(e => {
+        const items = chkItems(e);
+        return `
+    <div class="card"><h3>${esc(e.student_name)} <span class="tag">${esc(e.taskTitle)}</span> <span class="muted" style="font-size:.85rem">${esc(e.dayLabel)}</span> <span class="redbadge">waiting</span></h3>
+      <p class="muted" style="font-size:.85rem">📋 Parent checklist: ${items ? items.filter(Boolean).length + " of 17 ticked" : "not ticked yet"}</p>
+      <p><b>1. My Diary</b></p><p style="white-space:pre-wrap">${esc(e.diary_text)}</p>
+      <p><b>2. My Best Moment</b></p><p style="white-space:pre-wrap">${esc(e.best_moment)}</p>
+      <p><b>3. My Good Deed</b></p><p style="white-space:pre-wrap">${esc(e.good_deed)}</p>
+      ${items ? `<details style="margin:8px 0"><summary style="cursor:pointer;font-weight:700;font-size:13.5px">📋 Parent's checklist — what the parent ticked (${items.filter(Boolean).length} of 17)</summary>
+      ${labels.map((lab, i) => `<div class="ckitem ${items[i] ? "yes" : "no"}"><span class="mk">${items[i] ? "✓" : "–"}</span><span>${esc(lab)}</span></div>`).join("")}</details>` : ""}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+        <label>Stars (0–5)</label>
+        <select id="dst${e.id}"><option>5</option><option>4</option><option>3</option><option>2</option><option>1</option><option>0</option></select>
+        <label>Points (your choice — 5 per day)</label>
+        <input id="dpt${e.id}" type="number" min="0" value="5" style="width:90px">
+        <button class="btn small" data-da="${e.id}">✅ Approve</button>
+        <button class="btn small ghost" data-dr="${e.id}">❌ Reject</button>
+        <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="dbonus${e.id}" style="width:18px;height:18px;accent-color:#0b6e5d"> ⭐ Best good deed +5</label>
+      </div></div>`; }).join("") : "")
+    + (!total ? `<div class="card"><p class="muted">Nothing waiting. 🎉</p></div>` : "");
   d.works.forEach(w => {
     const upd = () => {
       const s = parseInt(document.getElementById("st" + w.id).value || 0);
@@ -164,6 +196,23 @@ async function vApprovals(p) {
   });
   p.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
     if (confirm("Delete this work?")) { await api("POST", `/api/teacher/work/${b.dataset.d}/delete`); render(); }
+  });
+  // Diary approvals, right here in the queue (same flow as the Diary tab).
+  p.querySelectorAll("[data-da]").forEach(b => b.onclick = async () => {
+    try {
+      await api("POST", `/api/teacher/holiday-diary/${b.dataset.da}/review`, { decision: "approve", stars: document.getElementById("dst" + b.dataset.da).value, points: document.getElementById("dpt" + b.dataset.da).value });
+      const bonusBox = document.getElementById("dbonus" + b.dataset.da);
+      if (bonusBox && bonusBox.checked) {
+        try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.da}/good-deed-bonus`); toast("Diary approved + best good deed +5! ⭐"); }
+        catch (e2) { toast("Diary approved! (bonus: " + e2.message + ")", false); }
+      } else toast("Diary approved! ⭐");
+      render();
+    } catch (e) { toast(e.message, false); }
+  });
+  p.querySelectorAll("[data-dr]").forEach(b => b.onclick = async () => {
+    if (!confirm("Reject this diary? The child will see it was not approved.")) return;
+    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.dr}/review`, { decision: "reject" }); toast("Diary rejected."); render(); }
+    catch (e) { toast(e.message, false); }
   });
   async function review(id, decision, reason) {
     try {
@@ -576,6 +625,9 @@ async function vTasks(p) {
   });
 }
 
+// Holiday Diary — which name rows are expanded (kept across re-renders, so
+// approving a diary shows the bonus result right away, no re-tap needed).
+const openDiaryRows = new Set();
 async function vDiary(p) {
   const d = await api("GET", "/api/teacher/holiday-diary");
   const lk = await api("GET", "/api/teacher/writing-lock");
@@ -619,31 +671,46 @@ async function vDiary(p) {
             <input id="dpt${e.id}" type="number" min="0" value="5" style="width:90px">
             <button class="btn small" data-da="${e.id}">✅ Approve</button>
             <button class="btn small ghost" data-dr="${e.id}">❌ Reject</button>
+            <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="dbonus${e.id}" style="width:18px;height:18px;accent-color:#0b6e5d"> ⭐ Best good deed +5</label>
           </div>` : `
           <div style="margin-top:12px">${e.bonus_given ? `<span class="pill">⭐ Best good deed +5 given</span>` : `<button class="btn small" data-db="${e.id}">⭐ Best good deed +5</button>`}</div>`}
         </div>
       </div>`; }).join("") : `<p class="muted">No diaries submitted yet for this day.</p>`}
     </div>`; }).join("")}`;
+  // Re-open rows the teacher had expanded (they survive re-render).
+  p.querySelectorAll(".namerow").forEach(row => { if (openDiaryRows.has(+row.dataset.nr)) row.classList.add("open"); });
   document.getElementById("locktoggle").onclick = async () => {
     try { const r = await api("POST", "/api/teacher/writing-lock", { locked: !lk.locked }); toast(r.locked ? "Writing locked for the leave. 🔒" : "Writing unlocked. 🔓"); render(); }
     catch (e) { toast(e.message, false); }
   };
   // Tap a name row to expand / collapse (not when tapping a control inside it).
   p.querySelectorAll(".namerow").forEach(row => row.onclick = (ev) => {
-    if (ev.target.closest("button, select, input, a")) return;
-    row.classList.toggle("open");
+    if (ev.target.closest("button, select, input, a, label")) return;
+    const id = +row.dataset.nr;
+    if (row.classList.toggle("open")) openDiaryRows.add(id); else openDiaryRows.delete(id);
   });
   p.querySelectorAll("[data-da]").forEach(b => b.onclick = async () => {
-    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.da}/review`, { decision: "approve", stars: document.getElementById("dst" + b.dataset.da).value, points: document.getElementById("dpt" + b.dataset.da).value }); toast("Diary approved! ⭐"); render(); }
+    try {
+      await api("POST", `/api/teacher/holiday-diary/${b.dataset.da}/review`, { decision: "approve", stars: document.getElementById("dst" + b.dataset.da).value, points: document.getElementById("dpt" + b.dataset.da).value });
+      const bonusBox = document.getElementById("dbonus" + b.dataset.da);
+      if (bonusBox && bonusBox.checked) {
+        try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.da}/good-deed-bonus`); toast("Diary approved + best good deed +5! ⭐"); }
+        catch (e2) { toast("Diary approved! (bonus: " + e2.message + ")", false); }
+      } else toast("Diary approved! ⭐");
+      openDiaryRows.add(+b.dataset.da);
+      await render();
+      const row = document.querySelector(`[data-nr="${b.dataset.da}"]`);
+      if (row) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
     catch (e) { toast(e.message, false); }
   });
   p.querySelectorAll("[data-dr]").forEach(b => b.onclick = async () => {
     if (!confirm("Reject this diary? The child will see it was not approved.")) return;
-    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.dr}/review`, { decision: "reject" }); toast("Diary rejected."); render(); }
+    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.dr}/review`, { decision: "reject" }); toast("Diary rejected."); openDiaryRows.add(+b.dataset.dr); render(); }
     catch (e) { toast(e.message, false); }
   });
   p.querySelectorAll("[data-db]").forEach(b => b.onclick = async () => {
-    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.db}/good-deed-bonus`); toast("Best good deed +5 given! ⭐"); render(); }
+    try { await api("POST", `/api/teacher/holiday-diary/${b.dataset.db}/good-deed-bonus`); toast("Best good deed +5 given! ⭐"); openDiaryRows.add(+b.dataset.db); render(); }
     catch (e) { toast(e.message, false); }
   });
 }
