@@ -1160,6 +1160,7 @@ app.get("/api/teacher/holiday-diary", requireTeacher, (req, res) => {
   const out = tasks.map(t => {
     const entries = db.prepare(`SELECT e.*, u.display_name AS student_name, u.ad_no,
         (SELECT ticked_count FROM holiday_checklists c WHERE c.task_id=e.task_id AND c.student_id=e.student_id) AS checklist_count,
+        (SELECT items_json FROM holiday_checklists c WHERE c.task_id=e.task_id AND c.student_id=e.student_id) AS checklist_items,
         (SELECT COUNT(*) FROM points_log p WHERE p.ref_type='good_deed_bonus' AND p.ref_id=e.id) AS bonus_given
       FROM holiday_diary_entries e JOIN users u ON u.id=e.student_id
       WHERE e.task_id=? ORDER BY u.display_name`).all(t.id);
