@@ -1267,6 +1267,35 @@ app.get("/api/writer-of-week", requireLogin, (req, res) => {
   const history = db.prepare(`${pick} ORDER BY w.id DESC LIMIT 6`).all().slice(1);
   res.json({ writer: w || null, history });
 });
+// ── "Next in Line" — the boys right behind the Writer of the Week (by
+// points) and right behind the Completion Champions (by Learning Tasks).
+// Visible to every logged-in user: students, parents, teachers.
+app.get("/api/next-up", requireLogin, (req, res) => {
+  const cur = db.prepare("SELECT student_id FROM writer_of_week ORDER BY id DESC LIMIT 1").get();
+  const wowId = cur ? cur.student_id : null;
+  const wowNext = db.prepare(`
+    SELECT u.id, u.display_name, u.photo,
+      COALESCE(SUM(p.points),0) AS points,
+      COALESCE((SELECT SUM(w.stars) FROM works w WHERE w.student_id=u.id AND w.status='approved'),0) AS stars,
+      (SELECT COUNT(*) FROM works w WHERE w.student_id=u.id AND w.status='approved') AS works
+    FROM users u LEFT JOIN points_log p ON p.student_id=u.id
+    WHERE u.role='student' ${wowId ? "AND u.id<>?" : ""}
+    GROUP BY u.id ORDER BY points DESC, u.display_name ASC LIMIT 3`).all(...(wowId ? [wowId] : []));
+  const total = db.prepare("SELECT COUNT(*) c FROM learning_tasks").get().c;
+  const students = db.prepare("SELECT id, display_name, photo, ad_no FROM users WHERE role='student' ORDER BY display_name").all();
+  const doneRows = db.prepare("SELECT student_id, task_id FROM learning_task_done").all();
+  const doneMap = {};
+  doneRows.forEach(r => { (doneMap[r.student_id] = doneMap[r.student_id] || new Set()).add(r.task_id); });
+  const completionNext = students
+    .map(s => {
+      const done = doneMap[s.id] ? doneMap[s.id].size : 0;
+      return { id: s.id, display_name: s.display_name, photo: s.photo, ad_no: s.ad_no, done, total, pct: total ? Math.round(done / total * 100) : 0 };
+    })
+    .filter(s => s.done < total)
+    .sort((a, b) => b.done - a.done || a.display_name.localeCompare(b.display_name))
+    .slice(0, 5);
+  res.json({ wow_next: wowNext, completion_next: completionNext });
+});
 // Publish a Writer of the Week pick: a 📢 notice to everyone (students +
 // parents) + a 💬 congratulations message to the winner himself. Once only.
 function publishWriterOfWeek(row) {
