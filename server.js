@@ -8,6 +8,7 @@ process.on("unhandledRejection", (e) => { console.error("Unhandled rejection (ke
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
+const PDFDocument = require("pdfkit");
 const { DatabaseSync } = require("node:sqlite");
 const STUDENTS = require("./students");
 
@@ -1333,6 +1334,7 @@ app.post("/api/teacher/message", requireTeacher, (req, res) => {
   const media = ((req.body || {}).media_data || "").toString().slice(0, 1500000);
   const mtype = ((req.body || {}).media_type || "").toString().slice(0, 20);
   if (!msg && !media) return res.status(400).json({ error: "Message text or photo is required." });
+  if (media && mtype !== "image" && mtype !== "audio") return res.status(400).json({ error: "That file type is not allowed." });
   let ids = [];
   if (all) {
     ids = db.prepare("SELECT id FROM users WHERE role='student'").all().map(u => u.id);
@@ -1346,8 +1348,17 @@ app.post("/api/teacher/message", requireTeacher, (req, res) => {
   logActivity(req.user.id, "teacher", "sent message", `${ids.length} student(s)`, "message", null);
   res.json({ ok: true, sent: ids.length });
 });
+// Teacher: all messages, newest first — LIGHT (no media_data, so the chat
+// list and the 🔔 bell stay fast). With ?student_id=N: that boy's full
+// thread, oldest first, WITH media (photos + voice notes).
 app.get("/api/teacher/messages", requireTeacher, (req, res) => {
-  const rows = db.prepare(`SELECT m.id, m.student_id AS sid, m.text, m.created_at, m.read_at, m.sender_role, u.display_name AS student
+  const sid = Number(req.query.student_id || 0);
+  if (sid) {
+    const rows = db.prepare(`SELECT m.id, m.student_id AS sid, m.text, m.created_at, m.read_at, m.sender_role, m.media_data, m.media_type, u.display_name AS student
+      FROM messages m JOIN users u ON u.id=m.student_id WHERE m.student_id=? ORDER BY m.created_at ASC LIMIT 100`).all(sid);
+    return res.json({ messages: rows });
+  }
+  const rows = db.prepare(`SELECT m.id, m.student_id AS sid, m.text, m.created_at, m.read_at, m.sender_role, m.media_type, u.display_name AS student
     FROM messages m JOIN users u ON u.id=m.student_id ORDER BY m.created_at DESC LIMIT 100`).all();
   res.json({ messages: rows });
 });
@@ -1370,12 +1381,15 @@ app.post("/api/my/messages/:id/read", requireStudent, (req, res) => {
 // Only the teacher sees these — never other students, never public.
 app.post("/api/my/message-teacher", requireStudent, (req, res) => {
   const msg = ((req.body || {}).text || "").toString().trim().slice(0, 1000);
-  if (!msg) return res.status(400).json({ error: "Write your message first." });
+  const media = ((req.body || {}).media_data || "").toString().slice(0, 1500000);
+  const mtype = ((req.body || {}).media_type || "").toString().slice(0, 20);
+  if (!msg && !media) return res.status(400).json({ error: "Write your message first." });
+  if (media && mtype !== "image" && mtype !== "audio") return res.status(400).json({ error: "That file type is not allowed." });
   // Light anti-spam: one message per 30 seconds (also stops double-taps).
   const recent = db.prepare(`SELECT COUNT(*) c FROM messages WHERE student_id=? AND sender_role='student'
     AND created_at > datetime('now', '-30 seconds')`).get(req.user.id).c;
   if (recent) return res.status(429).json({ error: "Please wait a few seconds before sending another message." });
-  const r = db.prepare("INSERT INTO messages (student_id, text, sender_role) VALUES (?,?,'student')").run(req.user.id, msg);
+  const r = db.prepare("INSERT INTO messages (student_id, text, media_data, media_type, sender_role) VALUES (?,?,?,?,'student')").run(req.user.id, msg, media || null, mtype || null);
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
@@ -2065,6 +2079,53 @@ app.get("/api/learning-top10", requireLogin, (req, res) => {
   });
   res.json({ top: list.slice(0, 10), total });
 });
+// ── Completion Champions ────────────────────────────────────────
+// Students at 100% of Learning Tasks, in completion order (same
+// activity-log replay as /api/learning-top10), with exam + certificate
+// status. Visible to EVERY logged-in user (teacher, student, parent) —
+// only completers are listed, never anyone's partial progress.
+function completionChampionsList() {
+  const students = db.prepare("SELECT id, display_name, ad_no, photo FROM users WHERE role='student'").all();
+  const total = db.prepare("SELECT COUNT(*) c FROM learning_tasks").get().c;
+  const taskIds = new Set(db.prepare("SELECT id FROM learning_tasks").all().map(r => r.id));
+  const doneRows = db.prepare("SELECT student_id, task_id FROM learning_task_done").all();
+  const doneMap = {};
+  doneRows.forEach(r => { (doneMap[r.student_id] = doneMap[r.student_id] || new Set()).add(r.task_id); });
+  const nameToId = {};
+  students.forEach(s => { nameToId[s.display_name] = s.id; });
+  const events = db.prepare("SELECT id, action, detail, ref_id, created_at FROM activity_log WHERE action IN ('tick','untick') AND ref_type='learning_task' ORDER BY created_at, id").all();
+  const ticked = {};
+  const completedAt = {};
+  events.forEach(e => {
+    if (!taskIds.has(e.ref_id)) return;
+    const m = /" for (.+)$/.exec(e.detail || "");
+    if (!m) return;
+    const sid = nameToId[m[1]];
+    if (!sid) return;
+    const s = ticked[sid] || (ticked[sid] = new Set());
+    if (e.action === "tick") s.add(e.ref_id); else s.delete(e.ref_id);
+    if (total > 0 && s.size === total && !completedAt[sid]) completedAt[sid] = e.created_at;
+  });
+  const issuedAt = Object.fromEntries(db.prepare("SELECT student_id, issued_at FROM completion_certs").all().map(r => [r.student_id, r.issued_at]));
+  const examAt = Object.fromEntries(db.prepare("SELECT student_id, passed_at FROM completion_exams").all().map(r => [r.student_id, r.passed_at]));
+  const list = students.map(st => {
+    const done = doneMap[st.id] ? doneMap[st.id].size : 0;
+    return { id: st.id, display_name: st.display_name, ad_no: st.ad_no, photo: st.photo,
+      done, total, completed_at: completedAt[st.id] || null,
+      exam_passed: !!examAt[st.id], exam_at: examAt[st.id] || null,
+      cert_issued: !!issuedAt[st.id], issued_at: issuedAt[st.id] || null };
+  }).filter(s => total > 0 && s.done === total);
+  list.sort((a, b) => {
+    if (a.completed_at && b.completed_at) return a.completed_at < b.completed_at ? -1 : a.completed_at > b.completed_at ? 1 : a.display_name.localeCompare(b.display_name);
+    if (a.completed_at) return -1;
+    if (b.completed_at) return 1;
+    return a.display_name.localeCompare(b.display_name);
+  });
+  return { champions: list, total_students: students.length, completed_count: list.length, total_tasks: total };
+}
+app.get("/api/completion-champions", requireLogin, (req, res) => {
+  res.json(completionChampionsList());
+});
 // One student's ticked tasks (teacher or guest view for the grid).
 app.get("/api/teacher/learning-ticks/:id", requireTeacherOrGuest, (req, res) => {
   const rows = db.prepare("SELECT task_id FROM learning_task_done WHERE student_id=?").all(req.params.id);
@@ -2114,6 +2175,129 @@ app.post("/api/teacher/completion-cert/:id/issue", requireTeacher, (req, res) =>
 app.post("/api/teacher/completion-cert/:id/revoke", requireTeacher, (req, res) => {
   db.prepare("DELETE FROM completion_certs WHERE student_id=?").run(req.params.id);
   res.json({ ok: true });
+});
+// ── Completion Champions downloads (teacher only) ──────────────
+// Both PDFs are generated live from the database, so they are always
+// current — no stale files. Dates are "YYYY-MM-DD HH:MM:SS" (UTC).
+function certDateStr(s) {
+  if (!s) return "";
+  const d = new Date(s.slice(0, 10) + "T00:00:00Z");
+  if (isNaN(d)) return s.slice(0, 10);
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+function drawCompletionCertPage(doc, c) {
+  const W = 595.28, H = 841.89, CX = W / 2;
+  doc.rect(24, 24, W - 48, H - 48).lineWidth(2).stroke("#0b3c46");
+  doc.rect(30, 30, W - 60, H - 60).lineWidth(0.75).stroke("#d4a017");
+  doc.fillColor("#0b3c46").font("Helvetica-Bold").fontSize(12)
+    .text("Noorul Huda Centre for Excellence", 0, 66, { width: W, align: "center" });
+  doc.fillColor("#b45309").font("Helvetica").fontSize(10)
+    .text("Little Hands, Big Stories  ·  S1 — 12th Batch", 0, 86, { width: W, align: "center" });
+  doc.moveTo(150, 112).lineTo(W - 150, 112).lineWidth(1).stroke("#d4a017");
+  doc.fillColor("#0b3c46").font("Helvetica-Bold").fontSize(30)
+    .text("Certificate of Completion", 0, 138, { width: W, align: "center" });
+  // Photo (data URL) or initials in a gold circle.
+  const cy = 252;
+  doc.save();
+  doc.circle(CX, cy, 44).fill("#fef3c7");
+  doc.restore();
+  let drewPhoto = false;
+  if (c.photo && typeof c.photo === "string" && c.photo.startsWith("data:image")) {
+    try {
+      const buf = Buffer.from(c.photo.split(",")[1], "base64");
+      doc.save(); doc.circle(CX, cy, 44).clip();
+      doc.image(buf, CX - 44, cy - 44, { width: 88, height: 88 }); doc.restore();
+      drewPhoto = true;
+    } catch (_) { drewPhoto = false; }
+  }
+  if (!drewPhoto) {
+    const initials = (c.display_name || "?").split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+    doc.fillColor("#b45309").font("Helvetica-Bold").fontSize(24)
+      .text(initials, CX - 44, cy - 13, { width: 88, align: "center" });
+  }
+  doc.fillColor("#0b3c46").font("Helvetica-Bold").fontSize(24)
+    .text(c.display_name, 0, 318, { width: W, align: "center" });
+  doc.fillColor("#b45309").font("Helvetica-Bold").fontSize(12)
+    .text("100% COMPLETE", 0, 352, { width: W, align: "center" });
+  doc.fillColor("#334155").font("Helvetica").fontSize(12)
+    .text("This certificate is proudly awarded for successfully completing 100% of the Learning Tasks — the Quran memorisation, daily duas and speech programme of Little Hands, Big Stories, Noorul Huda Centre for Excellence, S1 — 12th Batch.", 90, 386, { width: W - 180, align: "center" });
+  doc.fillColor("#0b3c46").font("Helvetica").fontSize(12)
+    .text(`Completed on ${certDateStr(c.completed_at) || "—"}`, 0, 486, { width: W, align: "center" })
+    .text(`Issued on ${certDateStr(c.issued_at)}`, 0, 506, { width: W, align: "center" });
+  // Signature (left) + institution (right), like completion-cert.html.
+  const sigPath = path.join(__dirname, "public", "signature.png");
+  try { if (fs.existsSync(sigPath)) doc.image(sigPath, 90, 590, { width: 130 }); } catch (_) {}
+  doc.fillColor("#334155").font("Helvetica").fontSize(10)
+    .text("Teacher's Signature", 90, 648, { width: 130, align: "center" });
+  doc.fillColor("#0b3c46").font("Helvetica-Bold").fontSize(11)
+    .text("Little Hands, Big Stories", W - 230, 606, { width: 140, align: "center" });
+  doc.fillColor("#334155").font("Helvetica").fontSize(10)
+    .text("12th Batch of NHCE", W - 230, 624, { width: 140, align: "center" });
+  doc.fillColor("#94a3b8").font("Helvetica").fontSize(9)
+    .text("Little Hands, Big Stories · Noorul Huda Centre for Excellence", 0, H - 56, { width: W, align: "center" });
+}
+// All issued completion certificates in one PDF (teacher only).
+app.get("/api/teacher/completion-certificates-pdf", requireTeacher, (req, res) => {
+  const { champions } = completionChampionsList();
+  const issued = champions.filter(c => c.cert_issued);
+  if (!issued.length) return res.status(404).json({ error: "No certificates issued yet." });
+  const doc = new PDFDocument({ size: "A4", margin: 0 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="LHBS-Completion-Certificates-${issued.length}.pdf"`);
+  doc.pipe(res);
+  issued.forEach((c, i) => { if (i) doc.addPage({ size: "A4", margin: 0 }); drawCompletionCertPage(doc, c); });
+  doc.end();
+});
+// Champions score board as a PDF (teacher only) — always current.
+app.get("/api/teacher/completion-scoreboard-pdf", requireTeacher, (req, res) => {
+  const { champions, total_students, completed_count } = completionChampionsList();
+  const doc = new PDFDocument({ size: "A4", margin: 0 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="LHBS-Completion-Scoreboard.pdf"`);
+  doc.pipe(res);
+  const W = 595.28, H = 841.89, M = 48, ROW = 26;
+  const drawHead = () => {
+    doc.fillColor("#b45309").font("Helvetica-Bold").fontSize(20)
+      .text("Congratulations to Our Champions!", M, 56, { width: W - 2 * M, align: "center" });
+    doc.fillColor("#475569").font("Helvetica").fontSize(11)
+      .text(`${completed_count} of ${total_students} boys finished all 21 Learning Tasks`, M, 86, { width: W - 2 * M, align: "center" });
+    doc.fillColor("#0b3c46").font("Helvetica-Bold").fontSize(11)
+      .text("Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch", M, 104, { width: W - 2 * M, align: "center" });
+  };
+  const cols = [M, 300, 360, 440, 500]; // Name | Ad | Completed | Exam | Cert
+  const drawTableHead = (y) => {
+    doc.rect(M, y, W - 2 * M, ROW).fill("#0b3c46");
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(10);
+    doc.text("Student", cols[0] + 8, y + 8);
+    doc.text("Ad", cols[1], y + 8);
+    doc.text("Completed", cols[2], y + 8);
+    doc.text("Exam", cols[3], y + 8);
+    doc.text("Cert", cols[4], y + 8);
+    return y + ROW;
+  };
+  drawHead();
+  let y = drawTableHead(140);
+  if (!champions.length) {
+    doc.fillColor("#475569").font("Helvetica").fontSize(12)
+      .text("No boy has completed 100% yet.", M, y + 16, { width: W - 2 * M, align: "center" });
+  }
+  champions.forEach((c, i) => {
+    if (y + ROW > H - 48) { doc.addPage({ size: "A4", margin: 0 }); drawHead(); y = drawTableHead(140); }
+    if (i % 2) doc.rect(M, y, W - 2 * M, ROW).fill("#f8fafc");
+    doc.fillColor("#1e3a4c").font("Helvetica-Bold").fontSize(10);
+    doc.text(c.display_name, cols[0] + 8, y + 8, { width: cols[1] - cols[0] - 12, ellipsis: true });
+    doc.fillColor("#334155").font("Helvetica").fontSize(10);
+    doc.text(c.ad_no || "—", cols[1], y + 8);
+    doc.text(certDateStr(c.completed_at) || "—", cols[2], y + 8);
+    doc.fillColor(c.exam_passed ? "#15803d" : "#854d0e").font("Helvetica-Bold").fontSize(10);
+    doc.text(c.exam_passed ? "Passed" : "Pending", cols[3], y + 8);
+    doc.fillColor(c.cert_issued ? "#15803d" : "#854d0e").font("Helvetica-Bold").fontSize(10);
+    doc.text(c.cert_issued ? "Issued" : "Pending", cols[4], y + 8);
+    y += ROW;
+  });
+  doc.fillColor("#94a3b8").font("Helvetica").fontSize(9)
+    .text("Little Hands, Big Stories · Noorul Huda Centre for Excellence", M, H - 40, { width: W - 2 * M, align: "center" });
+  doc.end();
 });
 // Student's own completion certificate status.
 app.get("/api/my/completion-cert", requireStudent, (req, res) => {
