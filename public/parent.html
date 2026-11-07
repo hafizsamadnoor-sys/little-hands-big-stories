@@ -176,7 +176,7 @@ async function toggleFinance() {
 
   // ---- Letter to Parents feedback (parent ticks + stars; the letter itself
   // is NEVER in the app — the teacher sees your ticks and stars only).
-  // Open tonight after you receive the letter; it never closes on its own —
+  // Open after you receive the letter; it never closes on its own —
   // the teacher deletes it from the Teacher Panel when the task is done. ----
   const LETTER_SUB = ["He handed it to me before sleeping.", "Father read it.", "Mother read it.", "Uppa and Umma sat together and read it.", "Love & Greetings · Thank You · My School Life · My Good Habits · Sorry · My Promise · A Beautiful Ending", "", "Happy with the things he said in the letter.", "", "Tap to tick when you are fully satisfied."];
   try {
@@ -192,7 +192,7 @@ async function toggleFinance() {
     } else {
     const items = lf.items || LETTER_SUB.map(() => "");
     const fb = lf.feedback;
-    setTc("tc-letterfb", fb ? "✓ Sent" : lf.open ? "Open tonight" : "Closed");
+    setTc("tc-letterfb", fb ? "✓ Sent" : lf.open ? "Open" : "Closed");
     if (fb && fb.points_awarded != null) {
       lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2>
         <p class="muted" style="font-size:.9rem">For ${esc(lf.child_name)} · Sunday, 8 November 2026</p>
@@ -202,7 +202,7 @@ async function toggleFinance() {
         <p class="muted" style="font-size:.85rem">✓ Sent ${fmtDateTime(fb.submitted_at)}. The teacher sees your ticks and stars — never the letter text.</p>`;
     } else if (!lf.open && !fb) {
       lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2>
-        <p class="muted">Feedback closed at 10 AM today. Thank you! 🙏</p>`;
+        <p class="muted">Feedback is no longer open. Thank you! 🙏</p>`;
     } else {
       const state = fb ? [...fb.items] : items.map(() => false);
       let stars = fb ? (fb.stars || 0) : 0;
@@ -214,7 +214,7 @@ async function toggleFinance() {
         <div id="lfstars" style="font-size:36px;letter-spacing:6px;cursor:pointer">${[1, 2, 3, 4, 5].map(n => `<span data-n="${n}" style="color:${n <= stars ? "#f7c948" : "#d5dee0"}">★</span>`).join("")}</div>
         <p class="muted" style="font-size:.85rem;margin-bottom:14px">😊 Tap a star to change it (1 = a little, 5 = very, very happy)</p>
         <button class="btn" id="lfverify">${fb ? "✓ Sent — tap to update" : "✓ Verify & Send to Teacher"}</button>
-        <p class="muted" style="font-size:.82rem;margin-top:10px;line-height:1.5">Only your own child's feedback. The teacher sees your ticks and stars — never the letter text.<br>Tick tonight after you receive the letter. Your teacher will remove this card when the task is done.</p>`;
+        <p class="muted" style="font-size:.82rem;margin-top:10px;line-height:1.5">Only your own child's feedback. The teacher sees your ticks and stars — never the letter text.<br>Tick after you receive the letter. Your teacher will remove this card when the task is done.</p>`;
       lc.querySelectorAll(".ditem").forEach(el => el.onclick = () => {
         const i = +el.dataset.i;
         state[i] = !state[i];

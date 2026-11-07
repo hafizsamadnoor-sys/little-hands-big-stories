@@ -833,7 +833,7 @@ async function vLetterFb(p) {
     : r.photos === 1 ? `<span style="background:#fdf0c0;color:#8a6d00;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">📸 1 / 2 — waiting</span>`
     : `<span style="background:#e8eef0;color:#555;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">📸 0 / 2</span>`;
   p.innerHTML = `<h2>💌 Letter Feedback — Letter to Parents</h2>
-    <p class="muted">Sunday, 8 November 2026 · Parents tick tonight. The card stays open until YOU delete it — it never closes on its own. The teacher sees ticks + stars only — the letter itself is never in the app. Tap a name to see the 2 photos + the parent's exact ticks, then award the points.</p>
+    <p class="muted">Sunday, 8 November 2026 · Parents tick after they receive the letter. The card stays open until YOU delete it — it never closes on its own. The teacher sees ticks + stars only — the letter itself is never in the app. Tap a name to see the 2 photos + the parent's exact ticks, then award the points.</p>
     <p><button class="btn small danger" id="lfdelete">🗑️ Delete feedback</button> <span class="muted" style="font-size:.85rem">When every boy is done — removes the ticks and the parent card. Points already given stay.</span></p>
     <div class="cksum"><b>${s.letters_received || 0} / ${s.total || 38} letters received · ${s.parents_ticked || 0} / ${s.total || 38} parents ticked</b>
       <p>Average happiness ${s.avg_happiness != null ? "⭐ " + s.avg_happiness : "—"} · ${s.full_10 || 0} boys got the full 10 points</p></div>
