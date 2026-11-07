@@ -22,6 +22,7 @@
 <script>
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["diary","🏖️ Holiday Diary"],
   ["checklist","📋 Checklist"],
+  ["letterfb","💌 Letter Feedback"],
   ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
@@ -32,6 +33,7 @@ let cur = "approvals";
 const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9l9 6 9-6"/></svg>',
   diary: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>',
   checklist: '<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
+  letterfb: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
   learning: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9l2 2 4-4M8 15h8"/></svg>',
   messages: '<svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>',
   students: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.5a3.5 3.5 0 0 1 0 7M17.5 14.5c2.3.8 3.5 2.8 3.5 5.5"/></svg>',
@@ -49,7 +51,7 @@ const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width
   activity: '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
   account: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>' };
 // Main tiles first, then the smaller "More" tiles.
-const TILE_MAIN = ["approvals", "diary", "checklist", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "marks", "finance"];
+const TILE_MAIN = ["approvals", "diary", "checklist", "letterfb", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "marks", "finance"];
 const TILE_MORE = ["tasks", "wow", "notices", "settings", "activity", "account"];
 // Deep link: /teacher.html#messages opens the Messages tab (used by the 🔔 bell).
 if (location.hash === "#messages") cur = "messages";
@@ -96,12 +98,13 @@ async function updateTileCounts(o) {
   set("students", o.students + " boys");
   set("parents", o.students + " parents");
   try {
-    const [m, l, d, b, c] = await Promise.allSettled([
+    const [m, l, d, b, c, lf] = await Promise.allSettled([
       api("GET", "/api/teacher/messages"),
       api("GET", "/api/teacher/learning-progress"),
       api("GET", "/api/teacher/holiday-diary"),
       api("GET", "/api/books"),
       api("GET", "/api/teacher/checklists"),
+      api("GET", "/api/teacher/letter-feedback"),
     ]);
     if (m.status === "fulfilled") {
       const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
@@ -123,6 +126,10 @@ async function updateTileCounts(o) {
       dot("approvals", (o.pending + pend) > 0);
     }
     if (b.status === "fulfilled") set("books", (b.value.books || []).length + " books");
+    if (lf.status === "fulfilled") {
+      const s = lf.value.summary || {};
+      set("letterfb", (s.parents_ticked || 0) + " / " + (s.total || 38) + " ticked");
+    }
     if (c.status === "fulfilled") {
       const tasks = c.value.tasks || [];
       const cur = [...tasks].reverse().find(t => t.open) || tasks[tasks.length - 1];
@@ -143,7 +150,7 @@ async function render() {
   // not when the tab opens — see vMessages.
   document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, challenges: vChallenges,
+  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
@@ -670,7 +677,7 @@ async function vDiary(p) {
     ${d.tasks.map(tk => {
       const pend = tk.entries.filter(e => e.status === "pending").length;
       return `
-    <div class="card"><h3>${esc(tk.title)} <span class="tag">${esc(tk.day_label)}</span> <span class="muted" style="font-size:.85rem">${tk.open ? "● Open" : "🔒 Opens " + esc(tk.start_date)}</span>${pend ? ` <span class="redbadge">${pend} pending</span>` : ""}</h3>
+    <div class="card"><h3>${esc(tk.title)} <span class="tag">${esc(tk.day_label)}</span> ${dayTagHtml(tk.start_date)} <span class="muted" style="font-size:.85rem">${tk.open ? "● Open" : "🔒 Opens " + esc(tk.start_date)}</span>${pend ? ` <span class="redbadge">${pend} pending</span>` : ""}</h3>
       ${tk.entries.length ? tk.entries.map(e => {
         const items = chkItems(e);
         const isPend = e.status === "pending";
@@ -742,6 +749,7 @@ async function vDiary(p) {
 // most-ticked first, tap a name to see exactly which of the 17 items.
 // A child shows here even when the child has not written the diary yet.
 const openChecklistRows = new Set();
+const openLetterRows = new Set();
 let checklistSort = "latest"; // "latest" = latest ticked first (default); "most" = most ticks first
 async function vChecklist(p) {
   const d = await api("GET", "/api/teacher/checklists");
@@ -762,8 +770,13 @@ async function vChecklist(p) {
       const rows = [...tk.students].sort((a, b) => checklistSort === "most"
         ? b.ticked_count - a.ticked_count || a.display_name.localeCompare(b.display_name)
         : ((b.ticked_count > 0) - (a.ticked_count > 0)) || (a.ticked_count > 0 ? (b.ticked_at || "").localeCompare(a.ticked_at || "") : a.display_name.localeCompare(b.display_name)));
+      // Day tag + status: two days can be open at once (yesterday's checklist
+      // stays open until 10 AM), so each card says which day it is.
+      const today = istTodayStr();
+      const ckStatus = !tk.open ? (tk.start_date > today ? "🔒 Opens " + esc(tk.start_date) + " morning" : "🔒 Closed at 10 AM")
+        : (tk.start_date < today ? "● Open — closes 10 AM today" : "● Open");
       return `
-    <div class="card"><h3>${esc(tk.title)} <span class="tag">${esc(tk.day_label)}</span> <span class="muted" style="font-size:.85rem">${tk.open ? "● Open" : "🔒 Opens " + esc(tk.start_date)}</span></h3>
+    <div class="card"><h3>${esc(tk.title)} <span class="tag">${esc(tk.day_label)}</span> ${dayTagHtml(tk.start_date)} <span class="muted" style="font-size:.85rem">${ckStatus}</span></h3>
       <div class="cksum"><b>${ticked.length} of ${tk.students.length} parents ticked</b>
       <p>Average ${avg} of 17 items · ${total} ticks in total · ⭐ ${totalPts} points given</p>
       <div class="cksumbar"><i style="width:${Math.round(ticked.length / (tk.students.length || 1) * 100)}%"></i></div></div>
@@ -802,6 +815,96 @@ async function vChecklist(p) {
     const id = row.dataset.cr;
     if (row.classList.toggle("open")) openChecklistRows.add(id); else openChecklistRows.delete(id);
   });
+}
+
+async function vLetterFb(p) {
+  const d = await api("GET", "/api/teacher/letter-feedback");
+  if (d.removed) {
+    p.innerHTML = `<h2>💌 Letter Feedback — Letter to Parents</h2>
+      <div class="card"><p>🗑️ <b>You deleted this feedback.</b></p>
+      <p class="muted">The parents' ticks and stars were removed and the parent card is hidden. Points already given stay on the Points Board.</p></div>`;
+    return;
+  }
+  const labels = d.items || [];
+  const s = d.summary || {};
+  const photoPill = (r) => r.photos >= 2
+    ? (r.photos_on_time ? `<span style="background:#d9f2e2;color:#1e7a3c;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">📸 2 / 2 ✓</span>`
+      : `<span style="background:#fdf0c0;color:#8a6d00;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">📸 2 / 2 — late</span>`)
+    : r.photos === 1 ? `<span style="background:#fdf0c0;color:#8a6d00;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">📸 1 / 2 — waiting</span>`
+    : `<span style="background:#e8eef0;color:#555;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">📸 0 / 2</span>`;
+  p.innerHTML = `<h2>💌 Letter Feedback — Letter to Parents</h2>
+    <p class="muted">Sunday, 8 November 2026 · Parents tick tonight. The card stays open until YOU delete it — it never closes on its own. The teacher sees ticks + stars only — the letter itself is never in the app. Tap a name to see the 2 photos + the parent's exact ticks, then award the points.</p>
+    <p><button class="btn small danger" id="lfdelete">🗑️ Delete feedback</button> <span class="muted" style="font-size:.85rem">When every boy is done — removes the ticks and the parent card. Points already given stay.</span></p>
+    <div class="cksum"><b>${s.letters_received || 0} / ${s.total || 38} letters received · ${s.parents_ticked || 0} / ${s.total || 38} parents ticked</b>
+      <p>Average happiness ${s.avg_happiness != null ? "⭐ " + s.avg_happiness : "—"} · ${s.full_10 || 0} boys got the full 10 points</p></div>
+    <div class="card">
+    ${d.rows.map(r => {
+      const stars = r.stars ? "⭐".repeat(r.stars) : "—";
+      const pts = r.points_awarded != null ? `<span class="pts-pill">✅ ${r.points_awarded} pts</span>`
+        : (r.points_now > 0 ? `<span class="pts-pill">${r.points_now} pts now</span>` : "");
+      return `
+      <div class="namerow" data-lr="${r.id}">
+        <div class="top"><span class="dot${r.ticks != null ? " none" : ""}"></span><span class="nm">${esc(r.display_name)}</span>${photoPill(r)}<span class="cnt">${r.ticks != null ? r.ticks + " / 9 ticks" : "not ticked yet"}</span><span class="cnt">${stars}</span>${pts}<span class="chev">›</span></div>
+        <div class="detail">
+          <div id="lfphotos${r.id}"><p class="muted">Loading photos…</p></div>
+          ${r.items ? `
+          <div class="chkhead">💌 What the parent ticked <span>(${r.ticks} of 9${r.submitted_at ? " · " + fmtDateTime(r.submitted_at) : ""})</span></div>
+          ${labels.map((lab, i) => `<div class="ckitem ${r.items[i] ? "yes" : "no"}"><span class="mk">${r.items[i] ? "✓" : "–"}</span><span>${esc(lab)}</span></div>`).join("")}
+          <p class="dstat">😊 Happiness: <b>${r.stars ? r.stars + " / 5" : "—"}</b> (stars do not change points)</p>` : `
+          <div class="chkline">💌 Parent feedback: <b>not sent yet</b> — the parent has not ticked the 9 items.</div>`}
+          ${r.points_awarded != null ? `<p class="dstat">⭐ <b>${r.points_awarded} points given</b></p>`
+            : r.points_now > 0 ? `<p class="dstat">⭐ <b>${r.points_now} points</b> — photos on time 2 + all 7 things 5 + neat + happy + satisfied 3</p>
+              <button class="btn small" data-laward="${r.id}">⭐ Award ${r.points_now} points</button>`
+            : `<p class="dstat">Waiting — photos and parent ticks will show the points here.</p>`}
+        </div>
+      </div>`; }).join("")}
+    </div>`;
+  // Re-open rows the teacher had expanded (they survive re-render).
+  p.querySelectorAll(".namerow").forEach(row => { if (openLetterRows.has(row.dataset.lr)) row.classList.add("open"); });
+  // Tap a name row to expand / collapse; photos load lazily on first open.
+  p.querySelectorAll(".namerow").forEach(row => row.onclick = async (ev) => {
+    if (ev.target.closest("button, select, input, a, label")) return;
+    const id = row.dataset.lr;
+    const opened = row.classList.toggle("open");
+    if (opened) openLetterRows.add(id); else openLetterRows.delete(id);
+    if (opened) {
+      const box = document.getElementById("lfphotos" + id);
+      if (box && !box.dataset.done) {
+        try {
+          const th = await api("GET", "/api/teacher/messages?student_id=" + id);
+          const photos = (th.messages || []).filter(m => m.sender_role === "student" && m.media_type === "image"
+            && m.created_at >= "2026-11-07 18:30:00" && m.created_at < "2026-11-08 18:30:00");
+          box.dataset.done = "1";
+          box.innerHTML = photos.length ? `<div class="chkhead">📸 The 2 photos <span>(closed letter + giving it)</span></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">${photos.map(m => `<img src="${m.media_data}" style="max-width:46%;border-radius:8px;display:block" alt="Letter photo ${fmtDateTime(m.created_at)}">`).join("")}</div>
+            <p class="muted" style="font-size:.8rem">${photos.map(m => fmtDateTime(m.created_at)).join(" · ")}</p>`
+            : `<div class="chkline">📸 No letter photos yet — the boy sends 2 photos (closed letter + giving it) before 10 PM tonight.</div>`;
+        } catch (e) { box.innerHTML = `<p class="muted">Could not load photos.</p>`; }
+      }
+    }
+  });
+  // Award points (once per boy — the server blocks a second award).
+  p.querySelectorAll("[data-laward]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const r = await api("POST", "/api/teacher/letter-feedback/" + b.dataset.laward + "/award", {});
+      toast(r.points + " points given! ⭐");
+      openLetterRows.add(String(b.dataset.laward));
+      render();
+    } catch (e) { toast(e.message, false); b.disabled = false; }
+  });
+  // Delete the whole feedback (Samad deletes it himself when every boy is
+  // done). Confirm first; points already given stay on the Points Board.
+  const delBtn = document.getElementById("lfdelete");
+  if (delBtn) delBtn.onclick = async () => {
+    if (!confirm("Delete all letter feedback? The parents' ticks and stars will be removed and the parent card will be hidden. Points already given stay on the Points Board.")) return;
+    delBtn.disabled = true;
+    try {
+      const r = await api("POST", "/api/teacher/letter-feedback/delete", {});
+      toast("Feedback deleted (" + (r.deleted || 0) + " rows). 🗑️");
+      render();
+    } catch (e) { toast(e.message, false); delBtn.disabled = false; }
+  };
 }
 
 async function vChallenges(p) {

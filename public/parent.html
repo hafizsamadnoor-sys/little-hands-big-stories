@@ -54,7 +54,8 @@
 
 <!-- ③ WHITE TILES — everything else, like the Teacher Panel -->
 <div class="tiles dash3" id="parent-tiles">
-  <button class="tile on" onclick="openParentSec('diary',this)"><span class="tile-circ">🏖️</span><span class="tile-t">Holiday Diary</span><span class="tile-n" id="tc-diary">…</span></button>
+  <button class="tile on" id="tile-letterfb" onclick="openParentSec('letterfb',this)"><span class="tile-circ">💌</span><span class="tile-t">Letter Feedback</span><span class="tile-n" id="tc-letterfb">…</span></button>
+  <button class="tile" onclick="openParentSec('diary',this)"><span class="tile-circ">🏖️</span><span class="tile-t">Holiday Diary</span><span class="tile-n" id="tc-diary">…</span></button>
   <button class="tile" onclick="openParentSec('tasks',this)"><span class="tile-circ">📅</span><span class="tile-t">Weekly Tasks</span><span class="tile-n" id="tc-tasks">…</span></button>
   <button class="tile" onclick="openParentSec('childbooks',this)"><span class="tile-circ">📚</span><span class="tile-t">My Child's Books</span><span class="tile-n" id="tc-childbooks">…</span></button>
   <button class="tile" onclick="openParentSec('marks',this)"><span class="tile-circ">📊</span><span class="tile-t">Marks</span><span class="tile-n" id="tc-marks">…</span></button>
@@ -68,7 +69,8 @@
   <button class="tile" onclick="openParentSec('writings',this)"><span class="tile-circ">📖</span><span class="tile-t">Writings — all students</span><span class="tile-n" id="tc-writings">…</span></button>
 </div>
 <div id="parent-sec">
-  <div class="dsec" id="sec-diary"><div id="diarycard"></div></div>
+  <div class="dsec" id="sec-letterfb"><div id="letterfbcard"><p class="muted">Loading…</p></div></div>
+  <div class="dsec" id="sec-diary" style="display:none"><div id="diarycard"></div></div>
   <div class="dsec" id="sec-tasks" style="display:none"><h2>📅 Weekly Tasks</h2><div id="tasklist"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-childbooks" style="display:none"><h2>📚 My Child's Books</h2><div id="childbooks"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-marks" style="display:none"><h2>📊 Marks</h2><div id="pmarks"><p class="muted">Loading…</p></div></div>
@@ -169,14 +171,81 @@ async function toggleFinance() {
   setTc("tc-childbooks", d.books.length + " books");
   const myId = s.id;
 
-  // ---- Finance balance for the 5th stat (ledger opens on tap) ----
-  try {
-    const f = await loadFinance();
-    const net = finBalance(f);
-    const money = n => "₹" + (Math.round(n * 100) / 100).toLocaleString("en-IN");
-    document.getElementById("st-fin").textContent = net === 0 ? "₹0 · settled" : net < 0 ? "🔴 " + money(-net) + " to pay" : "🟢 " + money(net) + " with teacher";
-  } catch (e) { /* stat keeps its "💰 Finance" label; tap will retry */ }
+  // ---- Finance: the stat shows only "💰 Finance" (no balance — Samad, screenshot privacy).
+  // The ledger loads on tap (toggleFinance) and shows the entries there.
 
+  // ---- Letter to Parents feedback (parent ticks + stars; the letter itself
+  // is NEVER in the app — the teacher sees your ticks and stars only).
+  // Open tonight after you receive the letter; it never closes on its own —
+  // the teacher deletes it from the Teacher Panel when the task is done. ----
+  const LETTER_SUB = ["He handed it to me before sleeping.", "Father read it.", "Mother read it.", "Uppa and Umma sat together and read it.", "Love & Greetings · Thank You · My School Life · My Good Habits · Sorry · My Promise · A Beautiful Ending", "", "Happy with the things he said in the letter.", "", "Tap to tick when you are fully satisfied."];
+  try {
+    const lf = await api("GET", "/api/parent/letter-feedback");
+    const lc = document.getElementById("letterfbcard");
+    if (lf.removed) {
+      // The teacher deleted the feedback — hide the card and the tile, and
+      // open the Holiday Diary section instead.
+      const tl = document.getElementById("tile-letterfb"); if (tl) tl.style.display = "none";
+      const sc = document.getElementById("sec-letterfb"); if (sc) sc.style.display = "none";
+      setTc("tc-letterfb", "Removed");
+      openParentSec("diary", document.querySelector("#parent-tiles .tile[onclick*=\"'diary'\"]"));
+    } else {
+    const items = lf.items || LETTER_SUB.map(() => "");
+    const fb = lf.feedback;
+    setTc("tc-letterfb", fb ? "✓ Sent" : lf.open ? "Open tonight" : "Closed");
+    if (fb && fb.points_awarded != null) {
+      lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2>
+        <p class="muted" style="font-size:.9rem">For ${esc(lf.child_name)} · Sunday, 8 November 2026</p>
+        <p style="font-weight:700;color:#0b6e5d">✅ Points given by teacher: ${fb.points_awarded} pts</p>
+        ${items.map((it, i) => `<div style="display:flex;gap:10px;align-items:flex-start;border:1.5px solid #d8e4e0;border-radius:12px;padding:10px 12px;margin-bottom:7px;font-size:13.5px"><span style="flex-shrink:0;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;background:${fb.items[i] ? "#0b6e5d" : "#9db3ac"}">${fb.items[i] ? "✓" : "–"}</span><span><b>${esc(it)}</b>${LETTER_SUB[i] ? `<br><span class="muted" style="font-size:.82rem">${esc(LETTER_SUB[i])}</span>` : ""}</span></div>`).join("")}
+        <p style="font-size:15px">How happy are you? <span style="font-size:22px;letter-spacing:3px;color:#f7c948">${"★".repeat(fb.stars || 0)}${"☆".repeat(5 - (fb.stars || 0))}</span></p>
+        <p class="muted" style="font-size:.85rem">✓ Sent ${fmtDateTime(fb.submitted_at)}. The teacher sees your ticks and stars — never the letter text.</p>`;
+    } else if (!lf.open && !fb) {
+      lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2>
+        <p class="muted">Feedback closed at 10 AM today. Thank you! 🙏</p>`;
+    } else {
+      const state = fb ? [...fb.items] : items.map(() => false);
+      let stars = fb ? (fb.stars || 0) : 0;
+      lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2>
+        <p class="muted" style="font-size:.9rem">For ${esc(lf.child_name)} · Sunday, 8 November 2026</p>
+        <p class="muted" style="font-size:.9rem">Tick what happened with the letter your son gave you. Only your own child's feedback.</p>
+        ${items.map((it, i) => `<div class="ditem" data-i="${i}" style="display:flex;align-items:flex-start;gap:10px;border:1.5px solid ${state[i] ? "#0b6e5d" : "#d8e4e0"};border-radius:12px;padding:10px 12px;margin-bottom:7px;cursor:pointer;font-size:13.5px;${state[i] ? "background:#e8f5f1" : ""}"><span class="box" style="flex-shrink:0;width:22px;height:22px;border:2px solid ${state[i] ? "#0b6e5d" : "#9db3ac"};border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;background:${state[i] ? "#0b6e5d" : "#fff"}">${state[i] ? "✓" : ""}</span><span><b>${esc(it)}</b>${LETTER_SUB[i] ? `<br><span class="muted" style="font-size:.82rem">${esc(LETTER_SUB[i])}</span>` : ""}</span></div>`).join("")}
+        <p style="margin-top:14px"><b style="font-size:15px">How happy are you?</b></p>
+        <div id="lfstars" style="font-size:36px;letter-spacing:6px;cursor:pointer">${[1, 2, 3, 4, 5].map(n => `<span data-n="${n}" style="color:${n <= stars ? "#f7c948" : "#d5dee0"}">★</span>`).join("")}</div>
+        <p class="muted" style="font-size:.85rem;margin-bottom:14px">😊 Tap a star to change it (1 = a little, 5 = very, very happy)</p>
+        <button class="btn" id="lfverify">${fb ? "✓ Sent — tap to update" : "✓ Verify & Send to Teacher"}</button>
+        <p class="muted" style="font-size:.82rem;margin-top:10px;line-height:1.5">Only your own child's feedback. The teacher sees your ticks and stars — never the letter text.<br>Tick tonight after you receive the letter. Your teacher will remove this card when the task is done.</p>`;
+      lc.querySelectorAll(".ditem").forEach(el => el.onclick = () => {
+        const i = +el.dataset.i;
+        state[i] = !state[i];
+        const on = state[i];
+        el.style.background = on ? "#e8f5f1" : "";
+        el.style.borderColor = on ? "#0b6e5d" : "#d8e4e0";
+        const box = el.querySelector(".box");
+        box.textContent = on ? "✓" : "";
+        box.style.background = on ? "#0b6e5d" : "#fff";
+        box.style.borderColor = on ? "#0b6e5d" : "#9db3ac";
+      });
+      lc.querySelectorAll("#lfstars span").forEach(el => el.onclick = () => {
+        stars = +el.dataset.n;
+        lc.querySelectorAll("#lfstars span").forEach(s2 => { s2.style.color = +s2.dataset.n <= stars ? "#f7c948" : "#d5dee0"; });
+      });
+      document.getElementById("lfverify").onclick = async (ev) => {
+        const btn = ev.target;
+        btn.disabled = true; btn.textContent = "⏳ Saving…";
+        try {
+          const r = await api("POST", "/api/parent/letter-feedback", { items: state, stars });
+          toast(`Sent to teacher! ${r.ticked} of 9 items ticked. ✅`);
+          btn.textContent = "✓ Sent — tap to update";
+          setTc("tc-letterfb", "✓ Sent");
+        } catch (e) { toast(e.message, false); btn.disabled = false; btn.textContent = "✓ Verify & Send to Teacher"; }
+      };
+    }
+    }
+  } catch (e) {
+    const lc = document.getElementById("letterfbcard");
+    if (lc) lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2><p class="muted">The feedback card could not be loaded — please close this page and open it again. If it still does not show, tell your teacher.</p>`;
+  }
   // ---- Holiday Diary checklist (parent ticks; diary text is private) ----
   const DIARY_ITEMS = ["5 prayers", "3 meals on time", "Evening play", "Evening bath", "Slept before 10 PM", "No fight with Umma", "Helped at home", "Read Quran after Maghrib", "Read Quran after Fajr", "Haddad", "Tahajjud", "Spoke to Uppa", "Spoke to Umma", "Spoke to Uppappas", "Spoke to Ummammas", "Asked Uppa about his life experiences", "Less screen time"];
   try {
@@ -192,14 +261,15 @@ async function toggleFinance() {
         <p class="muted" style="font-size:.9rem">🔒 Your child's diary writing is private — only your child and the teacher can read it. Please tick what your child did today. Your tick verifies the diary.</p>` +
         hd.tasks.map(tk => {
           if (tk.closed) return ""; // past day: checklist closed at 10 AM next morning — removed from the page
-          if (!tk.open) return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0"><b>${esc(tk.title)}</b><p class="muted">🔒 Opens ${esc(tk.start_date)} morning.</p></div>`;
+          if (!tk.open) return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0"><b>${esc(tk.title)}</b> ${dayTagHtml(tk.start_date)}<p class="muted">🔒 Opens ${esc(tk.start_date)} morning.</p></div>`;
           const done = tk.checklist;
           const items = done && done.items ? done.items : DIARY_ITEMS.map(() => false);
           const cnt = done ? done.ticked_count : 0;
           const entryTxt = tk.entryStatus === "none" ? "not written yet ⏳" : tk.entryStatus === "approved" ? "✅ approved by teacher" : tk.entryStatus === "rejected" ? "❌ not approved" : "✅ written — waiting for teacher";
           return `<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0">
-            <b>${esc(tk.title)}</b> <span class="muted">(${esc(tk.day_label)})</span>
+            <b>${esc(tk.title)}</b> <span class="muted">(${esc(tk.day_label)})</span> ${dayTagHtml(tk.start_date)}
             <p class="muted" style="font-size:.85rem">Diary: ${entryTxt}</p>
+            ${tk.start_date < istTodayStr() ? `<p class="muted" style="font-size:.85rem">⏰ This day's checklist closes at 10 AM today.</p>` : ""}
             <p style="font-weight:700;color:#0b6e5d;font-size:.9rem"><span id="dcnt${tk.id}">${cnt} of 17 ticked</span></p>
             <div style="height:8px;background:#e3ebe8;border-radius:6px;overflow:hidden;margin-bottom:10px"><i id="dbar${tk.id}" style="display:block;height:100%;background:#0b6e5d;width:${Math.round(cnt / 17 * 100)}%"></i></div>
             ${DIARY_ITEMS.map((it, i) => `<div class="ditem" data-t="${tk.id}" data-i="${i}" style="display:flex;align-items:center;gap:10px;border:1.5px solid ${items[i] ? "#0b6e5d" : "#d8e4e0"};border-radius:12px;padding:10px 12px;margin-bottom:7px;cursor:pointer;font-size:13.5px;${items[i] ? "background:#e8f5f1" : ""}"><span class="box" style="flex-shrink:0;width:22px;height:22px;border:2px solid ${items[i] ? "#0b6e5d" : "#9db3ac"};border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;background:${items[i] ? "#0b6e5d" : "#fff"}">${items[i] ? "✓" : ""}</span><span>${i + 1}. ${esc(it)}</span></div>`).join("")}

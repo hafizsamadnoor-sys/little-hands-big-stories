@@ -20,6 +20,20 @@ const CLUBS = [
 ];
 const clubFor = (pts) => CLUBS.find(c => (pts || 0) >= c.points) || null;
 const fmtDateTime = (d) => { try { const t = new Date(d); return t.toLocaleDateString() + " " + t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return d || ""; } };
+// Today in IST (same +5:30 shift the server uses) + a TODAY / YESTERDAY /
+// TOMORROW tag for a YYYY-MM-DD date, so the teacher and parents can tell
+// which checklist day is which when two days are open at once (Samad 2026-11-08).
+const istTodayStr = () => new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const dayTagHtml = (iso) => {
+  const t = istTodayStr();
+  const d = new Date(t + "T00:00:00Z");
+  const y = new Date(d); y.setUTCDate(y.getUTCDate() - 1);
+  const tm = new Date(d); tm.setUTCDate(tm.getUTCDate() + 1);
+  const tag = iso === t ? ["📅 TODAY", "#0b6e5d", "#d9f2e2"]
+    : iso === y.toISOString().slice(0, 10) ? ["YESTERDAY", "#555", "#e8eef0"]
+    : iso === tm.toISOString().slice(0, 10) ? ["TOMORROW", "#1d4ed8", "#dbeafe"] : null;
+  return tag ? `<span style="background:${tag[2]};color:${tag[1]};border-radius:999px;padding:2px 9px;font-weight:700;font-size:.78rem">${tag[0]}</span>` : "";
+};
 const avatar = (name, photo) =>
   photo ? `<img src="${esc(photo)}" alt="">` : esc((name || "?").trim()[0] || "?");
 
@@ -278,7 +292,7 @@ function chatOverlayEl() {
     if (!f) return;
     try {
       const c = await compressPhoto(f);
-      await api("POST", "/api/my/message-teacher", { text: "", media_data: c.data, media_type: c.type });
+      await postChatMedia(c.data, c.type);
       await loadChatThread();
     } catch (err) { alert(err.message); }
   });
@@ -338,20 +352,40 @@ async function sendChatMsg() {
   } catch (e) { alert(e.message); }
   btn.disabled = false;
 }
+// Send a photo message. If the 30-second anti-spam blocks the 2nd photo in
+// a row (a boy sends the closed-letter photo, then the giving photo), wait
+// it out and retry once automatically instead of making him tap again.
+async function postChatMedia(data, type) {
+  try {
+    return await api("POST", "/api/my/message-teacher", { text: "", media_data: data, media_type: type });
+  } catch (e) {
+    if (/wait a few seconds/i.test(e.message || "")) {
+      toast("First photo sent — sending the next one in a few seconds…");
+      await new Promise(r => setTimeout(r, 31000));
+      return await api("POST", "/api/my/message-teacher", { text: "", media_data: data, media_type: type });
+    }
+    throw e;
+  }
+}
 // Compress a photo client-side (max 1280px, JPEG) → {data, type}
 function compressPhoto(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const max = 1280;
-      let w = img.width, h = img.height;
-      if (w > max || h > max) { const r = max / Math.max(w, h); w = Math.round(w * r); h = Math.round(h * r); }
-      const c = document.createElement("canvas"); c.width = w; c.height = h;
-      c.getContext("2d").drawImage(img, 0, 0, w, h);
-      resolve({ data: c.toDataURL("image/jpeg", 0.82), type: "image" });
+      try {
+        const max = 1280;
+        let w = img.width, h = img.height;
+        if (w > max || h > max) { const r = max / Math.max(w, h); w = Math.round(w * r); h = Math.round(h * r); }
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        c.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve({ data: c.toDataURL("image/jpeg", 0.82), type: "image" });
+      } catch (e) {
+        reject(new Error("That photo is too big to send. Please take a new photo and try again."));
+        return;
+      }
       URL.revokeObjectURL(img.src);
     };
-    img.onerror = reject;
+    img.onerror = () => reject(new Error("Could not read that photo. Please take a new photo with the camera and try again."));
     img.src = URL.createObjectURL(file);
   });
 }
