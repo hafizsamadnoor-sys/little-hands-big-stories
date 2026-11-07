@@ -771,6 +771,21 @@ app.get("/api/dashboard", requireLogin, (req, res) => {
 const WORK_TYPES = ["story", "diary", "letter", "poem", "manifesto", "review", "anything"];
 const LANGUAGES = ["English", "Malayalam", "Manglish", "Arabic", "Urdu", "Kannada"];
 
+// Minimum story length (Samad, 2026-11-07 — "70 madhi, minimum"): a story must
+// have at least 70 words of the child's own writing, otherwise it cannot be
+// submitted — some boys were submitting very short stories. Poems, diary,
+// letters etc. are exempt.
+const MIN_STORY_WORDS = 70;
+const countWords = s => String(s || "").trim().split(/\s+/).filter(Boolean).length;
+// For weekly-task story completions the task prompt is pre-filled in the
+// writing box — the prompt's own words must NOT count toward the minimum.
+function ownStoryWords(content, task) {
+  let body = String(content || "").trim();
+  if (task && task.kind === "story_start" && task.prompt && body.startsWith(task.prompt.trim()))
+    body = body.slice(task.prompt.trim().length);
+  return countWords(body);
+}
+
 app.post("/api/works", requireStudent, (req, res) => {
   // Holiday-leave writing lock (7–9 Nov): general writing is locked so
   // nobody copies at home. Holiday Diary submissions use their own
@@ -781,15 +796,20 @@ app.post("/api/works", requireStudent, (req, res) => {
   if (!LANGUAGES.includes(language)) return res.status(400).json({ error: "Invalid language." });
   if (!title || !title.trim() || !content || !content.trim())
     return res.status(400).json({ error: "Title and content are required." });
-  let taskId = null;
+  let taskId = null, taskRow = null;
   if (weekly_task_id) {
-    const t = db.prepare("SELECT id, kind FROM weekly_tasks WHERE id=?").get(weekly_task_id);
-    if (t && t.kind !== "quiz") taskId = t.id;
+    const t = db.prepare("SELECT id, kind, prompt FROM weekly_tasks WHERE id=?").get(weekly_task_id);
+    if (t && t.kind !== "quiz") { taskId = t.id; taskRow = t; }
   }
   const eb = (edited_by || "").toString().trim().slice(0, 120);
   const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
   // Weekly-task writings (teacher-given) need no "Edited by" — only require it for free writings.
   if (!taskId && (!eb || !ebc)) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
+  if (type === "story") {
+    const n = ownStoryWords(content, taskRow);
+    if (n < MIN_STORY_WORDS)
+      return res.status(400).json({ error: `Your story needs at least ${MIN_STORY_WORDS} words. You have written ${n} words — please write a little more!` });
+  }
   const r = db.prepare(`INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
     VALUES (?,?,?,?,?,?,?,?)`).run(req.user.id, type, language, title.trim(), content.trim(), taskId, eb, ebc);
   res.json({ ok: true, id: r.lastInsertRowid });
@@ -809,6 +829,11 @@ app.post("/api/guest/works", requireGuest, (req, res) => {
   const eb = (edited_by || "").toString().trim().slice(0, 120);
   const ebc = ["SS1","SS2","D1","D2","D3","Teacher"].includes(edited_by_class) ? edited_by_class : "";
   if (!eb || !ebc) return res.status(400).json({ error: "Please tell us who edited this work — name and class are required." });
+  if (type === "story") {
+    const n = countWords(content);
+    if (n < MIN_STORY_WORDS)
+      return res.status(400).json({ error: `The story needs at least ${MIN_STORY_WORDS} words. ${n} words written so far — please write a little more!` });
+  }
   const r = db.prepare(`INSERT INTO works (student_id, type, language, title, content, weekly_task_id, edited_by, edited_by_class)
     VALUES (?,?,?,?,?,NULL,?,?)`).run(stu.id, type, language, title.trim(), content.trim(), eb, ebc);
   res.json({ ok: true, id: r.lastInsertRowid });
