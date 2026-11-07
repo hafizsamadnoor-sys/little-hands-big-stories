@@ -1031,6 +1031,7 @@ async function vLearning(p) {
 async function vCompletion(p) {
   const d = await api("GET", "/api/teacher/completion-eligible");
   const ch = await api("GET", "/api/completion-champions");
+  const nu = await api("GET", "/api/next-up").catch(() => null);
   const rows = d.students || [];
   const anyIssued = (ch.champions || []).some(c => c.cert_issued);
   p.innerHTML = `<h2>🎓 Completion Certificates</h2>
@@ -1042,7 +1043,7 @@ async function vCompletion(p) {
         ${anyIssued ? `<a class="btn" href="/api/teacher/completion-certificates-pdf" target="_blank">📥 All Certificates (PDF)</a>` : `<span class="btn" style="opacity:.5">📥 All Certificates (PDF) — none issued yet</span>`}
         <a class="btn ghost" href="/api/teacher/completion-scoreboard-pdf" target="_blank">📥 Score Board (PDF)</a>
       </div>
-      ${window.championsListHtml(ch.champions, true)}
+      ${window.championsListHtml(ch.champions, true, nu && nu.completion_next)}
     </div>
     ${rows.length ? `<table style="width:100%;font-size:.9rem">
       <tr><th style="text-align:left">Student</th><th>Exam</th><th>Certificate</th><th>Action</th></tr>
@@ -1142,10 +1143,11 @@ async function vMarks(p) {
 }
 
 async function vWow(p) {
-  const [d, wd, wdata] = await Promise.all([
+  const [d, wd, wdata, nu] = await Promise.all([
     api("GET", "/api/teacher/students"),
     api("GET", "/api/writer-of-week"),
     api("GET", "/api/works"),
+    api("GET", "/api/next-up").catch(() => null),
   ]);
   const students = d.students || [];
   const works = (wdata.works || []);
@@ -1164,7 +1166,7 @@ async function vWow(p) {
     <button class="btn ghost" id="w_go" style="margin-top:8px">Set only (no post yet)</button>
     <p class="muted" style="margin-top:10px">Publishing sends, in one tap: 📢 a notice to <b>all students + all parents</b> · 💬 a congratulations message to <b>the winner</b> · 🌟 the card on <b>student + parent pages</b>.</p></div>
   ${w ? `<div class="card"><h2>🌟 Current Writer of the Week</h2>
-    ${window.wowCardHtml(w, [])}
+    ${window.wowCardHtml(w, [], nu && nu.wow_next)}
     <p class="muted" style="margin-top:10px">${w.published_at ? "✅ Published on " + fmtDateTime(w.published_at) + " — notice sent, winner messaged." : "⏳ Not published yet — no notice or message sent."}</p>
     ${w.published_at ? "" : `<button class="btn" id="w_pub">📢 Publish now</button>`}
   </div>` : ""}

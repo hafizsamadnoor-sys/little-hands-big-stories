@@ -47,13 +47,13 @@
 
 <div class="card" id="childcard"><p class="muted">Loading your child's progress…</p></div>
 
-<div class="card" id="classtasks"><p class="muted">Loading class tasks…</p></div>
-
-<div class="card"><h2>🏆 Scoreboard — all students</h2><div id="board"></div></div>
+<div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"><p class="muted">Loading…</p></div></div>
 
 <div class="card"><h2>🎓 Completion Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
 
-<div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"><p class="muted">Loading…</p></div></div>
+<div class="card" id="classtasks"><p class="muted">Loading class tasks…</p></div>
+
+<div class="card"><h2>🏆 Scoreboard — all students</h2><div id="board"></div></div>
 
 <div class="card"><h2>✅ Your Child's Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
 
@@ -222,18 +222,22 @@
       <td>${r.points}</td><td>${r.stars}</td><td>${r.works}</td></tr>`).join("") +
     `</tbody></table></div>`;
 
+  // ---- "Next in Line" — fetched once, used by the Champions + WOW cards ----
+  let NEXTUP = null;
+  try { NEXTUP = await api("GET", "/api/next-up"); } catch (e) {}
+
   // ---- Completion Champions (public to parents) ----
   try {
     const ch = await api("GET", "/api/completion-champions");
     document.getElementById("champions").innerHTML =
       `<p class="muted">${ch.completed_count} of ${ch.total_students} boys finished all ${ch.total_tasks} Learning Tasks. 🎓</p>` +
-      window.championsListHtml(ch.champions, false);
+      window.championsListHtml(ch.champions, false, NEXTUP && NEXTUP.completion_next);
   } catch (e) { document.getElementById("champions").innerHTML = ""; }
 
   // ---- Writer of the Week (public to parents) ----
   try {
     const w = await api("GET", "/api/writer-of-week");
-    document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || []);
+    document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || [], NEXTUP && NEXTUP.wow_next);
   } catch (e) { document.getElementById("wow").innerHTML = ""; }
 
   // ---- Your child's approved works (own child only) ----

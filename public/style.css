@@ -235,6 +235,17 @@ tr:last-child td{border-bottom:none;}
 .champ-pill{display:inline-block;font-size:.68rem;font-weight:700;border-radius:8px;padding:2px 7px;margin-left:3px;white-space:nowrap;}
 .champ-pill.ok{background:#dcfce7;color:#15803d;}
 .champ-pill.wait{background:#fef9c3;color:#854d0e;}
+/* "Next in Line" / "Next 5" rows (shared by WOW + Champions cards). */
+.next-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #eef2f5;}
+.next-row:last-child{border-bottom:none;}
+.next-rank{width:26px;height:26px;border-radius:50%;background:#fef3c7;color:#92400e;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.next-rank.green{background:#dcfce7;color:#14532d;}
+.next-nm{flex:1;min-width:0;}
+.next-nm b{font-size:.92rem;color:#1e3a4c;}
+.next-nm span{display:block;font-size:.75rem;color:#667781;margin-top:1px;}
+.next-bar{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-top:4px;}
+.next-bar i{display:block;height:100%;background:linear-gradient(90deg,#0e7c8c,#14b8a6);border-radius:99px;}
+.next-pts{font-weight:800;font-size:.9rem;color:#92400e;white-space:nowrap;flex:0 0 auto;}
 
 /* Writer of the Week gold card (student / parent / teacher pages). */
 .wow-card{border:2px solid #d4a017;border-radius:14px;background:linear-gradient(180deg,#fffbeb,#fff);padding:16px 14px;text-align:center}

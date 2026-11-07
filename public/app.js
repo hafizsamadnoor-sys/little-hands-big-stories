@@ -364,9 +364,9 @@ window.wowWeekLabel = function (iso) {
   const f = x => x.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
   return `${f(mon)} – ${f(sun)}`;
 };
-window.wowCardHtml = function (writer, history) {
+window.wowCardHtml = function (writer, history, next) {
   if (!writer)
-    return `<p class="muted">No Writer of the Week picked yet — the teacher will pick one soon. 🌟</p>`;
+    return `<p class="muted">No Writer of the Week picked yet — the teacher will pick one soon. 🌟</p>` + window.nextUpWowHtml(next);
   const workBit = writer.work_title
     ? `for <b>“${esc(writer.work_title)}”</b>${writer.work_type ? " — " + esc(writer.work_type) : ""}`
     : "";
@@ -384,7 +384,14 @@ window.wowCardHtml = function (writer, history) {
       <a class="btn small gold" href="/wow-cert.html" target="_blank">📜 View Certificate</a>
       ${writer.work_id ? `<a class="btn small ghost" href="/work.html?id=${writer.work_id}">📕 Read the ${esc(writer.work_type || "work")}</a>` : ""}
     </div>
-  </div>${past ? `<h3 style="margin:14px 0 4px">🕰️ Past writers</h3>${past}` : ""}`;
+  </div>${window.nextUpWowHtml(next)}${past ? `<h3 style="margin:14px 0 4px">🕰️ Past writers</h3>${past}` : ""}`;
+};
+// "Next in Line" under the Writer of the Week — the 3 boys right behind
+// him on the Points Board. next: rows from /api/next-up (wow_next).
+window.nextUpWowHtml = function (next) {
+  if (!next || !next.length) return "";
+  return `<h3 style="margin:14px 0 4px">🥈 Next in Line</h3>` + next.map((n, i) =>
+    `<div class="next-row"><div class="next-rank">${i + 1}</div><div class="next-nm"><b>${esc(n.display_name)}</b><span>${n.works} work${n.works === 1 ? "" : "s"} · ${n.stars} star${n.stars === 1 ? "" : "s"}</span></div><div class="next-pts">${n.points} pts</div></div>`).join("");
 };
 // champions: [{display_name, ad_no, completed_at, exam_passed, cert_issued}].
 // showAd: the teacher sees Ad numbers; students and parents see names only.
@@ -416,13 +423,22 @@ window.myWorksCardHtml = function (works, opts) {
   return `<p class="muted">${approved.length} approved ${approved.length === 1 ? "work" : "works"} · ${stars} stars · ${points} points</p>${rows}${opts.seeAll ? `<a class="btn ghost" href="${opts.seeAll}" style="display:block;text-align:center">See all my works →</a>` : ""}`;
 };
 
-window.championsListHtml = function (champions, showAd) {
+window.championsListHtml = function (champions, showAd, next) {
+  const nextHtml = window.nextUpChampHtml(next);
   if (!champions || !champions.length)
-    return `<p class="muted">No boy has completed 100% yet — the first champions will appear here. 🎓</p>`;
+    return `<p class="muted">No boy has completed 100% yet — the first champions will appear here. 🎓</p>` + nextHtml;
   return champions.map(c => {
     const d = c.completed_at ? new Date(c.completed_at + "Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
     return `<div class="champ-row"><div class="champ-medal">🏅</div><div class="champ-nm"><b>${esc(c.display_name)}</b><span>${showAd && c.ad_no ? "Ad " + esc(c.ad_no) + " · " : ""}Completed ${d || "—"}</span></div><div class="champ-pills"><span class="champ-pill ${c.exam_passed ? "ok" : "wait"}">${c.exam_passed ? "✓ Exam" : "⏳ Exam"}</span><span class="champ-pill ${c.cert_issued ? "ok" : "wait"}">${c.cert_issued ? "✓ Cert" : "⏳ Cert"}</span></div></div>`;
-  }).join("");
+  }).join("") + nextHtml;
+};
+// "Next 5 — Almost There!" under the Champions — the 5 boys closest to
+// completing all Learning Tasks. next: rows from /api/next-up
+// (completion_next: {display_name, done, total, pct}).
+window.nextUpChampHtml = function (next) {
+  if (!next || !next.length) return "";
+  return `<h3 style="margin:14px 0 4px">⏳ Next 5 — Almost There!</h3>` + next.map((n, i) =>
+    `<div class="next-row"><div class="next-rank green">${i + 1}</div><div class="next-nm"><b>${esc(n.display_name)}</b><div class="next-bar"><i style="width:${n.pct}%"></i></div></div><div class="next-pts">${n.done} / ${n.total}</div></div>`).join("");
 };
 // Voice notes: tap 🎤 to start recording, tap ⏹ to stop and send. Max 60 seconds
 // (keeps the recording under the 1.5MB message size limit).

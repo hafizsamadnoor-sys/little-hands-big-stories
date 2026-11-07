@@ -12,6 +12,8 @@
 <h1 id="hello">👋</h1>
 <div class="statrow" id="stats"></div>
 <div class="card"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
+<div class="card"><h2>🎓 Our Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
+<div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
 <div class="card"><h2>✅ Your Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
 <div class="card" id="msgcard" style="display:none"><h2>💬 Messages from Teacher</h2><div id="mymsgs"></div></div>
 <div class="card" id="noticecard" style="display:none"><h2>📢 Notice Board</h2><div id="notices"></div></div>
@@ -19,8 +21,6 @@
 <div class="card"><h2>📊 My Total Progress</h2><div id="totalprog"><p class="muted">Loading…</p></div></div>
 <div id="taskcard"></div>
 <div id="diarycard"></div>
-<div class="card"><h2>📋 My Learning Tasks</h2><div id="learnprog"></div></div>
-<div class="card"><h2>🎓 Our Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
 <div id="compcert"></div>
 <div class="card"><h2>📊 My Marks</h2><div id="mymarks"><p class="muted">Loading…</p></div></div>
 <div class="card">
@@ -164,10 +164,13 @@
       });
     }
   } catch (e) {}
+  // "Next in Line" — fetched once, used by the WOW + Champions cards
+  let NEXTUP = null;
+  try { NEXTUP = await api("GET", "/api/next-up"); } catch (e) {}
   // Writer of the Week — every boy can see the winner + past writers
   try {
     const w = await api("GET", "/api/writer-of-week");
-    document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || []);
+    document.getElementById("wow").innerHTML = window.wowCardHtml(w.writer, w.history || [], NEXTUP && NEXTUP.wow_next);
   } catch (e) { document.getElementById("wow").innerHTML = ""; }
   // My approved works — the child sees his own approvals with stars + points
   try {
@@ -251,7 +254,7 @@
     const ch = await api("GET", "/api/completion-champions");
     document.getElementById("champions").innerHTML =
       `<p class="muted">${ch.completed_count} of ${ch.total_students} boys finished all ${ch.total_tasks} Learning Tasks. 🎓</p>` +
-      window.championsListHtml(ch.champions, false);
+      window.championsListHtml(ch.champions, false, NEXTUP && NEXTUP.completion_next);
   } catch (e) { document.getElementById("champions").innerHTML = ""; }
   // My marks
   try {
