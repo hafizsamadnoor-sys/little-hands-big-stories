@@ -10,7 +10,21 @@ async function api(method, url, body) {
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const fmtDate = (d) => { try { return new Date(d).toLocaleDateString(); } catch (e) { return d || ""; } };
+// All server timestamps are UTC ("2026-11-08 07:26:37"). Parse them as UTC
+// and show them in Indian time (IST) with AM/PM — e.g. 07:26 UTC shows as
+// "8 Nov 2026, 12:56 PM", never as 07:26. Explicit Asia/Kolkata, so the
+// time is right whatever timezone the phone is set to.
+const utcDate = (d) => {
+  if (d == null || d === "") return null;
+  if (d instanceof Date) return isNaN(d) ? null : d;
+  let s = String(d).trim().replace(" ", "T");
+  if (!/[Zz]$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += "Z";
+  const t = new Date(s);
+  return isNaN(t) ? null : t;
+};
+const istDateStr = (t) => t.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" });
+const istTimeStr = (t) => t.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit", hour12: true }).replace(/am|pm/i, (m) => m.toUpperCase());
+const fmtDate = (d) => { const t = utcDate(d); return t ? istDateStr(t) : (d || ""); };
 // Points Clubs (highest first) — mirrors the server CLUBS list.
 const CLUBS = [
   { points: 1000, icon: "👑", name: "1000 Points Club", title: "Legend" },
@@ -19,7 +33,7 @@ const CLUBS = [
   { points: 100, icon: "⭐", name: "100 Points Club", title: "Rising Star" },
 ];
 const clubFor = (pts) => CLUBS.find(c => (pts || 0) >= c.points) || null;
-const fmtDateTime = (d) => { try { const t = new Date(d); return t.toLocaleDateString() + " " + t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return d || ""; } };
+const fmtDateTime = (d) => { const t = utcDate(d); return t ? istDateStr(t) + ", " + istTimeStr(t) : (d || ""); };
 // Today in IST (same +5:30 shift the server uses) + a TODAY / YESTERDAY /
 // TOMORROW tag for a YYYY-MM-DD date, so the teacher and parents can tell
 // which checklist day is which when two days are open at once (Samad 2026-11-08).
@@ -455,8 +469,8 @@ window.myWorksCardHtml = function (works, opts) {
   const typeIcon = { story: "📖", poem: "📝", diary: "📔", letter: "✉️", manifesto: "📜", anything: "✨", review: "⭐" };
   const fmtDate = iso => {
     if (!iso) return "";
-    const d = new Date(iso + "Z");
-    return isNaN(d) ? "" : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const d = utcDate(iso);
+    return d ? istDateStr(d) : "";
   };
   const rows = approved.slice(0, 5).map((w, i) => {
     const isNew = i === 0 && w.reviewed_at && (Date.now() - new Date(w.reviewed_at + "Z").getTime()) < 7 * 86400000;
