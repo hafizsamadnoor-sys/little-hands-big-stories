@@ -702,7 +702,7 @@ app.get("/api/parent/child", requireParent, (req, res) => {
 // Teacher: parent visit history — every parent login is recorded in
 // activity_log, so this list updates by itself whenever a parent enters.
 app.get("/api/teacher/parent-visits", requireTeacher, (req, res) => {
-  const rows = db.prepare(`SELECT u.id AS student_id, u.display_name, u.ad_no,
+  const rows = db.prepare(`SELECT u.id AS student_id, u.display_name, u.ad_no, u.photo,
       COUNT(a.id) AS visits, MIN(a.created_at) AS first_login, MAX(a.created_at) AS last_login
     FROM users u
     JOIN users p ON p.parent_of = u.id AND p.role='parent'
@@ -713,7 +713,7 @@ app.get("/api/teacher/parent-visits", requireTeacher, (req, res) => {
   res.json({ visits: rows });
 });
 app.get("/api/teacher/parents", requireTeacher, (req, res) => {
-  const rows = db.prepare(`SELECT u.id AS student_id, u.display_name, u.ad_no,
+  const rows = db.prepare(`SELECT u.id AS student_id, u.display_name, u.ad_no, u.photo,
       p.username AS parent_username, p.pin AS parent_pin
     FROM users u LEFT JOIN users p ON p.parent_of = u.id AND p.role='parent'
     WHERE u.role='student' ORDER BY u.display_name`).all();
@@ -942,7 +942,7 @@ app.get("/api/save-file/:id/raw", (req, res) => {
 app.get("/api/works", requireLogin, (req, res) => {
   const { q, type, language, author, featured } = req.query;
   let sql = `SELECT w.id, w.type, w.language, w.title, w.stars, w.featured, w.created_at,
-      u.display_name AS author, u.id AS author_id,
+      u.display_name AS author, u.id AS author_id, u.photo AS author_photo,
       (SELECT COUNT(*) FROM likes l WHERE l.work_id=w.id) AS likes,
       (SELECT COUNT(*) FROM reads r WHERE r.work_id=w.id) AS reads
     FROM works w JOIN users u ON u.id=w.student_id
@@ -1250,7 +1250,7 @@ app.post("/api/parent/holiday-checklist", requireParent, (req, res) => {
 app.get("/api/teacher/holiday-diary", requireTeacher, (req, res) => {
   const tasks = db.prepare("SELECT * FROM holiday_diary_tasks ORDER BY start_date").all();
   const out = tasks.map(t => {
-    const entries = db.prepare(`SELECT e.*, u.display_name AS student_name, u.ad_no,
+    const entries = db.prepare(`SELECT e.*, u.display_name AS student_name, u.ad_no, u.photo AS student_photo,
         (SELECT ticked_count FROM holiday_checklists c WHERE c.task_id=e.task_id AND c.student_id=e.student_id) AS checklist_count,
         (SELECT items_json FROM holiday_checklists c WHERE c.task_id=e.task_id AND c.student_id=e.student_id) AS checklist_items,
         (SELECT COUNT(*) FROM points_log p WHERE p.ref_type='good_deed_bonus' AND p.ref_id=e.id) AS bonus_given
@@ -1266,12 +1266,12 @@ app.get("/api/teacher/holiday-diary", requireTeacher, (req, res) => {
 // whose diary is not written yet still shows here with the parent's ticks.
 app.get("/api/teacher/checklists", requireTeacher, (req, res) => {
   const tasks = db.prepare("SELECT * FROM holiday_diary_tasks ORDER BY start_date").all();
-  const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY display_name").all();
+  const students = db.prepare("SELECT id, display_name, ad_no, photo FROM users WHERE role='student' ORDER BY display_name").all();
   const out = tasks.map(t => {
     const rows = students.map(s => {
       const c = db.prepare("SELECT ticked_count, items_json, ticked_at, points_awarded FROM holiday_checklists WHERE task_id=? AND student_id=?").get(t.id, s.id);
       const e = db.prepare("SELECT status FROM holiday_diary_entries WHERE task_id=? AND student_id=?").get(t.id, s.id);
-      return { id: s.id, display_name: s.display_name, ad_no: s.ad_no,
+      return { id: s.id, display_name: s.display_name, ad_no: s.ad_no, photo: s.photo,
         ticked_count: c ? c.ticked_count : 0, points_awarded: c ? (c.points_awarded || 0) : 0, checklist_items: c ? c.items_json : null, ticked_at: c ? c.ticked_at : null,
         diary_status: e ? e.status : "none" };
     });
@@ -1414,13 +1414,13 @@ app.post("/api/parent/letter-feedback", requireParent, (req, res) => {
 });
 // Teacher: all 38 boys — photos received, parent ticks, happiness, points.
 app.get("/api/teacher/letter-feedback", requireTeacher, (req, res) => {
-  const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY display_name").all();
+  const students = db.prepare("SELECT id, display_name, ad_no, photo FROM users WHERE role='student' ORDER BY display_name").all();
   const rows = students.map(s => {
     const fb = db.prepare("SELECT * FROM letter_feedback WHERE student_id=?").get(s.id);
     const ph = letterPhotos(s.id);
     let items = null;
     try { items = fb ? JSON.parse(fb.items || "[]") : null; } catch (_) { items = null; }
-    return { id: s.id, display_name: s.display_name, ad_no: s.ad_no,
+    return { id: s.id, display_name: s.display_name, ad_no: s.ad_no, photo: s.photo,
       photos: ph.count, photos_on_time: ph.on_time,
       ticks: items ? items.filter(Boolean).length : null, items,
       stars: fb ? fb.stars : null, submitted_at: fb ? fb.submitted_at : null,
@@ -1688,7 +1688,7 @@ app.get("/api/admin/learning-progress", requireAdmin, (req, res) => {
 });
 
 app.get("/api/teacher/pending", requireTeacher, (req, res) => {
-  const rows = db.prepare(`SELECT w.*, u.display_name AS author FROM works w
+  const rows = db.prepare(`SELECT w.*, u.display_name AS author, u.photo AS author_photo FROM works w
     JOIN users u ON u.id=w.student_id WHERE w.status='pending' ORDER BY w.created_at`).all();
   res.json({ works: rows });
 });
@@ -2164,7 +2164,7 @@ app.post("/api/teacher/books", requireTeacher, (req, res) => {
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 app.get("/api/books", requireLogin, (req, res) => {
-  const books = db.prepare("SELECT id, work_id, title, author_name, pages, created_at FROM books ORDER BY created_at DESC").all();
+  const books = db.prepare("SELECT b.id, b.work_id, b.title, b.author_name, b.pages, b.created_at, u.photo AS author_photo FROM books b LEFT JOIN users u ON u.display_name=b.author_name AND u.role='student' ORDER BY b.created_at DESC").all();
   res.json({ books });
 });
 // Teacher preview: get any student's dashboard data (read-only, teacher stays logged in)
@@ -2360,14 +2360,14 @@ function learningProgress(student_id) {
 }
 // All students' progress (teacher or guest — for graphs).
 app.get("/api/teacher/learning-progress", requireTeacherOrGuest, (req, res) => {
-  const students = db.prepare("SELECT id, display_name FROM users WHERE role='student' ORDER BY display_name").all();
+  const students = db.prepare("SELECT id, display_name, photo FROM users WHERE role='student' ORDER BY display_name").all();
   const total = db.prepare("SELECT COUNT(*) c FROM learning_tasks").get().c;
   const doneRows = db.prepare("SELECT student_id, task_id FROM learning_task_done").all();
   const doneMap = {};
   doneRows.forEach(r => { (doneMap[r.student_id] = doneMap[r.student_id] || new Set()).add(r.task_id); });
   const list = students.map(s => {
     const done = doneMap[s.id] ? doneMap[s.id].size : 0;
-    return { id: s.id, display_name: s.display_name, done, total, pct: total ? Math.round(done / total * 100) : 0 };
+    return { id: s.id, display_name: s.display_name, photo: s.photo, done, total, pct: total ? Math.round(done / total * 100) : 0 };
   });
   res.json({ students: list, total });
 });
