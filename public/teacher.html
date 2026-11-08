@@ -868,7 +868,7 @@ async function vLetterFb(p) {
   p.innerHTML = `<h2>💌 Letter Feedback — Letter to Parents</h2>
     <p class="muted">Sunday, 8 November 2026 · Parents tick after they receive the letter. The card stays open until YOU delete it — it never closes on its own. The teacher sees ticks + stars only — the letter itself is never in the app. Tap a name to see the 2 photos + the parent's exact ticks, then award the points.</p>
     <p><button class="btn small danger" id="lfdelete">🗑️ Delete feedback</button> <span class="muted" style="font-size:.85rem">When every boy is done — removes the ticks and the parent card. Points already given stay.</span></p>
-    <div class="cksum"><b>${s.letters_received || 0} / ${s.total || 38} letters received · ${s.parents_ticked || 0} / ${s.total || 38} parents ticked</b>
+    <div class="cksum"><b>${s.letters_received || 0} / ${s.total || 38} letters received · ${s.parents_ticked || 0} / ${s.total || 38} parents ticked${s.locked_count ? " · 🔒 " + s.locked_count + " locked" : ""}</b>
       <p>Average happiness ${s.avg_happiness != null ? "⭐ " + s.avg_happiness : "—"} · ${s.full_10 || 0} boys got the full 10 points</p></div>
     <div class="card">
     ${d.rows.map(r => {
@@ -877,7 +877,7 @@ async function vLetterFb(p) {
         : (r.points_now > 0 ? `<span class="pts-pill">${r.points_now} pts now</span>` : "");
       return `
       <div class="namerow" data-lr="${r.id}">
-        <div class="top"><span class="dot${r.ticks != null ? " none" : ""}"></span><span class="nm">${esc(r.display_name)}</span>${photoPill(r)}<span class="cnt">${r.ticks != null ? r.ticks + " / 9 ticks" : "not ticked yet"}</span><span class="cnt">${stars}</span>${pts}<span class="chev">›</span></div>
+        <div class="top"><span class="dot${r.ticks != null ? " none" : ""}"></span><span class="nm">${esc(r.display_name)}</span>${photoPill(r)}<span class="cnt">${r.ticks != null ? r.ticks + " / 9 ticks" : "not ticked yet"}</span><span class="cnt">${stars}</span>${pts}${r.locked ? `<span style="background:#fdf0c0;color:#8a6d00;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">🔒 Locked</span>` : ""}<span class="chev">›</span></div>
         <div class="detail">
           <div id="lfphotos${r.id}"><p class="muted">Loading photos…</p></div>
           ${r.items ? `
@@ -889,6 +889,8 @@ async function vLetterFb(p) {
             : r.points_now > 0 ? `<p class="dstat">⭐ <b>${r.points_now} points</b> — photos on time 2 + all 7 things 5 + neat + happy + satisfied 3</p>
               <button class="btn small" data-laward="${r.id}">⭐ Award ${r.points_now} points</button>`
             : `<p class="dstat">Waiting — photos and parent ticks will show the points here.</p>`}
+          <p style="margin-top:10px"><button class="btn small" data-llock="${r.id}" data-cur="${r.locked ? "locked" : "open"}">${r.locked ? "🔓 Unlock feedback" : "🔒 Lock feedback"}</button>${r.items ? ` <button class="btn small danger" data-lremove="${r.id}">🗑️ Remove ticks</button>` : ""}</p>
+          ${r.locked ? `<p class="dstat">🔒 Locked by you — the parent cannot tick or send until you unlock it.</p>` : ""}
         </div>
       </div>`; }).join("")}
     </div>`;
@@ -923,6 +925,29 @@ async function vLetterFb(p) {
       const r = await api("POST", "/api/teacher/letter-feedback/" + b.dataset.laward + "/award", {});
       toast(r.points + " points given! ⭐");
       openLetterRows.add(String(b.dataset.laward));
+      render();
+    } catch (e) { toast(e.message, false); b.disabled = false; }
+  });
+  // Lock / unlock one boy's feedback (Samad opens it again himself).
+  p.querySelectorAll("[data-llock]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.llock;
+    const locked = b.dataset.cur === "open";
+    b.disabled = true;
+    try {
+      await api("POST", "/api/teacher/letter-feedback/" + id + "/lock", { locked });
+      toast(locked ? "Feedback locked. 🔒" : "Feedback unlocked. 🔓");
+      openLetterRows.add(String(id));
+      render();
+    } catch (e) { toast(e.message, false); b.disabled = false; }
+  });
+  // Remove one boy's ticks (confirm first; points already given stay).
+  p.querySelectorAll("[data-lremove]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove this boy's feedback ticks? The parent can tick again (unless you lock it). Points already given stay.")) return;
+    b.disabled = true;
+    try {
+      await api("POST", "/api/teacher/letter-feedback/" + b.dataset.lremove + "/delete", {});
+      toast("Feedback removed. 🗑️");
+      openLetterRows.add(String(b.dataset.lremove));
       render();
     } catch (e) { toast(e.message, false); b.disabled = false; }
   });

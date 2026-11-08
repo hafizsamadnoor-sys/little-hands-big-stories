@@ -200,6 +200,12 @@ async function toggleFinance() {
         ${items.map((it, i) => `<div style="display:flex;gap:10px;align-items:flex-start;border:1.5px solid #d8e4e0;border-radius:12px;padding:10px 12px;margin-bottom:7px;font-size:13.5px"><span style="flex-shrink:0;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;background:${fb.items[i] ? "#0b6e5d" : "#9db3ac"}">${fb.items[i] ? "✓" : "–"}</span><span><b>${esc(it)}</b>${LETTER_SUB[i] ? `<br><span class="muted" style="font-size:.82rem">${esc(LETTER_SUB[i])}</span>` : ""}</span></div>`).join("")}
         <p style="font-size:15px">How happy are you? <span style="font-size:22px;letter-spacing:3px;color:#f7c948">${"★".repeat(fb.stars || 0)}${"☆".repeat(5 - (fb.stars || 0))}</span></p>
         <p class="muted" style="font-size:.85rem">✓ Sent ${fmtDateTime(fb.submitted_at)}. The teacher sees your ticks and stars — never the letter text.</p>`;
+    } else if (lf.locked) {
+      lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2>
+        <p class="muted" style="font-size:.9rem">For ${esc(lf.child_name)} · Sunday, 8 November 2026</p>
+        <p>🔒 <b>This feedback is locked by your teacher.</b></p>
+        <p class="muted">Your teacher will open it again soon. Please wait for him to tell you.</p>`;
+      setTc("tc-letterfb", "🔒 Locked");
     } else if (!lf.open && !fb) {
       lc.innerHTML = `<h2>💌 Letter to Parents — Feedback</h2>
         <p class="muted">Feedback is no longer open. Thank you! 🙏</p>`;
