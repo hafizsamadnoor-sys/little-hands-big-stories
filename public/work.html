@@ -47,7 +47,7 @@
     <h1>${esc(w.title)}</h1>
     <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
     ${w.stars ? `<span class="pill">⭐ ${w.stars} stars</span>` : ""}</p>
-    <p class="muted">by <b>${esc(w.author)}</b> · ${fmtDate(w.created_at)} · 👁️ ${d.reads} reads</p>
+    <p class="muted"><span class="av av-sm" style="vertical-align:middle;margin-right:6px">${avatar(w.author, w.author_photo)}</span>by <b>${esc(w.author)}</b> · ${fmtDate(w.created_at)} · 👁️ ${d.reads} reads</p>
     <div class="card" style="font-size:1.08rem; white-space:pre-wrap">${esc(w.content)}</div>
     <p>${user.role === "student" && !d.isOwner
       ? `<button class="btn ${d.liked ? "ghost" : ""}" id="like">${d.liked ? "💔 Unlike" : "❤️ Like"} (${d.likes})</button>`

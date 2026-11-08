@@ -169,7 +169,7 @@ async function vApprovals(p) {
     + (d.works.length ? `<h3>✍️ Writings (${d.works.length})</h3>` + d.works.map(w => `
     <div class="card"><h3>${esc(w.title)}</h3>
       <p><span class="tag type">${esc(w.type)}</span><span class="tag lang">${esc(w.language)}</span>
-      <span class="muted" style="font-size:.85rem">by ${esc(w.author)} · ${fmtDate(w.created_at)}</span>
+      <span class="muted" style="font-size:.85rem"><span class="av av-sm" style="vertical-align:middle;margin-right:6px">${avatar(w.author, w.author_photo)}</span>by ${esc(w.author)} · ${fmtDate(w.created_at)}</span>
       ${w.edited_by ? `<br><span class="pill" style="border:1px solid #b45309;color:#b45309">✏️ Edited by ${esc(w.edited_by)}${w.edited_by_class ? ` (${esc(w.edited_by_class)})` : ""}</span>` : ""}</p>
       <div class="card" style="white-space:pre-wrap;box-shadow:none">${esc(w.content)}</div>
       <label>Stars (0–5)</label>
@@ -189,7 +189,7 @@ async function vApprovals(p) {
     + (diaryPend.length ? `<h3>🏖️ Holiday Diary — not yet seen (${diaryPend.length})</h3>` + diaryPend.map(e => {
         const items = chkItems(e);
         return `
-    <div class="card"><h3>${esc(e.student_name)} <span class="tag">${esc(e.taskTitle)}</span> <span class="muted" style="font-size:.85rem">${esc(e.dayLabel)}</span> <span class="redbadge">waiting</span></h3>
+    <div class="card"><h3><span class="av av-sm" style="vertical-align:middle;margin-right:8px">${avatar(e.student_name, e.student_photo)}</span>${esc(e.student_name)} <span class="tag">${esc(e.taskTitle)}</span> <span class="muted" style="font-size:.85rem">${esc(e.dayLabel)}</span> <span class="redbadge">waiting</span></h3>
       <p class="muted" style="font-size:.85rem">📋 Parent checklist: ${items ? items.filter(Boolean).length + " of 17 ticked" : "not ticked yet"}</p>
       <p><b>1. My Diary</b></p><p style="white-space:pre-wrap">${esc(e.diary_text)}</p>
       <p><b>2. My Best Moment</b></p><p style="white-space:pre-wrap">${esc(e.best_moment)}</p>
@@ -702,7 +702,7 @@ async function vDiary(p) {
         const isPend = e.status === "pending";
         return `
       <div class="namerow" data-nr="${e.id}">
-        <div class="top"><span class="dot${isPend ? "" : " none"}"></span><span class="nm">${esc(e.student_name)}</span><span class="chev">›</span></div>
+        <div class="top"><span class="dot${isPend ? "" : " none"}"></span><span class="av av-sm">${avatar(e.student_name, e.student_photo)}</span><span class="nm">${esc(e.student_name)}</span><span class="chev">›</span></div>
         <div class="st">${e.status === "approved" ? `✅ Approved · ⭐ ${e.stars} · +${e.points_awarded} pts` : e.status === "rejected" ? "❌ Not approved" : "⏳ Waiting"} · ${chkLine(e)}</div>
         <div class="detail">
           <p><b>1. My Diary</b></p><p style="white-space:pre-wrap">${esc(e.diary_text)}</p>
@@ -813,7 +813,7 @@ async function vChecklist(p) {
         const pct = Math.round(s.ticked_count / 17 * 100);
         return `
       <div class="namerow" data-cr="${tk.id}-${s.id}">
-        <div class="top"><span class="dot${s.ticked_count > 0 ? " none" : ""}"></span><span class="nm">${esc(s.display_name)}</span>${s.ticked_count > 0 ? `<span class="pts-pill">+${s.points_awarded || 0} pts</span>` : ""}<span class="cnt">${s.ticked_count} of 17</span><span class="chev">›</span></div>
+        <div class="top"><span class="dot${s.ticked_count > 0 ? " none" : ""}"></span><span class="av av-sm">${avatar(s.display_name, s.photo)}</span><span class="nm">${esc(s.display_name)}</span>${s.ticked_count > 0 ? `<span class="pts-pill">+${s.points_awarded || 0} pts</span>` : ""}<span class="cnt">${s.ticked_count} of 17</span><span class="chev">›</span></div>
         <div class="ckbar"><i style="width:${pct}%"></i></div>
         <div class="detail">
           ${items ? `
@@ -877,7 +877,7 @@ async function vLetterFb(p) {
         : (r.points_now > 0 ? `<span class="pts-pill">${r.points_now} pts now</span>` : "");
       return `
       <div class="namerow" data-lr="${r.id}">
-        <div class="top"><span class="dot${r.ticks != null ? " none" : ""}"></span><span class="nm">${esc(r.display_name)}</span>${photoPill(r)}<span class="cnt">${r.ticks != null ? r.ticks + " / 9 ticks" : "not ticked yet"}</span><span class="cnt">${stars}</span>${pts}${r.locked ? `<span style="background:#fdf0c0;color:#8a6d00;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">🔒 Locked</span>` : ""}<span class="chev">›</span></div>
+        <div class="top"><span class="dot${r.ticks != null ? " none" : ""}"></span><span class="av av-sm">${avatar(r.display_name, r.photo)}</span><span class="nm">${esc(r.display_name)}</span>${photoPill(r)}<span class="cnt">${r.ticks != null ? r.ticks + " / 9 ticks" : "not ticked yet"}</span><span class="cnt">${stars}</span>${pts}${r.locked ? `<span style="background:#fdf0c0;color:#8a6d00;border-radius:999px;padding:2px 9px;font-weight:700;font-size:.8rem">🔒 Locked</span>` : ""}<span class="chev">›</span></div>
         <div class="detail">
           <div id="lfphotos${r.id}"><p class="muted">Loading photos…</p></div>
           ${r.items ? `
@@ -1011,7 +1011,7 @@ async function vStudents(p) {
     <h2>👥 Students (${d.students.length})</h2>
     <div class="card" style="padding:6px 14px;overflow-x:auto"><table>
     <thead><tr><th>Name</th><th>Username</th><th>Ad No</th><th>PIN</th><th></th></tr></thead><tbody>
-    ${d.students.map(s => `<tr><td>${esc(s.display_name)}</td><td><code>${esc(s.username)}</code></td>
+    ${d.students.map(s => `<tr><td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(s.display_name, s.photo)}</span>${esc(s.display_name)}</td><td><code>${esc(s.username)}</code></td>
       <td>${esc(s.ad_no || "")}</td><td>${s.pin ? `<code style="font-size:1.2rem">${esc(s.pin)}</code>` : "❌"}</td>
       <td><button class="btn small ghost" data-ed="${s.id}">Edit</button>
           <button class="btn small ghost" data-rp="${s.id}">🔑 Reset pw</button>
@@ -1066,13 +1066,13 @@ async function vParents(p) {
       <p class="muted">Note: on 23 Oct at 3:28 PM every parent PIN was checked once from the teacher's side — a single visit at exactly that time is that check, not the parent.</p>
       <div style="overflow-x:auto"><table>
       <thead><tr><th>Student</th><th>Ad No</th><th>Visits</th><th>First visit</th><th>Last visit</th></tr></thead><tbody>
-      ${v.visits.map(r => `<tr${r.visits ? "" : ` style="color:#94a3b8"`}><td>${esc(r.display_name)}</td><td>${esc(r.ad_no || "")}</td>
+      ${v.visits.map(r => `<tr${r.visits ? "" : ` style="color:#94a3b8"`}><td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(r.display_name, r.photo)}</span>${esc(r.display_name)}</td><td>${esc(r.ad_no || "")}</td>
         <td>${r.visits ? `<b>${r.visits}</b>` : "0"}</td><td>${r.visits ? fmtT(r.first_login) : "—"}</td><td>${r.visits ? fmtT(r.last_login) : "Never visited yet"}</td></tr>`).join("")}
       </tbody></table></div></div>
     <h2>👪 Parents (${d.parents.length})</h2>
     <div class="card" style="padding:6px 14px;overflow-x:auto"><table>
     <thead><tr><th>Student</th><th>Ad No</th><th>Parent username</th><th>Parent PIN</th><th></th></tr></thead><tbody>
-    ${d.parents.map(r => `<tr><td>${esc(r.display_name)}</td><td>${esc(r.ad_no || "")}</td>
+    ${d.parents.map(r => `<tr><td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(r.display_name, r.photo)}</span>${esc(r.display_name)}</td><td>${esc(r.ad_no || "")}</td>
       <td><code>${esc(r.parent_username || "—")}</code></td>
       <td>${r.parent_pin ? `<code style="font-size:1.2rem">${esc(r.parent_pin)}</code>` : "❌"}</td>
       <td><button class="btn small ghost" data-rp="${r.student_id}">🔄 New PIN</button></td></tr>`).join("")}
@@ -1276,14 +1276,14 @@ async function vLearning(p) {
         <div style="flex:1;min-width:200px">
           <h2 style="color:#fff;margin:0 0 4px">📋 Learning Tasks</h2>
           <p style="color:#c9e8ee;margin:0 0 8px;font-size:.9rem">Quran, duas &amp; speech — tick what each child completes.</p>
-          <p style="color:#fff;margin:0"><b>${done100} of ${students.length}</b> at 100%${top ? ` · 🏆 <b>${esc(top.display_name)}</b> (${top.pct}%)` : ""}</p>
+          <p style="color:#fff;margin:0"><b>${done100} of ${students.length}</b> at 100%${top ? ` · <span class="av av-sm" style="vertical-align:middle;margin-right:4px">${avatar(top.display_name, top.photo)}</span>🏆 <b>${esc(top.display_name)}</b> (${top.pct}%)` : ""}</p>
         </div>
       </div>`;
     // Total summary graph: one horizontal bar per student, ranked
     const rows = students.map(s => {
       const col = s.pct >= 80 ? "#16a34a" : s.pct >= 50 ? "#0e7c8c" : s.pct >= 25 ? "#ea580c" : "#dc2626";
       return `<div style="display:flex;align-items:center;gap:10px;margin:6px 0">
-        <div style="width:118px;flex:0 0 auto;font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(s.display_name)}">${esc(s.display_name)}</div>
+        <div style="display:flex;align-items:center;gap:8px;width:150px;flex:0 0 auto;font-size:.82rem;font-weight:600" title="${esc(s.display_name)}"><span class="av av-sm">${avatar(s.display_name, s.photo)}</span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.display_name)}</span></div>
         <div style="flex:1;background:#e2e8f0;border-radius:99px;height:16px;overflow:hidden">
           <div class="tbar" data-w="${s.pct}" style="width:0;background:${col};height:100%;border-radius:99px;transition:width 1s ease"></div></div>
         <b style="width:46px;flex:0 0 auto;text-align:right;font-size:.82rem">${s.pct}%</b></div>`;
@@ -1295,7 +1295,7 @@ async function vLearning(p) {
         <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:0 2px 8px rgba(11,60,70,.08)">
           <div style="font-size:1.6rem;font-weight:800;color:${avgCol}">${done100}</div><div class="muted" style="font-size:.75rem">100% complete</div></div>
         <div style="background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:0 2px 8px rgba(11,60,70,.08)">
-          <div style="font-size:.95rem;font-weight:800;color:#0b3c46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${top ? "🏆 " + esc(top.display_name) : "—"}</div><div class="muted" style="font-size:.75rem">${top ? "Top: " + top.pct + "%" : "Top student"}</div></div>
+          <div style="font-size:.95rem;font-weight:800;color:#0b3c46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;justify-content:center">${top ? `<span class="av av-sm">${avatar(top.display_name, top.photo)}</span>🏆 ` + esc(top.display_name) : "—"}</div><div class="muted" style="font-size:.75rem">${top ? "Top: " + top.pct + "%" : "Top student"}</div></div>
       </div>
       <div class="section-label">Total summary — all students, ranked</div>
       ${rows || "<p class='muted'>No students.</p>"}`;
@@ -1358,7 +1358,7 @@ async function vLearning(p) {
       const d = await api("GET", "/api/teacher/learning-progress");
       const rows = [...(d.students || [])].sort((a, b) => b.pct - a.pct).map((s, i) => {
         const col = s.pct >= 80 ? "#16a34a" : s.pct >= 50 ? "#0e7c8c" : s.pct >= 25 ? "#ea580c" : "#dc2626";
-        return `<tr><td>${i + 1}</td><td><b>${esc(s.display_name)}</b></td>
+        return `<tr><td>${i + 1}</td><td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(s.display_name, s.photo)}</span><b>${esc(s.display_name)}</b></td>
           <td><div style="background:#e2e8f0;border-radius:99px;height:12px;overflow:hidden;min-width:90px"><div style="width:${s.pct}%;background:${col};height:100%;border-radius:99px"></div></div></td>
           <td style="text-align:center"><b>${s.pct}%</b></td>
           <td class="muted" style="text-align:center;font-size:.8rem">${s.done}/${s.total}</td></tr>`;
@@ -1389,7 +1389,7 @@ async function vCompletion(p) {
     ${rows.length ? `<table style="width:100%;font-size:.9rem">
       <tr><th style="text-align:left">Student</th><th>Exam</th><th>Certificate</th><th>Action</th></tr>
       ${rows.map(r => `<tr>
-        <td><a href="/completion-cert.html?student=${r.id}" target="_blank">${esc(r.display_name)}</a></td>
+        <td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(r.display_name, r.photo)}</span><a href="/completion-cert.html?student=${r.id}" target="_blank">${esc(r.display_name)}</a></td>
         <td>${r.exam_passed ? `✅ Passed (${new Date(r.exam_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not taken"}</td>
         <td>${r.issued ? `✅ Issued (${new Date(r.issued_at + "Z").toLocaleDateString("en-IN")})` : "⏳ Not issued"}</td>
         <td style="white-space:nowrap">${r.issued
@@ -1513,7 +1513,7 @@ async function vWow(p) {
   </div>` : ""}
   ${hist.length ? `<div class="card"><h2>🕰️ Past writers</h2>${hist.map(h => {
     const dd = h.created_at ? new Date(h.created_at + "Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
-    return `<div class="wow-past"><div class="wow-av">🌟</div><div><b>${esc(h.display_name)}</b><span>${h.work_title ? "“" + esc(h.work_title) + "” · " : ""}${dd}</span></div></div>`;
+    return `<div class="wow-past"><span class="av av-md">${avatar(h.display_name, h.photo)}</span><div><b>${esc(h.display_name)}</b><span>${h.work_title ? "“" + esc(h.work_title) + "” · " : ""}${dd}</span></div></div>`;
   }).join("")}</div>` : ""}`;
   fillWorks(document.getElementById("w_s").value);
   document.getElementById("w_s").onchange = (e) => fillWorks(e.target.value);

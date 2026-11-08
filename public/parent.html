@@ -155,7 +155,7 @@ async function toggleFinance() {
   // ---- My child's progress (private to this parent) ----
   const d = await api("GET", "/api/parent/child");
   const s = d.student;
-  document.getElementById("childname").textContent = "🌟 " + s.display_name + "'s progress";
+  document.getElementById("childname").innerHTML = `<span class="av av-lg" style="vertical-align:middle;margin-right:10px">${avatar(s.display_name, s.photo)}</span>🌟 ` + esc(s.display_name) + "'s progress";
   document.getElementById("st-points").textContent = d.points;
   document.getElementById("st-stars").textContent = "⭐ " + d.stars;
   document.getElementById("st-works").textContent = d.worksCount;
@@ -398,7 +398,7 @@ async function toggleFinance() {
   document.getElementById("board").innerHTML =
     `<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Student</th><th>Points</th><th>⭐</th><th>Pieces</th></tr></thead><tbody>` +
     b.board.map((r, i) => `<tr${r.id === myId ? ` style="background:#eff6ff;font-weight:bold"` : ""}>
-      <td>${i + 1}</td><td>${esc(r.display_name)}${r.id === myId ? " 👈" : ""}</td>
+      <td>${i + 1}</td><td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(r.display_name, r.photo)}</span>${esc(r.display_name)}${r.id === myId ? " 👈" : ""}</td>
       <td>${r.points}</td><td>${r.stars}</td><td>${r.works}</td></tr>`).join("") +
     `</tbody></table></div>`;
 
@@ -433,7 +433,7 @@ async function toggleFinance() {
   const bk = await api("GET", "/api/books");
   setTc("tc-books", bk.books.length + " books");
   document.getElementById("books").innerHTML = bk.books.length ? bk.books.map(x =>
-    `<p>📕 <a href="/api/books/${x.id}/file" target="_blank">${esc(x.title)}</a> <span class="muted">— ${esc(x.author_name)} · ⬇️ tap to open the illustrated book, then save or share it</span></p>`).join("")
+    `<p>📕 <a href="/api/books/${x.id}/file" target="_blank">${esc(x.title)}</a> <span class="muted">— <span class="av av-sm" style="vertical-align:middle;margin-right:4px">${avatar(x.author_name, x.author_photo)}</span>${esc(x.author_name)} · ⬇️ tap to open the illustrated book, then save or share it</span></p>`).join("")
     : `<p class="muted">No books yet.</p>`;
 
   // ---- Writings (public to parents, read-only) ----
@@ -444,7 +444,7 @@ async function toggleFinance() {
     `<details class="storycard"><summary><b>${esc(x.title)}</b>
       <span class="tag">${typeEmo[x.type] || "📝"} ${esc(x.type)}</span>
       <span class="tag lang">${esc(x.language)}</span>
-      <span class="muted">— ${esc(x.author)}${x.stars ? ` · ⭐ ${x.stars}` : ""}</span></summary>
+      <span class="muted">— <span class="av av-sm" style="vertical-align:middle;margin-right:4px">${avatar(x.author, x.author_photo)}</span>${esc(x.author)}${x.stars ? ` · ⭐ ${x.stars}` : ""}</span></summary>
       <div class="wbody" data-wid="${x.id}"><p class="muted">Loading…</p></div></details>`).join("")
     : `<p class="muted">Nothing published yet.</p>`;
   const bookByWork = {};

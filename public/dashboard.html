@@ -101,7 +101,7 @@ function allWorksHtml(works) {
 (async () => {
   const user = await guard("student"); if (!user) return;
   document.getElementById("nav").innerHTML = studentNav("dashboard.html");
-  document.getElementById("hello").textContent = "👋 Hi, " + user.display_name + "!";
+  document.getElementById("hello").innerHTML = `<span class="av av-lg" style="vertical-align:middle;margin-right:10px">${avatar(user.display_name, user.photo)}</span>👋 Hi, ` + esc(user.display_name) + "!";
   const setTc = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
   const d = await api("GET", "/api/dashboard");
   setTc("tc-points", (d.points || 0) + " points");
@@ -186,9 +186,9 @@ function allWorksHtml(works) {
     setTc("tc-board", board.length ? "Top: " + board[0].points + " pts" : "—");
     document.getElementById("rankbody").innerHTML =
       `<div style="font-size:1.1rem;font-weight:800;color:#0b3c46">You are #${d.rank} of ${board.length}! ${d.rank === 1 ? "🎉" : ""}</div>` +
-      board.slice(0, 5).map((r, i) => `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9"><span>${i + 1}. ${esc(r.display_name)}${user.id && r.id === user.id ? " ← You!" : ""}</span><b>${r.points} pts</b></div>`).join("");
+      board.slice(0, 5).map((r, i) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9"><span style="display:flex;align-items:center;gap:8px"><span class="av av-sm">${avatar(r.display_name, r.photo)}</span><span>${i + 1}. ${esc(r.display_name)}${user.id && r.id === user.id ? " ← You!" : ""}</span></span><b>${r.points} pts</b></div>`).join("");
     document.getElementById("boardbody").innerHTML = board.length ? board.slice(0, 10).map((r, i) =>
-      `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9"><span>${i + 1}. ${esc(r.display_name)}${user.id && r.id === user.id ? " ← You!" : ""}</span><span><b>${r.points} pts</b> · ${r.stars || 0} ★ · ${r.works || 0} works</span></div>`).join("") : `<p class="muted">No points yet.</p>`;
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9"><span style="display:flex;align-items:center;gap:8px"><span class="av av-sm">${avatar(r.display_name, r.photo)}</span><span>${i + 1}. ${esc(r.display_name)}${user.id && r.id === user.id ? " ← You!" : ""}</span></span><span><b>${r.points} pts</b> · ${r.stars || 0} ★ · ${r.works || 0} works</span></div>`).join("") : `<p class="muted">No points yet.</p>`;
     // 🎯 How far to go?
     const me = d.points || 0;
     const top = board[0];
@@ -198,7 +198,7 @@ function allWorksHtml(works) {
     if (!top || gap1 <= 0) h1 = `<div style="font-weight:800">🥇 You are 1st! 🎉</div><div class="muted" style="font-size:.88rem">You have ${me} points — the top of the Points Board!</div>`;
     else {
       const pct1 = Math.min(100, Math.round(me / top.points * 100));
-      h1 = `<div style="font-weight:800">🥇 To 1st place — <span style="color:#b45309">${gap1} more points to go!</span></div><div class="muted" style="font-size:.88rem">You: ${me} pts · 1st place: ${esc(top.display_name)} — ${top.points} pts</div><div class="tbar"><div class="tfill" style="width:${pct1}%;background:linear-gradient(90deg,#d4a017,#f59e0b)"></div></div>`;
+      h1 = `<div style="font-weight:800">🥇 To 1st place — <span style="color:#b45309">${gap1} more points to go!</span></div><div class="muted" style="font-size:.88rem">You: ${me} pts · 1st place: <span class="av av-sm" style="vertical-align:middle;margin-right:4px">${avatar(top.display_name, top.photo)}</span>${esc(top.display_name)} — ${top.points} pts</div><div class="tbar"><div class="tfill" style="width:${pct1}%;background:linear-gradient(90deg,#d4a017,#f59e0b)"></div></div>`;
     }
     if (!next) h2 = `<div style="font-weight:800">👑 Legend — you reached the highest club!</div>`;
     else {
@@ -422,7 +422,7 @@ function allWorksHtml(works) {
         `📢 Notice Board${newN ? ` <span style="background:#ef4444;color:#fff;border-radius:12px;padding:2px 10px;font-size:.8rem">${newN} new</span>` : ""}`;
       document.getElementById("notices").innerHTML = nd.notices.map((n, i) =>
         `<div style="border:1px solid #fbbf24;background:#fffbeb;border-radius:8px;padding:10px;margin:8px 0">
-        <p><b>📌 ${esc(n.title || "Notice")}</b></p><p>${richText(n.text)}</p>${mediaHtml(n)}
+        <p><b>📌 ${esc(n.title || "Notice")}</b></p><p style="white-space:pre-wrap">${richText(n.text)}</p>${mediaHtml(n)}
         <p class="muted" style="font-size:.78rem">${fmtDateTime(n.created_at)}
         <button class="btn small ghost" onclick="speakNotice(${i})" style="margin-left:8px">🔊 Listen</button></p></div>`).join("");
       window._notices = nd.notices;

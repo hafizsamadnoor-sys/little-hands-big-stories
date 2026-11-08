@@ -331,3 +331,16 @@ tr:last-child td{border-bottom:none;}
 .ckitem.no .mk{background:#e3ebe8;color:#8aa39c}
 .chkline{font-size:13.5px;margin-top:8px;padding:9px 11px;border-radius:10px;background:#f2f7f5;color:#5a6b66}
 .chkline.yes{background:#e8f5f1;color:#0b6e5d;font-weight:700;border:1.5px solid #0b6e5d}
+
+/* Photos next to names — shared round avatar (photo, or initial letter). */
+.av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#e0f2f7;color:#0b3c46;font-weight:800;flex:none;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+/* The older .avatar class (author page, authors list, login grid, preview):
+   it had NO size limit, so a photo spilled out huge over the page. Same
+   round-crop treatment as .av — the inline width/height on each page stays. */
+.avatar{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#e0f2f7;color:#0b3c46;font-weight:800;flex:none;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.av-sm{width:28px;height:28px;font-size:13px}
+.av-md{width:40px;height:40px;font-size:17px}
+.av-lg{width:56px;height:56px;font-size:24px}
+.av-xl{width:84px;height:84px;font-size:36px}
