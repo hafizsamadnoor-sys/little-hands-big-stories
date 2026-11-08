@@ -337,6 +337,13 @@ CREATE TABLE IF NOT EXISTS letter_feedback (
   points_awarded INTEGER,
   awarded_at TEXT
 );
+-- Per-student lock (2026-11-08, Samad): teacher locks one boy's letter
+-- feedback so his parent cannot tick/submit until the teacher unlocks it.
+-- Own table so the lock survives deleting the feedback row.
+CREATE TABLE IF NOT EXISTS letter_feedback_locks (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  locked_at TEXT DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS mysteries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
@@ -1360,6 +1367,9 @@ function letterFeedbackRemoved() {
   return !!(r && r.value === "1");
 }
 function letterFbOpen() { return !letterFeedbackRemoved(); }
+function letterFbLocked(sid) {
+  return !!db.prepare("SELECT 1 FROM letter_feedback_locks WHERE student_id=?").get(sid);
+}
 // Photos: image messages the boy sent on the letter day (Sun 8 Nov, IST).
 // On time = the 2nd photo arrived by 10 PM IST (16:30 UTC).
 function letterPhotos(student_id) {
@@ -1379,7 +1389,7 @@ app.get("/api/parent/letter-feedback", requireParent, (req, res) => {
   if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
   const fb = db.prepare("SELECT * FROM letter_feedback WHERE student_id=?").get(me.parent_of);
   const s = db.prepare("SELECT display_name FROM users WHERE id=?").get(me.parent_of);
-  res.json({ open: letterFbOpen(), closed: false, removed: letterFeedbackRemoved(),
+  res.json({ open: letterFbOpen(), closed: false, removed: letterFeedbackRemoved(), locked: letterFbLocked(me.parent_of),
     items: LETTER_ITEMS, child_name: s ? s.display_name : "",
     feedback: fb ? { items: JSON.parse(fb.items || "[]"), stars: fb.stars, submitted_at: fb.submitted_at, points_awarded: fb.points_awarded } : null });
 });
@@ -1388,6 +1398,7 @@ app.post("/api/parent/letter-feedback", requireParent, (req, res) => {
   if (!me || !me.parent_of) return res.status(404).json({ error: "No linked student." });
   const sid = me.parent_of;
   if (letterFeedbackRemoved()) return res.status(403).json({ error: "Feedback was removed by the teacher." });
+  if (letterFbLocked(sid)) return res.status(403).json({ error: "This feedback is locked by the teacher." });
   const fb0 = db.prepare("SELECT points_awarded FROM letter_feedback WHERE student_id=?").get(sid);
   if (fb0 && fb0.points_awarded != null) return res.status(403).json({ error: "Points have already been given by the teacher — feedback is now locked." });
   const items = (req.body || {}).items;
@@ -1413,7 +1424,7 @@ app.get("/api/teacher/letter-feedback", requireTeacher, (req, res) => {
       photos: ph.count, photos_on_time: ph.on_time,
       ticks: items ? items.filter(Boolean).length : null, items,
       stars: fb ? fb.stars : null, submitted_at: fb ? fb.submitted_at : null,
-      points_awarded: fb ? fb.points_awarded : null,
+      points_awarded: fb ? fb.points_awarded : null, locked: letterFbLocked(s.id),
       points_now: fb ? letterPoints(fb, ph) : 0 };
   });
   const ticked = rows.filter(r => r.ticks != null);
@@ -1421,6 +1432,7 @@ app.get("/api/teacher/letter-feedback", requireTeacher, (req, res) => {
   res.json({ rows, items: LETTER_ITEMS, removed: letterFeedbackRemoved(), summary: {
     letters_received: rows.filter(r => r.photos >= 2).length,
     parents_ticked: ticked.length,
+    locked_count: rows.filter(r => r.locked).length,
     avg_happiness: starred.length ? Math.round(starred.reduce((a, r) => a + r.stars, 0) / starred.length * 10) / 10 : null,
     full_10: rows.filter(r => r.points_awarded === 10).length,
     total: rows.length } });
@@ -1444,6 +1456,27 @@ app.post("/api/teacher/letter-feedback/:id/award", requireTeacher, (req, res) =>
   db.prepare("UPDATE letter_feedback SET points_awarded=?, awarded_at=datetime('now') WHERE student_id=?").run(pts, sid);
   logActivity(req.user.id, "teacher", "awarded letter points", pts + " pts", "letter_feedback", sid);
   res.json({ ok: true, points: pts, parts });
+});
+// Teacher locks / unlocks one boy's letter feedback (2026-11-08, Samad).
+// Locked: the parent cannot tick/submit until the teacher unlocks it.
+// The lock survives deleting the feedback row.
+app.post("/api/teacher/letter-feedback/:id/lock", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const locked = !!(req.body || {}).locked;
+  const st = db.prepare("SELECT id FROM users WHERE id=? AND role='student'").get(sid);
+  if (!st) return res.status(404).json({ error: "No such student." });
+  if (locked) db.prepare("INSERT OR REPLACE INTO letter_feedback_locks (student_id, locked_at) VALUES (?, datetime('now'))").run(sid);
+  else db.prepare("DELETE FROM letter_feedback_locks WHERE student_id=?").run(sid);
+  logActivity(req.user.id, "teacher", (locked ? "locked" : "unlocked") + " letter feedback", "", "letter_feedback", sid);
+  res.json({ ok: true, student_id: sid, locked });
+});
+// Teacher removes ONE boy's feedback row (ticks + stars). Points already
+// awarded stay on the Points Board. The per-student lock is untouched.
+app.post("/api/teacher/letter-feedback/:id/delete", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const r = db.prepare("DELETE FROM letter_feedback WHERE student_id=?").run(sid);
+  logActivity(req.user.id, "teacher", "removed letter feedback for one boy", "", "letter_feedback", sid);
+  res.json({ ok: true, deleted: r.changes });
 });
 // Teacher deletes the whole feedback (Samad: he reviews it, then deletes it
 // himself). Removes the feedback rows and hides the parent card. Points
@@ -2068,7 +2101,7 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "challenges","challenge_entries","writer_of_week","point_settings","books",
   "learning_tasks","learning_task_done","completion_certs","completion_exams","student_marks",
   "messages","notices","notice_reads","finance_entries","general_expenses","app_settings",
-  "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback"];
+  "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback","letter_feedback_locks"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
