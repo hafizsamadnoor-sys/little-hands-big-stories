@@ -288,11 +288,14 @@ function waPreview(m) {
 }
 function waListTime(ts) {
   try {
-    const d = new Date(ts), now = new Date();
-    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    const y = new Date(now); y.setDate(now.getDate() - 1);
-    if (d.toDateString() === y.toDateString()) return "Yesterday";
-    return d.toLocaleDateString([], { day: "numeric", month: "numeric" });
+    const d = utcDate(ts);
+    if (!d) return "";
+    const istDay = (x) => x.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "numeric", year: "numeric" });
+    const now = new Date();
+    if (istDay(d) === istDay(now)) return istTimeStr(d);
+    const y = new Date(now.getTime() - 86400000);
+    if (istDay(d) === istDay(y)) return "Yesterday";
+    return d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "numeric" });
   } catch (e) { return ""; }
 }
 async function vMessages(p) {
