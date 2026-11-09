@@ -550,20 +550,8 @@ function logActivity(user_id, role, action, detail, ref_type, ref_id) {
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 
-// ── Old site (Render) redirects to the new site (Replit) ─────────────
-// The Render copy is the OLD site: it still shows the removed Puzzle game's
-// points (Thalha 384, Uwais 1334). Anyone opening it must land on the
-// daily Replit app instead. Host-gated, so the same code is safe on both
-// deployments: on Replit the host never matches, so nothing redirects.
-// API calls are left alone (the teacher purge endpoints still need to work).
-const NEW_SITE = "https://little-hands-big-stories--hafizsamadnoor.replit.app";
-app.use((req, res, next) => {
-  const host = (req.get("host") || "").toLowerCase();
-  if (host.includes("onrender.com") && !req.path.startsWith("/api/")) {
-    return res.redirect(301, NEW_SITE + req.originalUrl);
-  }
-  next();
-});
+// ── Live site: Render (moved from Replit 2026-11-09) ────────────────────
+// No redirect: this deployment IS the live app now.
 
 function getSessionUser(req) {
   const cookie = req.headers.cookie || "";
