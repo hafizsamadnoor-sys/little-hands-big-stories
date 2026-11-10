@@ -65,6 +65,7 @@
   <button class="tile" onclick="openParentSec('learn',this)"><span class="tile-circ">📋</span><span class="tile-t">Learning Tasks</span><span class="tile-n" id="tc-learn">…</span></button>
   <button class="tile" onclick="openParentSec('board',this)"><span class="tile-circ">🏆</span><span class="tile-t">Scoreboard</span><span class="tile-n" id="tc-board">…</span></button>
   <button class="tile" onclick="openParentSec('works',this)"><span class="tile-circ">✅</span><span class="tile-t">Approved Works</span><span class="tile-n" id="tc-works">…</span></button>
+  <button class="tile" onclick="openParentSec('gala',this)"><span class="tile-circ">🎉</span><span class="tile-t">Twelfth Gala</span><span class="tile-n" id="tc-gala">…</span></button>
   <button class="tile" onclick="openParentSec('books',this)"><span class="tile-circ">📕</span><span class="tile-t">Books — all students</span><span class="tile-n" id="tc-books">…</span></button>
   <button class="tile" onclick="openParentSec('writings',this)"><span class="tile-circ">📖</span><span class="tile-t">Writings — all students</span><span class="tile-n" id="tc-writings">…</span></button>
 </div>
@@ -81,6 +82,7 @@
   <div class="dsec" id="sec-learn" style="display:none"><div id="classtasks"><p class="muted">Loading class tasks…</p></div></div>
   <div class="dsec" id="sec-board" style="display:none"><h2>🏆 Scoreboard — all students</h2><div id="board"></div></div>
   <div class="dsec" id="sec-works" style="display:none"><h2>✅ Your Child's Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
+  <div class="dsec" id="sec-gala" style="display:none"><h2>🎉 Twelfth Gala</h2><div id="galabody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-books" style="display:none"><h2>📚 Books — all students</h2><div id="books"></div></div>
   <div class="dsec" id="sec-writings" style="display:none"><h2>📖 Writings — all students</h2><div id="works"></div></div>
 </div>
@@ -428,6 +430,13 @@ async function toggleFinance() {
     setTc("tc-works", (mw.works || []).length + " works");
     document.getElementById("myworks").innerHTML = window.myWorksCardHtml(mw.works, { emptyHint: "Your child has no approved works yet — when the teacher approves one, it will appear here with its stars and points." });
   } catch (e) { document.getElementById("myworks").innerHTML = ""; }
+
+  // ---- Twelfth Gala — your child's score + team totals (own child only) ----
+  try {
+    const gb = await api("GET", "/api/gala/board");
+    setTc("tc-gala", gb.setup ? (gb.me ? gb.me.total + " pts · " + gb.me.team : "Door " + gb.teamTotals.Door + " — Window " + gb.teamTotals.Window) : "Coming soon");
+    document.getElementById("galabody").innerHTML = window.galaBoardHtml(gb, d.student.display_name);
+  } catch (e) { document.getElementById("galabody").innerHTML = ""; }
 
   // ---- Books (public to parents) ----
   const bk = await api("GET", "/api/books");

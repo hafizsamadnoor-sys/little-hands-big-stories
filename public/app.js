@@ -498,6 +498,51 @@ window.nextUpChampHtml = function (next) {
   return `<h3 style="margin:14px 0 4px">⏳ Next 5 — Almost There!</h3>` + next.map((n, i) =>
     `<div class="next-row"><span class="av av-md">${avatar(n.display_name, n.photo)}</span><div class="next-nm"><b>${esc(n.display_name)}</b><div class="next-bar"><i style="width:${n.pct}%"></i></div></div><div class="next-pts">${n.done} / ${n.total}</div></div>`).join("");
 };
+// ── Twelfth Gala — shared board for the student + parent pages ─────
+// b = the /api/gala/board response, already privacy-scoped server-side:
+// students see only their own score (b.me) + team totals; parents see only
+// their own child's score + team totals. meLabel: "My" (student) or the
+// child's name (parent). Challenge points never touch writing points.
+window.galaBoardHtml = function (b, meLabel) {
+  const progs = b.programs || [];
+  if (!b.setup) return `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h3 style="color:#fff;margin:0">🎉 Twelfth Gala</h3>
+    <p style="color:#d4f0f5;margin:6px 0 0">12 Days • 12 Programs • 2:30–3:30 PM • Friday off</p>
+    <p style="color:#d4f0f5;margin:6px 0 0">The Gala is coming soon! Your teacher will set up the two teams — Team Door and Team Window — and the scoreboard will appear here.</p></div>`
+    + `<h3 style="margin-top:16px">📋 The 12 Programs</h3>` + progs.map(pr =>
+      `<div style="padding:8px 0;border-bottom:1px solid #f1f5f9"><b>Day ${pr.day} — ${esc(pr.name)}</b> <span class="tag">${esc(pr.tag)}</span><div class="muted" style="font-size:.88rem">${esc(pr.concept)}</div></div>`).join("");
+  const tt = b.teamTotals || { Door: 0, Window: 0 };
+  const max = Math.max(tt.Door, tt.Window, 1);
+  const bar = (t, total) => {
+    const col = t === "Door" ? "#0e7c8c" : "#d4a017";
+    return `<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-weight:800">
+      <span>${t === "Door" ? "🚪" : "🪟"} Team ${t}</span><span>${total} pts</span></div>
+      <div style="background:#e8f2f6;height:16px;border-radius:99px;overflow:hidden">
+      <div style="width:${Math.round(total / max * 100)}%;height:100%;background:${col}"></div></div></div>`;
+  };
+  const next = (b.dayTotals || []).find(d => !d.done);
+  const nextProg = next ? progs[next.day - 1] : null;
+  let html = `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h3 style="color:#fff;margin:0">🎉 Twelfth Gala</h3>
+    <p style="color:#d4f0f5;margin:6px 0 0">12 Days • 12 Programs • 2:30–3:30 PM • Friday off • ${b.daysDone || 0} of 12 days done</p></div>
+    <div class="card"><h3>🏆 Team Scores</h3>${bar("Door", tt.Door)}${bar("Window", tt.Window)}</div>`;
+  if (b.me) {
+    const me = b.me;
+    html += `<div class="card"><h3>⭐ ${esc(meLabel)} Score — ${me.team === "Door" ? "🚪 Team Door" : "🪟 Team Window"}</h3>
+      <div style="font-size:2rem;font-weight:800;color:#0b3c46">${me.total} <span style="font-size:1rem">points</span></div>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:.85rem"><tr><th>Day</th><th>Program</th><th>🚪 Door</th><th>🪟 Window</th><th>${esc(meLabel)} pts</th></tr>
+      ${(b.dayTotals || []).map(d => `<tr><td>${d.day}</td><td>${esc(d.program)}</td><td>${d.Door}</td><td>${d.Window}</td><td><b>${me.days[d.day - 1] === null ? "–" : me.days[d.day - 1]}</b></td></tr>`).join("")}</table></div></div>`;
+  } else if (b.isCoordinator) {
+    html += `<div class="card"><p>🎤 <b>${esc(meLabel)} ${meLabel === "My" ? "are" : "is"} the coordinator</b> — you help run the Gala, so you do not play. The team scores are above. 👏</p></div>`;
+  } else {
+    html += `<div class="card"><p class="muted">${esc(meLabel)} ${meLabel === "My" ? "are" : "is"} not playing in the Gala this time — cheer for your team! 📣</p></div>`;
+  }
+  if (nextProg) html += `<div class="card"><h3>⏭️ Next: Day ${nextProg.day} — ${esc(nextProg.name)}</h3><p class="muted">${esc(nextProg.concept)}</p></div>`;
+  else html += `<div class="card"><h3>🎉 All 12 days done!</h3><p class="muted">The Twelfth Gala is complete — well played, everyone! 👏</p></div>`;
+  html += `<div class="card"><h3>📋 The 12 Programs</h3>` + progs.map(pr =>
+    `<div style="padding:8px 0;border-bottom:1px solid #f1f5f9"><b>Day ${pr.day} — ${esc(pr.name)}</b> <span class="tag">${esc(pr.tag)}</span><div class="muted" style="font-size:.88rem">${esc(pr.concept)}</div></div>`).join("") + `</div>`;
+  return html;
+};
 // Voice notes: tap 🎤 to start recording, tap ⏹ to stop and send. Max 60 seconds
 // (keeps the recording under the 1.5MB message size limit).
 let __voice = null; // {rec, btn, onDone, timer}

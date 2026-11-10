@@ -40,6 +40,7 @@
   <button class="tile" onclick="openDashSec('wow',this)"><span class="tile-circ">🌟</span><span class="tile-t">Writer of the Week</span><span class="tile-n" id="tc-wow">…</span></button>
   <button class="tile" onclick="openDashSec('champ',this)"><span class="tile-circ">🎓</span><span class="tile-t">Our Champions</span><span class="tile-n" id="tc-champ">…</span></button>
   <button class="tile" onclick="openDashSec('works',this)"><span class="tile-circ">✅</span><span class="tile-t">My Approved Works</span><span class="tile-n" id="tc-works">…</span></button>
+  <button class="tile" onclick="openDashSec('gala',this)"><span class="tile-circ">🎉</span><span class="tile-t">Twelfth Gala</span><span class="tile-n" id="tc-gala">…</span></button>
   <button class="tile" onclick="openDashSec('msgs',this)"><span class="tile-circ">💬</span><span class="tile-t">Messages</span><span class="tile-n" id="tc-msgs">…</span></button>
   <button class="tile" onclick="openDashSec('diary',this)"><span class="tile-circ">🏖️</span><span class="tile-t">Holiday Diary</span><span class="tile-n" id="tc-diary">…</span></button>
   <button class="tile" onclick="openDashSec('cert',this)"><span class="tile-circ">📜</span><span class="tile-t">My Certificate</span><span class="tile-n" id="tc-cert">…</span></button>
@@ -54,6 +55,7 @@
   <div class="dsec" id="sec-wow" style="display:none"><h2>🌟 Writer of the Week</h2><div id="wow"></div></div>
   <div class="dsec" id="sec-champ" style="display:none"><h2>🎓 Our Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-works" style="display:none"><h2>✅ Your Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
+  <div class="dsec" id="sec-gala" style="display:none"><h2>🎉 Twelfth Gala</h2><div id="galabody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-msgs" style="display:none"><h2 id="msgs-h2">💬 Messages from Teacher</h2><div id="mymsgs"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-diary" style="display:none"><div id="diarycard"></div></div>
   <div class="dsec" id="sec-cert" style="display:none"><div id="compcert"></div></div>
@@ -375,6 +377,12 @@ function allWorksHtml(works) {
       `<p class="muted">${ch.completed_count} of ${ch.total_students} boys finished all ${ch.total_tasks} Learning Tasks. 🎓</p>` +
       window.championsListHtml(ch.champions, false, NEXTUP && NEXTUP.completion_next);
   } catch (e) { document.getElementById("champions").innerHTML = ""; }
+  // Twelfth Gala — my score + team totals (other boys' scores stay private)
+  try {
+    const gb = await api("GET", "/api/gala/board");
+    setTc("tc-gala", gb.setup ? (gb.me ? gb.me.total + " pts · " + gb.me.team : "Door " + gb.teamTotals.Door + " — Window " + gb.teamTotals.Window) : "Coming soon");
+    document.getElementById("galabody").innerHTML = window.galaBoardHtml(gb, "My");
+  } catch (e) { document.getElementById("galabody").innerHTML = ""; }
   // My marks
   try {
     const md = await api("GET", "/api/my/marks");

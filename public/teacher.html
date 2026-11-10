@@ -23,7 +23,7 @@
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["diary","🏖️ Holiday Diary"],
   ["checklist","📋 Checklist"],
   ["letterfb","💌 Letter Feedback"],
-  ["challenges","🎯 Challenges"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
+  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
   ["messages","💬 Little Hands Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
@@ -42,6 +42,7 @@ const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width
   points: '<svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.7 6.6 19.8l1.1-6.1L3.2 9.4l6.1-.8L12 3z"/></svg>',
   books: '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13M9 7h6"/></svg>',
   challenges: '<svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a2 2 0 0 0 2 4h1M17 6h3a2 2 0 0 1-2 4h-1"/></svg>',
+  gala: '<svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="5"/><path d="M12 4.5l1.1 2.6 2.8.3-2 2 .5 2.8-2.4-1.4-2.4 1.4.5-2.8-2-2 2.8-.3L12 4.5z"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/></svg>',
   marks: '<svg viewBox="0 0 24 24"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/><path d="M14 6l4 4"/></svg>',
   finance: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>',
   tasks: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 15h4"/></svg>',
@@ -51,7 +52,7 @@ const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width
   activity: '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
   account: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>' };
 // Main tiles first, then the smaller "More" tiles.
-const TILE_MAIN = ["approvals", "diary", "checklist", "letterfb", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "marks", "finance"];
+const TILE_MAIN = ["approvals", "diary", "checklist", "letterfb", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "gala", "marks", "finance"];
 const TILE_MORE = ["tasks", "wow", "notices", "settings", "activity", "account"];
 // Deep link: /teacher.html#messages opens the Messages tab (used by the 🔔 bell).
 if (location.hash === "#messages") cur = "messages";
@@ -98,13 +99,14 @@ async function updateTileCounts(o) {
   set("students", o.students + " boys");
   set("parents", o.students + " parents");
   try {
-    const [m, l, d, b, c, lf] = await Promise.allSettled([
+    const [m, l, d, b, c, lf, g] = await Promise.allSettled([
       api("GET", "/api/teacher/messages"),
       api("GET", "/api/teacher/learning-progress"),
       api("GET", "/api/teacher/holiday-diary"),
       api("GET", "/api/books"),
       api("GET", "/api/teacher/checklists"),
       api("GET", "/api/teacher/letter-feedback"),
+      api("GET", "/api/gala/board"),
     ]);
     if (m.status === "fulfilled") {
       const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
@@ -126,6 +128,12 @@ async function updateTileCounts(o) {
       dot("approvals", (o.pending + pend) > 0);
     }
     if (b.status === "fulfilled") set("books", (b.value.books || []).length + " books");
+    if (g.status === "fulfilled") {
+      const gb = g.value;
+      set("gala", (gb.players || []).length
+        ? `${gb.daysDone || 0} of 12 days · Door ${gb.teamTotals.Door} — Window ${gb.teamTotals.Window}`
+        : "Set up the teams");
+    }
     if (lf.status === "fulfilled") {
       const s = lf.value.summary || {};
       set("letterfb", (s.parents_ticked || 0) + " / " + (s.total || 38) + " ticked");
@@ -150,7 +158,7 @@ async function render() {
   // not when the tab opens — see vMessages.
   document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges,
+  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
@@ -1002,6 +1010,165 @@ async function vChallenges(p) {
       await api("POST", `/api/teacher/challenge-entry/${db2.dataset.done}/complete`); toast("Completed! Points awarded."); render();
     });
   });
+}
+
+// ── Twelfth Gala (Samad, Nov 2026) ──────────────────────────────
+// 12 days, 12 programs, 2:30–3:30 PM, Friday off. 28 boys play + 1
+// coordinator. Challenge points are SEPARATE from writing points — they
+// never touch the Points Board, clubs or certificates.
+let galaSub = "setup", galaDay = 1;
+async function vGala(p) {
+  const [setup, board] = await Promise.all([
+    api("GET", "/api/teacher/gala/setup"),
+    api("GET", "/api/gala/board"),
+  ]);
+  const students = setup.students || [];
+  const savedSetup = setup.setup || [];
+  const hasSetup = savedSetup.some(r => !r.is_coordinator);
+  const byId = {};
+  savedSetup.forEach(r => { byId[r.student_id] = r; });
+  // Default (first time, no setup saved yet): the first 28 in roster order
+  // play, alternating Door/Window starting with Door; the 29th boy is the
+  // coordinator — exactly the demo's sample. Samad can change all of it.
+  const defPlayers = {}, defCoord = students.length > 28 ? students[28].id : null;
+  students.slice(0, 28).forEach((s, i) => { defPlayers[s.id] = i % 2 === 0 ? "Door" : "Window"; });
+  const isPlayer = (s) => hasSetup ? !!byId[s.id] && !byId[s.id].is_coordinator : !!defPlayers[s.id];
+  const teamOf = (s) => hasSetup ? (byId[s.id] ? byId[s.id].team : "Door") : (defPlayers[s.id] || "Door");
+  const isCoord = (s) => hasSetup ? !!byId[s.id] && !!byId[s.id].is_coordinator : s.id === defCoord;
+  const players = board.players || [];
+  const coord = board.coordinator;
+  const nextDay = (board.dayTotals || []).find(d => !d.done);
+  if (galaDay < 1 || galaDay > 12) galaDay = 1;
+  const teamBar = (t, total) => {
+    const max = Math.max(board.teamTotals.Door, board.teamTotals.Window, 1);
+    const col = t === "Door" ? "#0e7c8c" : "#d4a017";
+    return `<div style="margin:10px 0"><div style="display:flex;justify-content:space-between;font-weight:800">
+      <span>${t === "Door" ? "🚪" : "🪟"} Team ${t}</span><span>${total} pts</span></div>
+      <div style="background:#e8f2f6;height:16px;border-radius:99px;overflow:hidden">
+      <div style="width:${Math.round(total / max * 100)}%;height:100%;background:${col}"></div></div></div>`;
+  };
+  const subBtn = (k, label) => `<button class="btn small ${galaSub === k ? "" : "ghost"}" data-gsub="${k}">${label}</button>`;
+  let html = `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h2 style="color:#fff;margin:0">🎉 Twelfth Gala</h2>
+    <p style="margin:6px 0 0;color:#d4f0f5">12 Days • 12 Programs • 2:30–3:30 PM • Friday off • Every boy plays every day</p>
+    <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">0–10 points per boy per day. Challenge points are separate from writing points — they never touch the Points Board, clubs or certificates.</p></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${subBtn("setup", "⚙️ Setup")}${subBtn("scores", "✏️ Enter Scores")}${subBtn("board", "🏆 Scoreboard")}${subBtn("programs", "📋 Programs")}</div>`;
+
+  if (galaSub === "setup") {
+    const nDoor = students.filter(s => isPlayer(s) && teamOf(s) === "Door").length;
+    const nWin = students.filter(s => isPlayer(s) && teamOf(s) === "Window").length;
+    const nPlay = students.filter(s => isPlayer(s)).length;
+    const coordName = students.find(s => isCoord(s));
+    html += `<div class="card"><h3>⚙️ Teams &amp; Coordinator</h3>
+      <p class="muted">Pick the 28 boys who play (tick the box), give each a team, and pick the coordinator (he does not play). ${hasSetup ? "" : "<b>Default shown: the first 28 in roster order, alternating teams, with the 29th boy as coordinator — change it before Day 1.</b>"} You can change this any time before Day 1. Boys who leave the teams lose their Gala scores.</p>
+      <p><b id="gsetup-count">${nPlay} playing · Team Door ${nDoor} · Team Window ${nWin} · Coordinator: ${coordName ? esc(coordName.display_name) : "—"}</b></p>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>Play</th><th>Boy</th><th>Team</th><th>Coordinator</th></tr>
+      ${students.map(s => `<tr>
+        <td><input type="checkbox" id="gplay-${s.id}" ${isPlayer(s) ? "checked" : ""} style="width:20px;height:20px;accent-color:#0e7c8c"></td>
+        <td><b>${esc(s.display_name)}</b> <span class="muted">(${esc(s.ad_no)})</span></td>
+        <td><select id="gteam-${s.id}" style="padding:6px 8px"><option ${teamOf(s) === "Door" ? "selected" : ""}>Door</option><option ${teamOf(s) === "Window" ? "selected" : ""}>Window</option></select></td>
+        <td><input type="radio" name="gcoord" id="gcoord-${s.id}" value="${s.id}" ${isCoord(s) ? "checked" : ""} style="width:20px;height:20px;accent-color:#d4a017"></td>
+      </tr>`).join("")}</table></div>
+      <button class="btn" id="gala-save-setup" style="margin-top:12px">💾 Save teams &amp; coordinator</button>
+      <span id="gala-setup-msg" class="muted" style="margin-left:8px"></span></div>`;
+  }
+
+  if (galaSub === "scores") {
+    if (!players.length) {
+      html += `<div class="card"><p class="muted">Set up the 28 players first (Setup tab), then enter scores here.</p></div>`;
+    } else {
+      const prog = (board.programs || [])[galaDay - 1] || {};
+      html += `<div class="card"><h3>✏️ Enter Scores — Day ${galaDay}: ${esc(prog.name || "")}</h3>
+        <p class="muted">${esc(prog.concept || "")}</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">${Array.from({ length: 12 }, (_, i) => i + 1).map(d => {
+          const done = (board.dayTotals || [])[d - 1] && board.dayTotals[d - 1].done;
+          return `<button class="btn small ${galaDay === d ? "" : "ghost"}" data-gday="${d}">Day ${d}${done ? " ✓" : ""}</button>`;
+        }).join("")}</div>
+        <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+        <tr><th>Boy</th><th>Team</th><th>Score (0–10)</th></tr>
+        ${players.map(b => `<tr>
+          <td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(b.display_name, b.photo)}</span><b>${esc(b.display_name)}</b></td>
+          <td>${b.team === "Door" ? "🚪 Door" : "🪟 Window"}</td>
+          <td><input type="number" min="0" max="10" step="1" id="gsc-${b.id}" value="${b.days[galaDay - 1] === null ? "" : b.days[galaDay - 1]}" style="width:80px" placeholder="–"></td>
+        </tr>`).join("")}</table></div>
+        <button class="btn" id="gala-save-scores" style="margin-top:12px">💾 Save Day ${galaDay} scores</button>
+        <span id="gala-scores-msg" class="muted" style="margin-left:8px"></span>
+        <p class="muted" style="font-size:.85rem;margin-top:8px">Leave a box empty to clear that boy's score for this day. Saving again overwrites the day.</p></div>`;
+    }
+  }
+
+  if (galaSub === "board") {
+    if (!players.length) {
+      html += `<div class="card"><p class="muted">No teams yet — set them up first (Setup tab). The scoreboard will appear here with empty scores.</p></div>`;
+    } else {
+      const sorted = [...players].sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name));
+      html += `<div class="card"><h3>🏆 Scoreboard — ${board.daysDone} of 12 days done</h3>
+        ${teamBar("Door", board.teamTotals.Door)}${teamBar("Window", board.teamTotals.Window)}
+        <div style="overflow-x:auto"><table style="width:100%;font-size:.82rem"><tr><th>Day</th><th>Program</th><th>🚪 Door</th><th>🪟 Window</th></tr>
+        ${(board.dayTotals || []).map(d => `<tr><td>${d.day}</td><td>${esc(d.program)}</td><td><b>${d.Door}</b></td><td><b>${d.Window}</b></td></tr>`).join("")}</table></div></div>
+      <div class="card"><h3>👦 Boys — most points first</h3>
+        <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem"><tr><th>Boy</th><th>Team</th><th>Total</th><th>Day 1–12</th></tr>
+        ${sorted.map(b => `<tr><td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(b.display_name, b.photo)}</span><b>${esc(b.display_name)}</b></td>
+          <td>${b.team === "Door" ? "🚪 Door" : "🪟 Window"}</td><td><b>${b.total}</b></td>
+          <td>${b.days.map(v => v === null ? "–" : v).join(" · ")}</td></tr>`).join("")}</table></div>
+        ${coord ? `<p class="muted" style="margin-top:10px">🎤 Coordinator: <b>${esc(coord.display_name)}</b> (does not play)</p>` : ""}</div>`;
+    }
+  }
+
+  if (galaSub === "programs") {
+    html += `<div class="card"><h3>📋 The 12 Programs</h3>
+      ${(board.programs || []).map(pr => `<div style="padding:10px 0;border-bottom:1px solid #e2e8f0">
+        <b>Day ${pr.day} — ${esc(pr.name)}</b> <span class="tag">${esc(pr.tag)}</span>
+        <div class="muted" style="font-size:.9rem">${esc(pr.concept)}</div></div>`).join("")}
+      <p class="muted" style="font-size:.85rem;margin-top:10px">All whole-group: all 28 play every day, 60 minutes each, 0–10 points per boy per day. Friday off.</p></div>`;
+  }
+
+  p.innerHTML = html;
+  p.querySelectorAll("[data-gsub]").forEach(b => b.onclick = () => { galaSub = b.dataset.gsub; render(); });
+  p.querySelectorAll("[data-gday]").forEach(b => b.onclick = () => { galaDay = +b.dataset.gday; render(); });
+
+  const updCount = () => {
+    const nPlay = students.filter(s => document.getElementById("gplay-" + s.id).checked).length;
+    const nDoor = students.filter(s => document.getElementById("gplay-" + s.id).checked && document.getElementById("gteam-" + s.id).value === "Door").length;
+    const coordEl = document.querySelector("input[name=gcoord]:checked");
+    const coordName = coordEl ? (students.find(s => s.id === +coordEl.value) || {}).display_name : "—";
+    const el = document.getElementById("gsetup-count");
+    if (el) el.textContent = `${nPlay} playing · Team Door ${nDoor} · Team Window ${nPlay - nDoor} · Coordinator: ${coordName || "—"}`;
+  };
+  students.forEach(s => {
+    const cb = document.getElementById("gplay-" + s.id);
+    const tm = document.getElementById("gteam-" + s.id);
+    const rd = document.getElementById("gcoord-" + s.id);
+    if (cb) cb.onchange = () => { if (cb.checked && rd.checked) rd.checked = false; updCount(); };
+    if (tm) tm.onchange = updCount;
+    if (rd) rd.onchange = () => { const cb2 = document.getElementById("gplay-" + s.id); if (cb2 && cb2.checked) cb2.checked = false; updCount(); };
+  });
+  const saveSetupBtn = document.getElementById("gala-save-setup");
+  if (saveSetupBtn) saveSetupBtn.onclick = async () => {
+    const playersSel = students.filter(s => document.getElementById("gplay-" + s.id).checked)
+      .map(s => ({ student_id: s.id, team: document.getElementById("gteam-" + s.id).value }));
+    const coordEl = document.querySelector("input[name=gcoord]:checked");
+    const msg = document.getElementById("gala-setup-msg");
+    if (playersSel.length > 28) { if (msg) msg.textContent = "At most 28 boys can play — untick some."; return; }
+    if (playersSel.length === 0) { if (msg) msg.textContent = "Tick at least one boy to play."; return; }
+    try {
+      await api("POST", "/api/teacher/gala/setup", { players: playersSel, coordinator_id: coordEl ? +coordEl.value : null });
+      toast("Twelfth Gala teams saved! 🎉"); galaSub = "scores"; if (nextDay) galaDay = nextDay.day; render();
+    } catch (e) { toast(e.message, false); }
+  };
+  const saveScoresBtn = document.getElementById("gala-save-scores");
+  if (saveScoresBtn) saveScoresBtn.onclick = async () => {
+    const scores = players.map(b => {
+      const v = document.getElementById("gsc-" + b.id).value;
+      return { student_id: b.id, points: v === "" ? null : +v };
+    });
+    try {
+      const r = await api("POST", "/api/teacher/gala/scores", { day: galaDay, scores });
+      toast(`Day ${galaDay} scores saved — ${r.saved} boys! ✅`);
+      galaSub = "board"; render();
+    } catch (e) { toast(e.message, false); }
+  };
 }
 
 async function vStudents(p) {
