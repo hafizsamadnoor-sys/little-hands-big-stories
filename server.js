@@ -397,6 +397,24 @@ CREATE TABLE IF NOT EXISTS books (
   pages INTEGER NOT NULL DEFAULT 8,
   created_at TEXT DEFAULT (datetime('now'))
 );
+-- Twelfth Gala (12 days, 12 programs, Nov 2026 — Samad): challenge points
+-- live ONLY here, never in points_log / Points Board / clubs / certificates.
+-- gala_players: the 28 playing boys + team; the coordinator is a student
+-- who is NOT a player (is_coordinator=1, no team row). gala_scores: one
+-- 0-10 score per player per day (Day 1-12 only, no dates).
+CREATE TABLE IF NOT EXISTS gala_players (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  team TEXT NOT NULL CHECK(team IN ('Door','Window')),
+  is_coordinator INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS gala_scores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day INTEGER NOT NULL CHECK(day BETWEEN 1 AND 12),
+  points INTEGER NOT NULL CHECK(points BETWEEN 0 AND 10),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(student_id, day)
+);
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
 
@@ -1507,6 +1525,160 @@ app.post("/api/challenge/:id/enter", requireStudent, (req, res) => {
   res.json({ ok: true, id: r.lastInsertRowid });
 });
 
+// ── Twelfth Gala — 12 days, 12 programs (Samad, Nov 2026) ───────────
+// Challenge points live ONLY in gala_scores — never in points_log, the
+// writing Points Board, Points Clubs or certificates. Privacy: the teacher
+// (and view-only admins) see every boy; a student sees only his own score
+// + the team totals; a parent sees only their own child's score + team totals.
+const GALA_PROGRAMS = [
+  { day: 1, name: "News Collection & Reading", concept: "Bring 1 short news and read 4–5 lines aloud in groups of 7.", tag: "READING" },
+  { day: 2, name: "Story Telling", concept: "Tell a 1-minute story in your group; the best from each group presents.", tag: "SPEAKING" },
+  { day: 3, name: "Book Review", concept: "5 lines: book name, what happened, what I liked, stars.", tag: "READING" },
+  { day: 4, name: "GK Quiz", concept: "20 questions on paper. All 28 answer together in 20 minutes.", tag: "QUIZ" },
+  { day: 5, name: "Story Writing", concept: "8–10 lines on the day's topic; teacher gives the first line.", tag: "WRITING" },
+  { day: 6, name: "History Talk", concept: "Talk 1 minute about a history topic given the day before — an event or a great person.", tag: "HISTORY" },
+  { day: 7, name: "Biography", concept: "Talk 1 minute about a great person — his life, his deeds, one lesson for us.", tag: "SPEAKING" },
+  { day: 8, name: "Story Completion", concept: "Half a story given; write the ending in 10–12 lines.", tag: "WRITING" },
+  { day: 9, name: "Pencil Drawing", concept: "One topic, 30 minutes. Everyone submits a drawing.", tag: "DRAWING" },
+  { day: 10, name: "Letter Writing", concept: "8–10 lines in proper letter format.", tag: "WRITING" },
+  { day: 11, name: "Diary Writing", concept: "8–10 lines: date, what happened, what I learned, how I felt.", tag: "WRITING" },
+  { day: 12, name: "Poem Writing", concept: "8 lines, 4 rhyming pairs, topic given that day.", tag: "WRITING" },
+];
+function galaSetup() {
+  const players = db.prepare(`SELECT gp.student_id AS id, u.display_name, u.ad_no, u.photo, gp.team
+    FROM gala_players gp JOIN users u ON u.id = gp.student_id
+    WHERE gp.is_coordinator = 0 ORDER BY u.display_name`).all();
+  const coord = db.prepare(`SELECT gp.student_id AS id, u.display_name, u.ad_no
+    FROM gala_players gp JOIN users u ON u.id = gp.student_id
+    WHERE gp.is_coordinator = 1 LIMIT 1`).get() || null;
+  return { players, coordinator: coord };
+}
+// Full board numbers, shared by every role — the caller decides which
+// per-boy rows the viewer is allowed to see (see /api/gala/board).
+function galaBoardData() {
+  const { players, coordinator } = galaSetup();
+  const ids = players.map(p => p.id);
+  const scoresByBoy = {};
+  if (ids.length) {
+    const rows = db.prepare(`SELECT student_id, day, points FROM gala_scores
+      WHERE student_id IN (${ids.map(() => "?").join(",")})`).all(...ids);
+    for (const r of rows) (scoresByBoy[r.student_id] = scoresByBoy[r.student_id] || {})[r.day] = r.points;
+  }
+  const boyRows = players.map(p => {
+    const days = [];
+    let total = 0;
+    for (let d = 1; d <= 12; d++) {
+      const v = (scoresByBoy[p.id] || {})[d];
+      days.push(v === undefined ? null : v);
+      total += v || 0;
+    }
+    return { id: p.id, display_name: p.display_name, ad_no: p.ad_no, photo: p.photo, team: p.team, total, days };
+  });
+  const teamTotal = t => boyRows.filter(b => b.team === t).reduce((a, b) => a + b.total, 0);
+  const dayTotals = [];
+  let daysDone = 0;
+  for (let d = 1; d <= 12; d++) {
+    const done = boyRows.some(b => b.days[d - 1] !== null);
+    if (done) daysDone++;
+    dayTotals.push({ day: d, program: GALA_PROGRAMS[d - 1].name,
+      Door: boyRows.filter(b => b.team === "Door").reduce((a, b) => a + (b.days[d - 1] || 0), 0),
+      Window: boyRows.filter(b => b.team === "Window").reduce((a, b) => a + (b.days[d - 1] || 0), 0),
+      done });
+  }
+  return { players: boyRows, coordinator, teamTotals: { Door: teamTotal("Door"), Window: teamTotal("Window") },
+    dayTotals, daysDone, programs: GALA_PROGRAMS };
+}
+// Role-scoped board: teacher/admins see every boy; students see only
+// themselves; parents see only their own child. Team totals are public
+// to everyone who is logged in.
+app.get("/api/gala/board", requireLogin, (req, res) => {
+  const data = galaBoardData();
+  const role = req.user.role;
+  if (role === "teacher" || isAdminRole(role)) return res.json({ ...data, view: "teacher", setup: data.players.length > 0 });
+  let meId = null;
+  if (role === "student") meId = req.user.id;
+  else if (role === "parent") {
+    const me = db.prepare("SELECT parent_of FROM users WHERE id=?").get(req.user.id);
+    meId = me ? me.parent_of : null;
+  } else {
+    return res.json({ ...data, players: [], view: "guest", me: null });
+  }
+  const me = data.players.find(b => b.id === meId) || null;
+  const coordRow = meId ? db.prepare("SELECT is_coordinator FROM gala_players WHERE student_id=?").get(meId) : null;
+  res.json({ coordinator: data.coordinator, teamTotals: data.teamTotals, dayTotals: data.dayTotals,
+    daysDone: data.daysDone, programs: data.programs, players: [], view: role, me,
+    setup: data.players.length > 0,
+    isCoordinator: coordRow ? coordRow.is_coordinator === 1 : false });
+});
+// Teacher: setup form data — all 38 students + current Gala setup.
+app.get("/api/teacher/gala/setup", requireTeacher, (req, res) => {
+  const students = db.prepare(`SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY CAST(ad_no AS INTEGER)`).all();
+  const setup = db.prepare("SELECT student_id, team, is_coordinator FROM gala_players").all();
+  res.json({ students, setup });
+});
+// Teacher: save the Gala setup — 28 players (team Door/Window) + 1 coordinator.
+// Replaces the whole setup. Scores of boys who stop being players are removed.
+app.post("/api/teacher/gala/setup", requireTeacher, (req, res) => {
+  const body = req.body || {};
+  const players = Array.isArray(body.players) ? body.players : [];
+  const coordinatorId = body.coordinator_id ? Number(body.coordinator_id) : null;
+  if (players.length > 28) return res.status(400).json({ error: "At most 28 boys can play." });
+  const ids = new Set();
+  for (const p of players) {
+    const sid = Number(p.student_id);
+    if (!sid || ids.has(sid)) return res.status(400).json({ error: "Each boy can be picked only once." });
+    if (p.team !== "Door" && p.team !== "Window") return res.status(400).json({ error: "Each player needs a team: Door or Window." });
+    const s = db.prepare("SELECT id FROM users WHERE id=? AND role='student'").get(sid);
+    if (!s) return res.status(400).json({ error: "Unknown student in the list." });
+    ids.add(sid);
+  }
+  if (coordinatorId) {
+    if (ids.has(coordinatorId)) return res.status(400).json({ error: "The coordinator does not play — pick a boy who is not in the 28." });
+    const s = db.prepare("SELECT id FROM users WHERE id=? AND role='student'").get(coordinatorId);
+    if (!s) return res.status(400).json({ error: "Unknown coordinator." });
+  }
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM gala_players").run();
+    const ins = db.prepare("INSERT INTO gala_players (student_id, team, is_coordinator) VALUES (?,?,0)");
+    for (const p of players) ins.run(Number(p.student_id), p.team);
+    if (coordinatorId) db.prepare("INSERT INTO gala_players (student_id, team, is_coordinator) VALUES (?, 'Door', 1)").run(coordinatorId);
+    db.prepare(`DELETE FROM gala_scores WHERE student_id NOT IN (SELECT student_id FROM gala_players WHERE is_coordinator = 0)`).run();
+    db.exec("COMMIT");
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save the setup." }); }
+  logActivity(req.user.id, "teacher", "gala_setup", `${players.length} players, coordinator ${coordinatorId || "none"}`);
+  res.json({ ok: true, ...galaSetup() });
+});
+// Teacher: save one day's scores (0–10 per player; blank clears). One Save.
+app.post("/api/teacher/gala/scores", requireTeacher, (req, res) => {
+  const body = req.body || {};
+  const day = Number(body.day);
+  if (!Number.isInteger(day) || day < 1 || day > 12) return res.status(400).json({ error: "Day must be 1–12." });
+  const scores = Array.isArray(body.scores) ? body.scores : [];
+  const playerIds = new Set(db.prepare("SELECT student_id FROM gala_players WHERE is_coordinator = 0").all().map(r => r.student_id));
+  if (!playerIds.size) return res.status(400).json({ error: "Set up the 28 players first (Twelfth Gala → Setup)." });
+  const upsert = db.prepare(`INSERT INTO gala_scores (student_id, day, points, updated_at)
+    VALUES (?,?,?, datetime('now'))
+    ON CONFLICT(student_id, day) DO UPDATE SET points = excluded.points, updated_at = datetime('now')`);
+  const clear = db.prepare("DELETE FROM gala_scores WHERE student_id=? AND day=?");
+  db.exec("BEGIN");
+  try {
+    let saved = 0;
+    for (const s of scores) {
+      const sid = Number(s.student_id);
+      if (!playerIds.has(sid)) continue; // only players can be scored
+      if (s.points === null || s.points === "" || s.points === undefined) { clear.run(sid, day); continue; }
+      const pts = Number(s.points);
+      if (!Number.isInteger(pts) || pts < 0 || pts > 10) { db.exec("ROLLBACK"); return res.status(400).json({ error: "Scores must be whole numbers from 0 to 10." }); }
+      upsert.run(sid, day, pts);
+      saved++;
+    }
+    db.exec("COMMIT");
+    logActivity(req.user.id, "teacher", "gala_scores", `Day ${day}: ${saved} scores saved`);
+    res.json({ ok: true, saved, board: galaBoardData() });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} res.status(500).json({ error: "Could not save the scores." }); }
+});
+
 // ── Points board, authors, writer of week, badges ─────────────
 app.get("/api/points-board", requireLogin, (req, res) => {
   const period = req.query.period === "month" ? "month" : "all";
@@ -2089,7 +2261,8 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "challenges","challenge_entries","writer_of_week","point_settings","books",
   "learning_tasks","learning_task_done","completion_certs","completion_exams","student_marks",
   "messages","notices","notice_reads","finance_entries","general_expenses","app_settings",
-  "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback","letter_feedback_locks"];
+  "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback","letter_feedback_locks",
+  "gala_players","gala_scores"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
