@@ -11,6 +11,7 @@ const fs = require("fs");
 const PDFDocument = require("pdfkit");
 const { DatabaseSync } = require("node:sqlite");
 const STUDENTS = require("./students");
+const MAP_GAME = require("./map-game-data");
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -415,6 +416,120 @@ CREATE TABLE IF NOT EXISTS gala_scores (
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(student_id, day)
 );
+-- Bidaya Map Study game (BNS31, Nov 2026 — Samad): game scores live ONLY
+-- here, never in points_log / Points Board / clubs / certificates.
+-- map_game_players: which boys may play (Faaz first; add more later).
+-- map_game_attempts: one row per finished Round-1 stage play (score out of 10).
+-- map_game_answers: one row per Round-1 question answered (Q + given + correct).
+-- map_game_progress: per-boy cache — highest stage unlocked, totals.
+-- map_game_revisions: teacher-set revision slots for weak sections.
+-- map_game_key_status: latest right/wrong per boy per question key —
+--   the single source of truth for coverage (seen keys) and the
+--   mistakes revision queue (keys last answered wrong).
+-- map_game_round2_attempts / map_game_round2_answers: Round 2 (no-options
+--   typing round) plays, tracked separately from Round 1.
+-- map_game_revision_answers: mistakes-revision plays (only wrong
+--   questions, repeated until right); stored separately from stage scores.
+CREATE TABLE IF NOT EXISTS map_game_players (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  added_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS map_game_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stage INTEGER NOT NULL CHECK(stage BETWEEN 1 AND 8),
+  level TEXT NOT NULL CHECK(level IN ('easy','medium','hard')),
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS map_game_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES map_game_attempts(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stage INTEGER NOT NULL,
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  is_map INTEGER NOT NULL DEFAULT 0,
+  map_kind TEXT DEFAULT '',
+  map_place TEXT DEFAULT '',
+  map_where TEXT DEFAULT '',
+  map_note TEXT DEFAULT '',
+  point TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS map_game_progress (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  highest_unlocked INTEGER NOT NULL DEFAULT 1,
+  total_attempts INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS map_game_revisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stage INTEGER NOT NULL CHECK(stage BETWEEN 1 AND 8),
+  revise_date TEXT NOT NULL,
+  start_time TEXT NOT NULL,
+  minutes INTEGER NOT NULL DEFAULT 20,
+  note TEXT DEFAULT '',
+  done INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS map_game_key_status (
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  question_key TEXT NOT NULL,
+  stage INTEGER NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (student_id, question_key)
+);
+CREATE TABLE IF NOT EXISTS map_game_round2_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stage INTEGER NOT NULL CHECK(stage BETWEEN 1 AND 8),
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS map_game_round2_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES map_game_round2_attempts(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stage INTEGER NOT NULL,
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  is_map INTEGER NOT NULL DEFAULT 0,
+  map_kind TEXT DEFAULT '',
+  map_place TEXT DEFAULT '',
+  map_where TEXT DEFAULT '',
+  map_note TEXT DEFAULT '',
+  point TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS map_game_revision_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  stage INTEGER NOT NULL,
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  is_map INTEGER NOT NULL DEFAULT 0,
+  map_kind TEXT DEFAULT '',
+  map_place TEXT DEFAULT '',
+  map_where TEXT DEFAULT '',
+  map_note TEXT DEFAULT '',
+  point TEXT NOT NULL DEFAULT '',
+  session_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
 
@@ -500,6 +615,14 @@ function seedParentUsers() {
   } catch (e) { console.log("Parent seeding:", e.message); }
 }
 seedParentUsers();
+// Map Study game: Faaz (Ad 494, BNS31) is the only player for now.
+// Other boys are added later by the teacher (Teacher Panel → Map Study Game).
+(function seedMapGamePlayers() {
+  try {
+    const faaz = db.prepare("SELECT id FROM users WHERE role='student' AND (ad_no='494' OR display_name LIKE '%FAAZ%')").get();
+    if (faaz) db.prepare("INSERT OR IGNORE INTO map_game_players (student_id) VALUES (?)").run(faaz.id);
+  } catch (e) { console.log("Map game seeding:", e.message); }
+})();
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
@@ -1679,6 +1802,677 @@ app.post("/api/teacher/gala/scores", requireTeacher, (req, res) => {
   } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} res.status(500).json({ error: "Could not save the scores." }); }
 });
 
+// ── Bidaya Map Study game (BNS31) ────────────────────────────
+// Anytime play, stage-by-stage: 8 stages in order, Stage N+1 unlocks
+// only after Stage N is passed (6/10). Game scores are separate from
+// writing points — nothing here touches points_log, awardPoints,
+// the Points Board, clubs or certificates.
+const mapGameStage = (n) => MAP_GAME.MAP_GAME_STAGES.find(s => s.n === n) || null;
+const mapGameIsPlayer = (sid) => !!db.prepare("SELECT 1 FROM map_game_players WHERE student_id=?").get(sid);
+function mapGameUnlocked(sid) {
+  const row = db.prepare("SELECT MAX(stage) AS m FROM map_game_attempts WHERE student_id=? AND score>=?").get(sid, MAP_GAME.MAP_GAME_PASS_MARK);
+  return Math.min(8, (row && row.m ? row.m : 0) + 1);
+}
+function mapGameRefreshProgress(sid) {
+  const unlocked = mapGameUnlocked(sid);
+  const total = db.prepare("SELECT COUNT(*) c FROM map_game_attempts WHERE student_id=?").get(sid).c;
+  db.prepare(`INSERT INTO map_game_progress (student_id, highest_unlocked, total_attempts, updated_at)
+    VALUES (?,?,?, datetime('now'))
+    ON CONFLICT(student_id) DO UPDATE SET highest_unlocked=excluded.highest_unlocked, total_attempts=excluded.total_attempts, updated_at=datetime('now')`)
+    .run(sid, unlocked, total);
+  return { highest_unlocked: unlocked, total_attempts: total };
+}
+// Round 2 typed-answer check: case-insensitive, trimmed, extra
+// spaces/punctuation ignored; plus the question's `accept` aliases.
+function mapGameNorm(s) {
+  return String(s == null ? "" : s).toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+function mapGameTypedOk(q, given) {
+  const g = mapGameNorm(given);
+  if (!g) return false;
+  if (g === mapGameNorm(q.typed || q.answer)) return true;
+  return (q.accept || []).some(a => g === mapGameNorm(a));
+}
+// Latest right/wrong per question key (coverage + revision queue).
+function mapGameTouchKey(sid, stage, key, isCorrect) {
+  db.prepare(`INSERT INTO map_game_key_status (student_id, question_key, stage, is_correct, updated_at)
+    VALUES (?,?,?, ?, datetime('now'))
+    ON CONFLICT(student_id, question_key) DO UPDATE SET is_correct=excluded.is_correct, stage=excluded.stage, updated_at=datetime('now')`)
+    .run(sid, key, stage, isCorrect ? 1 : 0);
+}
+// Full bank by key, for the revision queue.
+const MAP_GAME_BANK_BY_KEY = (() => {
+  const m = new Map();
+  for (const st of MAP_GAME.MAP_GAME_STAGES)
+    for (const q of MAP_GAME.MAP_GAME_QUESTIONS[st.n] || []) m.set(q.key, { ...q, stage: st.n });
+  return m;
+})();
+// Mistakes revision queue: keys whose LATEST answer (any mode) is wrong.
+// A question leaves the queue when it is next answered correctly.
+function mapGameRevisionInfo(sid) {
+  const wrongKeys = db.prepare("SELECT question_key, stage FROM map_game_key_status WHERE student_id=? AND is_correct=0 ORDER BY stage, question_key").all(sid);
+  const queue = wrongKeys.map(r => MAP_GAME_BANK_BY_KEY.get(r.question_key)).filter(Boolean);
+  const everWrongRows = db.prepare(`SELECT question_key FROM map_game_answers WHERE student_id=? AND is_correct=0
+    UNION SELECT question_key FROM map_game_round2_answers WHERE student_id=? AND is_correct=0
+    UNION SELECT question_key FROM map_game_revision_answers WHERE student_id=? AND is_correct=0`).all(sid, sid, sid);
+  const correctKeys = new Set(db.prepare("SELECT question_key FROM map_game_key_status WHERE student_id=? AND is_correct=1").all(sid).map(r => r.question_key));
+  const cleared = everWrongRows.filter(r => correctKeys.has(r.question_key)).length;
+  return { queue, count: queue.length, cleared, everWrong: everWrongRows.length };
+}
+// Draw N questions for a stage: UNSEEN first, then past mistakes, then
+// review — so repeated plays cover new ground instead of the same 10.
+function mapGameDraw(sid, n, count) {
+  const bank = MAP_GAME.MAP_GAME_QUESTIONS[n] || [];
+  const rows = db.prepare("SELECT question_key, is_correct FROM map_game_key_status WHERE student_id=? AND stage=?").all(sid, n);
+  const seen = new Set(rows.map(r => r.question_key));
+  const mistakes = new Set(rows.filter(r => !r.is_correct).map(r => r.question_key));
+  const shuf = (a) => { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
+  const unseen = shuf(bank.filter(q => !seen.has(q.key)));
+  const wrong = shuf(bank.filter(q => mistakes.has(q.key)));
+  const review = shuf(bank.filter(q => seen.has(q.key) && !mistakes.has(q.key)));
+  const picked = [...unseen, ...wrong, ...review].slice(0, count);
+  return shuf(picked); // mix the order within the play
+}
+// Round 2 unlocks only after ALL 8 Round-1 stages are passed.
+function mapGameRound2Status(sid) {
+  const perStage = mapGamePerStage(sid);
+  const unlocked = perStage.every(s => s.passed);
+  const atts = db.prepare("SELECT * FROM map_game_round2_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  return { unlocked, stages: perStage.map(s => {
+    const r2 = atts.filter(a => a.stage === s.n);
+    const best = r2.length ? Math.max(...r2.map(a => a.score)) : null;
+    return { n: s.n, title: s.title, icon: s.icon, locked: !unlocked,
+      attempts: r2.length, best,
+      pct: best === null ? null : Math.round(best / MAP_GAME.MAP_GAME_PLAY_COUNT * 100) };
+  }) };
+}
+function mapGamePerStage(sid) {
+  const attempts = db.prepare("SELECT * FROM map_game_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  const r2atts = db.prepare("SELECT * FROM map_game_round2_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  const unlocked = mapGameUnlocked(sid);
+  const PLAY = MAP_GAME.MAP_GAME_PLAY_COUNT;
+  return MAP_GAME.MAP_GAME_STAGES.map(st => {
+    const atts = attempts.filter(a => a.stage === st.n);
+    const total = PLAY; // one play = 10 questions, whatever the pool size
+    const poolTotal = (MAP_GAME.MAP_GAME_QUESTIONS[st.n] || []).length;
+    const seen = db.prepare("SELECT COUNT(*) c FROM map_game_key_status WHERE student_id=? AND stage=?").get(sid, st.n).c;
+    const coveragePct = poolTotal ? Math.round(seen / poolTotal * 100) : 0;
+    const best = atts.length ? Math.max(...atts.map(a => a.score)) : null;
+    const latest = atts.length ? atts[0].score : null;
+    const pct = best === null ? null : Math.round(best / total * 100);
+    const r2 = r2atts.filter(a => a.stage === st.n);
+    const r2best = r2.length ? Math.max(...r2.map(a => a.score)) : null;
+    return { n: st.n, key: st.key, icon: st.icon, title: st.title, desc: st.desc,
+      attempts: atts.length, best, latest, total, pct,
+      poolTotal, seen, coveragePct,
+      round2: { best: r2best, attempts: r2.length,
+        pct: r2best === null ? null : Math.round(r2best / total * 100) },
+      locked: st.n > unlocked,
+      passed: best !== null && best >= MAP_GAME.MAP_GAME_PASS_MARK,
+      weak: pct !== null && pct < 60, strong: pct !== null && pct >= 80 };
+  });
+}
+function mapGameRevisionsFor(sid) {
+  return db.prepare("SELECT * FROM map_game_revisions WHERE student_id=? ORDER BY revise_date, start_time").all(sid);
+}
+// Every wrong answer ever, from all three modes, for the total summary
+// and the wrong-answers PDF. `mode` is Round 1 / Round 2 / Revision.
+function mapGameAllWrongAnswers(sid) {
+  return db.prepare(`
+    SELECT question_key, stage, question, given_answer, correct_answer, is_correct, is_map, map_kind, map_place, map_where, map_note, point, created_at, 'Round 1' AS mode FROM map_game_answers WHERE student_id=? AND is_correct=0
+    UNION ALL SELECT question_key, stage, question, given_answer, correct_answer, is_correct, is_map, map_kind, map_place, map_where, map_note, point, created_at, 'Round 2' AS mode FROM map_game_round2_answers WHERE student_id=? AND is_correct=0
+    UNION ALL SELECT question_key, stage, question, given_answer, correct_answer, is_correct, is_map, map_kind, map_place, map_where, map_note, point, created_at, 'Revision' AS mode FROM map_game_revision_answers WHERE student_id=? AND is_correct=0
+    ORDER BY stage, created_at`).all(sid, sid, sid);
+}
+function mapGameSummary(sid) {
+  const stu = db.prepare("SELECT id, display_name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!stu) return null;
+  const attempts = db.prepare("SELECT * FROM map_game_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  const r2Attempts = db.prepare("SELECT * FROM map_game_round2_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  const wrong = mapGameAllWrongAnswers(sid);
+  const perStage = mapGamePerStage(sid);
+  const totalQ = attempts.reduce((a, x) => a + x.total, 0);
+  const totalRight = attempts.reduce((a, x) => a + x.score, 0);
+  const r2Q = r2Attempts.reduce((a, x) => a + x.total, 0);
+  const r2Right = r2Attempts.reduce((a, x) => a + x.score, 0);
+  const rev = mapGameRevisionInfo(sid);
+  return { student: stu, attempts, r2Attempts, perStage, wrongAnswers: wrong,
+    round2: mapGameRound2Status(sid),
+    revision: { count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong },
+    totals: { attempts: attempts.length, questions: totalQ, correct: totalRight,
+      pct: totalQ ? Math.round(totalRight / totalQ * 100) : null,
+      weakStages: perStage.filter(s => s.weak).map(s => s.n),
+      strongStages: perStage.filter(s => s.strong).map(s => s.n) },
+    r2Totals: { attempts: r2Attempts.length, questions: r2Q, correct: r2Right,
+      pct: r2Q ? Math.round(r2Right / r2Q * 100) : null } };
+}
+// Student: my stages (locked/unlocked, best scores, coverage) + my
+// revision slots + revision queue + Round 2 status.
+app.get("/api/map-game/stages", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  const unlocked = mapGameUnlocked(req.user.id);
+  const rev = mapGameRevisionInfo(req.user.id);
+  res.json({ stages: mapGamePerStage(req.user.id), unlocked,
+    passMark: MAP_GAME.MAP_GAME_PASS_MARK, revisions: mapGameRevisionsFor(req.user.id),
+    revisionQueue: { count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong },
+    round2: mapGameRound2Status(req.user.id) });
+});
+app.get("/api/my/map-game", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.json({ isPlayer: false });
+  const revs = mapGameRevisionsFor(req.user.id);
+  const rev = mapGameRevisionInfo(req.user.id);
+  res.json({ isPlayer: true, stages: mapGamePerStage(req.user.id),
+    unlocked: mapGameUnlocked(req.user.id), revisions: revs,
+    nextRevision: revs.find(r => !r.done) || null,
+    revisionQueue: { count: rev.count, cleared: rev.cleared },
+    round2: mapGameRound2Status(req.user.id) });
+});
+// Student: draw 10 questions for one stage — UNSEEN first, then past
+// mistakes, then review. Correct answers are NEVER sent — the client
+// only gets the question + 4 options. Hints are sent on Easy/Medium
+// only; Hard shows no hint.
+app.get("/api/map-game/stage/:n/questions", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  const n = Number(req.params.n);
+  const st = mapGameStage(n);
+  if (!st) return res.status(404).json({ error: "No such stage." });
+  const unlocked = mapGameUnlocked(req.user.id);
+  if (n > unlocked) return res.status(403).json({ error: `Finish Stage ${unlocked} first — then Stage ${n} opens.` });
+  const level = ["easy", "medium", "hard"].includes(req.query.level) ? req.query.level : "easy";
+  const drawn = mapGameDraw(req.user.id, n, MAP_GAME.MAP_GAME_PLAY_COUNT);
+  const poolTotal = (MAP_GAME.MAP_GAME_QUESTIONS[n] || []).length;
+  const seen = db.prepare("SELECT COUNT(*) c FROM map_game_key_status WHERE student_id=? AND stage=?").get(req.user.id, n).c;
+  const qs = drawn.map(q => ({
+    key: q.key, q: q.q, options: q.options, level: q.level, is_map: !!q.map,
+    hint: level === "hard" ? null : (q.hint || null),
+  }));
+  res.json({ stage: st, level, timePerQ: MAP_GAME.MAP_GAME_TIME_PER_Q[level], questions: qs,
+    coverage: { seen, total: poolTotal, pct: poolTotal ? Math.round(seen / poolTotal * 100) : 0 } });
+});
+// Student: submit one finished stage play (10 drawn questions).
+// Body: { level, answers: [{ key, given }] }. Re-checks the stage lock
+// server-side, scores against the bank, and stores the attempt + every
+// answer. Game points are stored here only — never in points_log.
+app.post("/api/map-game/stage/:n/attempt", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  const n = Number(req.params.n);
+  const st = mapGameStage(n);
+  if (!st) return res.status(404).json({ error: "No such stage." });
+  const unlocked = mapGameUnlocked(req.user.id);
+  if (n > unlocked) return res.status(403).json({ error: `Finish Stage ${unlocked} first — then Stage ${n} opens.` });
+  const level = (req.body && req.body.level) || "easy";
+  if (!["easy", "medium", "hard"].includes(level)) return res.status(400).json({ error: "Level must be easy, medium or hard." });
+  const bank = MAP_GAME.MAP_GAME_QUESTIONS[n] || [];
+  const byKey = new Map(bank.map(q => [q.key, q]));
+  const given = (req.body && req.body.answers) || [];
+  if (!Array.isArray(given) || given.length !== MAP_GAME.MAP_GAME_PLAY_COUNT)
+    return res.status(400).json({ error: `Answer all ${MAP_GAME.MAP_GAME_PLAY_COUNT} questions.` });
+  let score = 0;
+  const detail = [];
+  const seenKeys = new Set();
+  for (const a of given) {
+    const q = byKey.get(a && a.key);
+    if (!q) return res.status(400).json({ error: "One of the questions is not from this stage." });
+    if (seenKeys.has(q.key)) return res.status(400).json({ error: "The same question was answered twice." });
+    seenKeys.add(q.key);
+    const g = a.given === undefined || a.given === null ? "" : String(a.given);
+    if (g !== "" && !q.options.includes(g)) return res.status(400).json({ error: `One answer is not one of the options.` });
+    const ok = g === q.answer;
+    if (ok) score++;
+    detail.push({ key: q.key, question: q.q, given: g, correct: ok, answer: q.answer,
+      point: q.point, is_map: !!q.map,
+      map_kind: q.map ? q.map.kind : "",
+      map_place: q.map ? q.map.place : "", map_where: q.map ? q.map.where : "", map_note: q.map ? q.map.note : "" });
+  }
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO map_game_attempts (student_id, stage, level, score, total) VALUES (?,?,?,?,?)")
+      .run(req.user.id, n, level, score, MAP_GAME.MAP_GAME_PLAY_COUNT);
+    const ins = db.prepare(`INSERT INTO map_game_answers
+      (attempt_id, student_id, stage, question_key, question, given_answer, correct_answer, is_correct, is_map, map_kind, map_place, map_where, map_note, point)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const d of detail) {
+      ins.run(att.lastInsertRowid, req.user.id, n, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0,
+        d.is_map ? 1 : 0, d.map_kind, d.map_place, d.map_where, d.map_note, d.point);
+      mapGameTouchKey(req.user.id, n, d.key, d.correct);
+    }
+    mapGameRefreshProgress(req.user.id);
+    db.exec("COMMIT");
+    const passed = score >= MAP_GAME.MAP_GAME_PASS_MARK;
+    res.json({ ok: true, attempt_id: att.lastInsertRowid, score, total: MAP_GAME.MAP_GAME_PLAY_COUNT, passed,
+      detail, unlocked: mapGameUnlocked(req.user.id), perStage: mapGamePerStage(req.user.id),
+      revisionQueue: mapGameRevisionInfo(req.user.id).count });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your game." }); }
+});
+// ── Mistakes Revision Game ──
+// Only the questions Faaz got wrong (latest answer wrong, any mode).
+// A question leaves the queue when answered correctly; wrong again
+// and it stays. Revision plays never touch Round-1 stage scores.
+// Student: my revision queue (up to 10, oldest mistakes first by stage).
+app.get("/api/map-game/revision", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  const rev = mapGameRevisionInfo(req.user.id);
+  const qs = rev.queue.slice(0, MAP_GAME.MAP_GAME_PLAY_COUNT).map(q => ({
+    key: q.key, q: q.q, options: q.options, level: q.level, is_map: !!q.map,
+    stage: q.stage, hint: q.hint || null,
+  }));
+  res.json({ queue: qs, count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong,
+    timePerQ: 0 });
+});
+// Student: submit one revision play. Body: { answers: [{ key, given }] }.
+app.post("/api/map-game/revision/attempt", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  const given = (req.body && req.body.answers) || [];
+  if (!Array.isArray(given) || !given.length || given.length > MAP_GAME.MAP_GAME_PLAY_COUNT)
+    return res.status(400).json({ error: `Answer 1 to ${MAP_GAME.MAP_GAME_PLAY_COUNT} revision questions.` });
+  const rev = mapGameRevisionInfo(req.user.id);
+  const inQueue = new Set(rev.queue.map(q => q.key));
+  let score = 0;
+  const detail = [];
+  const seenKeys = new Set();
+  for (const a of given) {
+    const q = MAP_GAME_BANK_BY_KEY.get(a && a.key);
+    if (!q || !inQueue.has(q.key)) return res.status(400).json({ error: "One of the questions is not in your revision queue." });
+    if (seenKeys.has(q.key)) return res.status(400).json({ error: "The same question was answered twice." });
+    seenKeys.add(q.key);
+    const g = a.given === undefined || a.given === null ? "" : String(a.given);
+    if (g !== "" && !q.options.includes(g)) return res.status(400).json({ error: "One answer is not one of the options." });
+    const ok = g === q.answer;
+    if (ok) score++;
+    detail.push({ key: q.key, stage: q.stage, question: q.q, given: g, correct: ok, answer: q.answer,
+      point: q.point, is_map: !!q.map,
+      map_kind: q.map ? q.map.kind : "",
+      map_place: q.map ? q.map.place : "", map_where: q.map ? q.map.where : "", map_note: q.map ? q.map.note : "" });
+  }
+  const sessionId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+  db.exec("BEGIN");
+  try {
+    const ins = db.prepare(`INSERT INTO map_game_revision_answers
+      (student_id, stage, question_key, question, given_answer, correct_answer, is_correct, is_map, map_kind, map_place, map_where, map_note, point, session_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const d of detail) {
+      ins.run(req.user.id, d.stage, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0,
+        d.is_map ? 1 : 0, d.map_kind, d.map_place, d.map_where, d.map_note, d.point, sessionId);
+      mapGameTouchKey(req.user.id, d.stage, d.key, d.correct);
+    }
+    db.exec("COMMIT");
+    const after = mapGameRevisionInfo(req.user.id);
+    res.json({ ok: true, score, total: detail.length, detail,
+      remaining: after.count, cleared: after.cleared });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your revision game." }); }
+});
+// ── Round 2 (no-options typing round) ──
+// Unlocks only after ALL 8 Round-1 stages are passed. Same pools, no
+// options — the boy TYPES the answer. 45 seconds per question.
+app.get("/api/map-game/round2", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  res.json(mapGameRound2Status(req.user.id));
+});
+app.get("/api/map-game/round2/stage/:n/questions", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  const n = Number(req.params.n);
+  const st = mapGameStage(n);
+  if (!st) return res.status(404).json({ error: "No such stage." });
+  if (!mapGameRound2Status(req.user.id).unlocked)
+    return res.status(403).json({ error: "Round 2 opens after you pass all 8 stages in Round 1." });
+  const drawn = mapGameDraw(req.user.id, n, MAP_GAME.MAP_GAME_PLAY_COUNT);
+  const qs = drawn.map(q => ({ key: q.key, q: q.q, level: q.level, is_map: !!q.map }));
+  res.json({ stage: st, round: 2, timePerQ: MAP_GAME.MAP_GAME_ROUND2_TIME_PER_Q, questions: qs });
+});
+app.post("/api/map-game/round2/stage/:n/attempt", requireStudent, (req, res) => {
+  if (!mapGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Map Study Game is only for Faaz for now." });
+  const n = Number(req.params.n);
+  const st = mapGameStage(n);
+  if (!st) return res.status(404).json({ error: "No such stage." });
+  if (!mapGameRound2Status(req.user.id).unlocked)
+    return res.status(403).json({ error: "Round 2 opens after you pass all 8 stages in Round 1." });
+  const bank = MAP_GAME.MAP_GAME_QUESTIONS[n] || [];
+  const byKey = new Map(bank.map(q => [q.key, q]));
+  const given = (req.body && req.body.answers) || [];
+  if (!Array.isArray(given) || given.length !== MAP_GAME.MAP_GAME_PLAY_COUNT)
+    return res.status(400).json({ error: `Answer all ${MAP_GAME.MAP_GAME_PLAY_COUNT} questions.` });
+  let score = 0;
+  const detail = [];
+  const seenKeys = new Set();
+  for (const a of given) {
+    const q = byKey.get(a && a.key);
+    if (!q) return res.status(400).json({ error: "One of the questions is not from this stage." });
+    if (seenKeys.has(q.key)) return res.status(400).json({ error: "The same question was answered twice." });
+    seenKeys.add(q.key);
+    const g = a.given === undefined || a.given === null ? "" : String(a.given);
+    const ok = mapGameTypedOk(q, g);
+    if (ok) score++;
+    detail.push({ key: q.key, question: q.q, given: g, correct: ok, answer: q.typed || q.answer,
+      point: q.point, is_map: !!q.map,
+      map_kind: q.map ? q.map.kind : "",
+      map_place: q.map ? q.map.place : "", map_where: q.map ? q.map.where : "", map_note: q.map ? q.map.note : "" });
+  }
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO map_game_round2_attempts (student_id, stage, score, total) VALUES (?,?,?,?)")
+      .run(req.user.id, n, score, MAP_GAME.MAP_GAME_PLAY_COUNT);
+    const ins = db.prepare(`INSERT INTO map_game_round2_answers
+      (attempt_id, student_id, stage, question_key, question, given_answer, correct_answer, is_correct, is_map, map_kind, map_place, map_where, map_note, point)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const d of detail) {
+      ins.run(att.lastInsertRowid, req.user.id, n, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0,
+        d.is_map ? 1 : 0, d.map_kind, d.map_place, d.map_where, d.map_note, d.point);
+      mapGameTouchKey(req.user.id, n, d.key, d.correct);
+    }
+    db.exec("COMMIT");
+    const passed = score >= MAP_GAME.MAP_GAME_PASS_MARK;
+    res.json({ ok: true, attempt_id: att.lastInsertRowid, score, total: MAP_GAME.MAP_GAME_PLAY_COUNT, passed,
+      detail, round2: mapGameRound2Status(req.user.id) });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your Round 2 game." }); }
+});
+// Teacher: who can play + add/remove a boy (Faaz first, others later).
+app.get("/api/teacher/map-game/players", requireTeacher, (req, res) => {
+  const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY CAST(ad_no AS INTEGER)").all();
+  const enabled = new Set(db.prepare("SELECT student_id FROM map_game_players").all().map(r => r.student_id));
+  res.json({ students: students.map(s => ({ ...s, enabled: enabled.has(s.id) })) });
+});
+app.post("/api/teacher/map-game/players", requireTeacher, (req, res) => {
+  const sid = Number((req.body || {}).student_id);
+  const enabled = (req.body || {}).enabled;
+  const s = db.prepare("SELECT id, display_name FROM users WHERE id=? AND role='student'").get(sid);
+  if (!s) return res.status(404).json({ error: "No such student." });
+  if (enabled) db.prepare("INSERT OR IGNORE INTO map_game_players (student_id) VALUES (?)").run(sid);
+  else db.prepare("DELETE FROM map_game_players WHERE student_id=?").run(sid);
+  logActivity(req.user.id, "teacher", "map_game_player", `${s.display_name}: ${enabled ? "can play" : "removed from"} Map Study Game`);
+  res.json({ ok: true });
+});
+// Teacher: monitoring overview — every player, per-section %, attempts.
+app.get("/api/teacher/map-game/overview", requireTeacher, (req, res) => {
+  const players = db.prepare(`SELECT u.id, u.display_name, u.ad_no FROM map_game_players p
+    JOIN users u ON u.id = p.student_id ORDER BY CAST(u.ad_no AS INTEGER)`).all();
+  res.json({ players: players.map(p => {
+    const s = mapGameSummary(p.id);
+    const last = s.attempts[0] || null;
+    return { ...p, perStage: s.perStage, totals: s.totals, r2Totals: s.r2Totals,
+      revision: s.revision, round2: s.round2, r2Attempts: s.r2Attempts,
+      lastPlayedAt: last ? last.created_at : null,
+      revisionsDue: mapGameRevisionsFor(p.id).filter(r => !r.done).length };
+  }) });
+});
+// Teacher: total summary for one boy, viewable at any time.
+app.get("/api/teacher/map-game/summary/:id", requireTeacher, (req, res) => {
+  const s = mapGameSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such student." });
+  res.json(s);
+});
+// Teacher: the boy's mistakes-revision queue (what is still wrong,
+// what he has already cleared by answering it right).
+app.get("/api/teacher/map-game/revision-queue/:id", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const stu = db.prepare("SELECT id, display_name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!stu) return res.status(404).json({ error: "No such student." });
+  const rev = mapGameRevisionInfo(sid);
+  res.json({ student: stu, count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong,
+    queue: rev.queue.map(q => ({ key: q.key, stage: q.stage, question: q.q, answer: q.answer, point: q.point, is_map: !!q.map })) });
+});
+// Teacher: revision slots.
+app.get("/api/teacher/map-game/revisions", requireTeacher, (req, res) => {
+  const rows = db.prepare(`SELECT r.*, u.display_name FROM map_game_revisions r
+    JOIN users u ON u.id = r.student_id ORDER BY r.revise_date, r.start_time`).all();
+  res.json({ revisions: rows });
+});
+app.post("/api/teacher/map-game/revision", requireTeacher, (req, res) => {
+  const b = req.body || {};
+  const sid = Number(b.student_id);
+  const stage = Number(b.stage);
+  const s = db.prepare("SELECT id, display_name FROM users WHERE id=? AND role='student'").get(sid);
+  if (!s) return res.status(404).json({ error: "No such student." });
+  if (!mapGameStage(stage)) return res.status(400).json({ error: "Stage must be 1–8." });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(b.revise_date || "")) return res.status(400).json({ error: "Date must be YYYY-MM-DD." });
+  if (!/^\d{2}:\d{2}$/.test(b.start_time || "")) return res.status(400).json({ error: "Time must be HH:MM." });
+  const minutes = Number(b.minutes) || 20;
+  if (minutes < 5 || minutes > 120) return res.status(400).json({ error: "Minutes must be 5–120." });
+  const r = db.prepare(`INSERT INTO map_game_revisions (student_id, stage, revise_date, start_time, minutes, note)
+    VALUES (?,?,?,?,?,?)`).run(sid, stage, b.revise_date, b.start_time, minutes, (b.note || "").slice(0, 200));
+  logActivity(req.user.id, "teacher", "map_game_revision",
+    `${s.display_name}: ${mapGameStage(stage).title} revision on ${b.revise_date} at ${b.start_time} (${minutes} min)`);
+  res.json({ ok: true, id: r.lastInsertRowid });
+});
+app.post("/api/teacher/map-game/revision/:id/done", requireTeacher, (req, res) => {
+  const r = db.prepare("SELECT * FROM map_game_revisions WHERE id=?").get(Number(req.params.id));
+  if (!r) return res.status(404).json({ error: "No such revision." });
+  const done = (req.body || {}).done ? 1 : 0;
+  db.prepare("UPDATE map_game_revisions SET done=? WHERE id=?").run(done, r.id);
+  res.json({ ok: true, done: !!done });
+});
+
+// ── Map Study PDFs (B&W, print-ready, pdfkit — like the cert PDFs) ──
+function mapPdfStar(doc, cx, cy, r) { // 5-point star, filled black
+  doc.save(); doc.fillColor("#000000");
+  doc.moveTo(cx, cy - r);
+  for (let i = 1; i <= 10; i++) {
+    const ang = -Math.PI / 2 + i * Math.PI / 5;
+    const rr = i % 2 === 0 ? r : r * 0.45;
+    doc.lineTo(cx + rr * Math.cos(ang), cy + rr * Math.sin(ang));
+  }
+  doc.closePath().fill(); doc.restore();
+}
+function mapPdfHead(doc, title, sub) {
+  const W = 595.28, H = 841.89, M = 48;
+  doc.fillColor("#000000").font("Helvetica-Bold").fontSize(17)
+    .text(title, M, 48, { width: W - 2 * M, align: "center" });
+  doc.fillColor("#333333").font("Helvetica").fontSize(10)
+    .text(sub, M, 72, { width: W - 2 * M, align: "center" });
+  doc.moveTo(M, 96).lineTo(W - M, 96).lineWidth(1).stroke("#000000");
+  return { W, H, M, y: 112 };
+}
+function mapPdfFooter(doc) {
+  doc.fillColor("#666666").font("Helvetica").fontSize(8)
+    .text("Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch · BNS31 Map Study",
+      48, 841.89 - 36, { width: 595.28 - 96, align: "center" });
+}
+function mapPdfNeedPage(doc, y, need, head) {
+  if (y + need > 841.89 - 48) {
+    doc.addPage({ size: "A4", margin: 0 });
+    mapPdfFooter(doc);
+    return 64;
+  }
+  return y;
+}
+// Schematic world locator — labelled boxes in rough geographic layout.
+// NOT a real map and NOT to scale: it shows WHICH continent/region the
+// place is in, with a star on it. A real map image would need a licensed
+// blank world-map image embedded in the PDF instead.
+function mapPdfWorldDiagram(doc, x, y, w, h, place, where) {
+  const boxes = [
+    { name: "North America", x: 0.01, y: 0.05, w: 0.24, h: 0.34 },
+    { name: "South America", x: 0.09, y: 0.44, w: 0.15, h: 0.32 },
+    { name: "Europe", x: 0.44, y: 0.04, w: 0.13, h: 0.18 },
+    { name: "Africa", x: 0.44, y: 0.25, w: 0.17, h: 0.38 },
+    { name: "Asia", x: 0.60, y: 0.04, w: 0.36, h: 0.36 },
+    { name: "Australia", x: 0.76, y: 0.60, w: 0.14, h: 0.16 },
+    { name: "Antarctica", x: 0.30, y: 0.82, w: 0.40, h: 0.10 },
+  ];
+  const wl = (where || "").toLowerCase();
+  let target = "Asia", sx = 0.78, sy = 0.22;
+  const centre = (b) => [x + (b.x + b.w / 2) * w, y + (b.y + b.h / 2) * h];
+  if (wl.includes("south america")) { target = "South America"; [sx, sy] = centre(boxes[1]); }
+  else if (wl.includes("north america")) { target = "North America"; [sx, sy] = centre(boxes[0]); }
+  else if (wl.includes("europe") && wl.includes("asia")) { target = "Europe and Asia"; sx = x + 0.585 * w; sy = y + 0.13 * h; }
+  else if (wl.includes("europe")) { target = "Europe"; [sx, sy] = centre(boxes[2]); }
+  else if (wl.includes("oceania")) { target = "Australia"; [sx, sy] = centre(boxes[5]); }
+  else if (wl.includes("south of india")) { target = "Indian Ocean"; sx = x + 0.68 * w; sy = y + 0.52 * h; }
+  else if (wl.includes("arabia") && wl.includes("africa")) { target = "Red Sea"; sx = x + 0.60 * w; sy = y + 0.30 * h; }
+  else if (wl.includes("africa")) { target = "Africa"; [sx, sy] = centre(boxes[3]); }
+  else { target = "Asia"; [sx, sy] = centre(boxes[4]); }
+  doc.save();
+  doc.rect(x, y, w, h).lineWidth(1).stroke("#000000");
+  for (const b of boxes) {
+    doc.rect(x + b.x * w, y + b.y * h, b.w * w, b.h * h).lineWidth(0.5).stroke("#666666");
+  }
+  mapPdfStar(doc, sx, sy, 10);
+  // Labels last, on a white backing, so a star never covers the text.
+  doc.font("Helvetica").fontSize(8);
+  for (const b of boxes) {
+    const lx = x + b.x * w + 2, ly = y + b.y * h + 2;
+    const tw = doc.widthOfString(b.name);
+    doc.save(); doc.fillColor("#ffffff").rect(lx - 1, ly - 1, tw + 2, 11).fill(); doc.restore();
+    doc.fillColor("#000000").text(b.name, lx, ly, { width: b.w * w - 4 });
+  }
+  doc.font("Helvetica-Bold").fontSize(9)
+    .text("HERE: " + place + " (" + target + ")", x, y + h + 6, { width: w, align: "center" });
+  doc.restore();
+  return y + h + 22;
+}
+// Schematic India locator — simplified India outline with a dot on the
+// region. NOT a real map and NOT to scale.
+function mapPdfIndiaDiagram(doc, x, y, w, h, place, where) {
+  // Simplified India outline (wide north, tapering to the southern tip),
+  // with a Gujarat bulge on the west and a Bengal bulge on the east.
+  const outline = [[0.36, 0.05], [0.55, 0.02], [0.72, 0.06], [0.82, 0.14], [0.80, 0.24], [0.74, 0.40], [0.66, 0.52], [0.58, 0.64], [0.52, 0.92], [0.46, 0.64], [0.34, 0.50], [0.20, 0.34], [0.22, 0.16]];
+  const wl = ((place || "") + " " + (where || "")).toLowerCase();
+  // Dot by place first (exact states/seas), then by region as a fallback.
+  const PLACE_DOTS = [
+    ["kerala", [0.36, 0.80]], ["tamil nadu", [0.60, 0.74]], ["karnataka", [0.30, 0.62]],
+    ["kanyakumari", [0.50, 0.90]], ["arabian sea", [0.10, 0.62]], ["bay of bengal", [0.90, 0.55]],
+    ["indian ocean", [0.50, 0.97]], ["thar desert", [0.24, 0.32]], ["rajasthan", [0.24, 0.32]],
+    ["himalaya", [0.48, 0.10]], ["madhya pradesh", [0.50, 0.48]], ["maharashtra", [0.30, 0.55]],
+    ["west bengal", [0.72, 0.42]], ["assam", [0.82, 0.28]], ["sikkim", [0.78, 0.18]],
+  ];
+  let dot = null;
+  for (const [k, d] of PLACE_DOTS) if (wl.includes(k)) { dot = d; break; }
+  if (!dot) {
+    if (wl.includes("north-east")) dot = [0.84, 0.28];
+    else if (wl.includes("north")) dot = [0.45, 0.14];
+    else if (wl.includes("south")) dot = [0.50, 0.85];
+    else if (wl.includes("east")) dot = [0.72, 0.45];
+    else if (wl.includes("west")) dot = [0.22, 0.45];
+    else if (wl.includes("central")) dot = [0.50, 0.48];
+    else dot = [0.50, 0.48]; // centre
+  }
+  doc.save();
+  doc.rect(x, y, w, h).lineWidth(1).stroke("#000000");
+  doc.font("Helvetica").fontSize(8).fillColor("#000000");
+  doc.text("N", x + w - 16, y + 6);
+  doc.moveTo(x + w - 12, y + 18).lineTo(x + w - 8, y + 26).lineTo(x + w - 16, y + 26).closePath().fill("#000000");
+  doc.moveTo(x + outline[0][0] * w, y + outline[0][1] * h);
+  for (const p of outline.slice(1)) doc.lineTo(x + p[0] * w, y + p[1] * h);
+  doc.closePath().lineWidth(1).stroke("#000000");
+  mapPdfStar(doc, x + dot[0] * w, y + dot[1] * h, 9);
+  doc.save(); doc.fillColor("#ffffff").rect(x + 0.40 * w - 2, y + 0.40 * h - 1, 34, 11).fill(); doc.restore();
+  doc.font("Helvetica").fontSize(8).fillColor("#000000")
+    .text("INDIA", x + 0.40 * w, y + 0.40 * h, { width: 0.25 * w, align: "center" });
+  doc.font("Helvetica-Bold").fontSize(9)
+    .text("HERE: " + place + " — " + where, x, y + h + 6, { width: w, align: "center" });
+  doc.restore();
+  return y + h + 22;
+}
+// Teacher: wrong-answers PDF — every wrong answer as Q + given + correct,
+// with a map diagram for map-location wrongs. B&W, print-ready.
+app.get("/api/teacher/map-game/summary/:id/wrong-answers.pdf", requireTeacher, (req, res) => {
+  const s = mapGameSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such student." });
+  if (!s.wrongAnswers.length) return res.status(404).json({ error: "No wrong answers yet — well done!" });
+  const doc = new PDFDocument({ size: "A4", margin: 0 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="Map-Study-Wrong-Answers-${s.student.ad_no || s.student.id}.pdf"`);
+  doc.pipe(res);
+  mapPdfFooter(doc);
+  let { W, H, M, y } = mapPdfHead(doc, "Map Study Game — Wrong Answers",
+    `${s.student.display_name} (Ad ${s.student.ad_no || "—"}) · BNS31 · SIBAQ 26`);
+  doc.fillColor("#000000").font("Helvetica").fontSize(11)
+    .text(`Total: ${s.totals.correct} correct out of ${s.totals.questions} questions in ${s.totals.attempts} game(s) (${s.totals.pct === null ? "—" : s.totals.pct + "%"}).`, M, y, { width: W - 2 * M });
+  y += 18;
+  if (s.totals.weakStages.length) {
+    doc.font("Helvetica-Bold").text("Weak sections (under 60%): " +
+      s.totals.weakStages.map(n => `Stage ${n} — ${mapGameStage(n).title}`).join("; "), M, y, { width: W - 2 * M });
+    y += 16;
+  }
+  doc.font("Helvetica").fontSize(10)
+    .text("For every question below: what Faaz answered, and the correct answer. Map questions also show a schematic map.", M, y, { width: W - 2 * M });
+  y += 22;
+  let lastStage = 0;
+  s.wrongAnswers.forEach((a, i) => {
+    if (a.stage !== lastStage) {
+      y = mapPdfNeedPage(doc, y, 30);
+      lastStage = a.stage;
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(12)
+        .text(`Stage ${a.stage} — ${mapGameStage(a.stage).title}`, M, y, { width: W - 2 * M });
+      y += 18;
+    }
+    const lines = [
+      `Q${i + 1}. ${a.question}${a.mode && a.mode !== "Round 1" ? ` [${a.mode}]` : ""}`,
+      `Faaz answered: ${a.given_answer || "(no answer)"}`,
+      `Correct answer: ${a.correct_answer}`,
+      `Learn: ${a.point}`,
+    ];
+    const need = 16 + lines.length * 14 + (a.is_map ? 150 : 0);
+    y = mapPdfNeedPage(doc, y, need);
+    doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text(lines[0], M, y, { width: W - 2 * M });
+    y += 14;
+    doc.fillColor("#000000").font("Helvetica").fontSize(10).text(lines[1], M, y, { width: W - 2 * M });
+    y += 14;
+    doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text(lines[2], M, y, { width: W - 2 * M });
+    y += 14;
+    doc.fillColor("#000000").font("Helvetica").fontSize(10).text(lines[3], M, y, { width: W - 2 * M });
+    y += 16;
+    if (a.is_map) {
+      doc.fillColor("#000000").font("Helvetica").fontSize(9)
+        .text(`Where it is: ${a.map_note || a.map_where}`, M, y, { width: W - 2 * M });
+      y += 14;
+      y = mapPdfNeedPage(doc, y, 150);
+      const dw = 300, dh = 110;
+      y = a.map_kind === "india"
+        ? mapPdfIndiaDiagram(doc, M + 60, y, dw, dh, a.map_place, a.map_where)
+        : mapPdfWorldDiagram(doc, M + 60, y, dw, dh, a.map_place, a.map_where);
+      doc.fillColor("#666666").font("Helvetica").fontSize(8)
+        .text("Schematic map — not to scale. Use with the blank World / India map.", M, y - 6, { width: W - 2 * M, align: "center" });
+      y += 10;
+    }
+    doc.moveTo(M, y).lineTo(W - M, y).lineWidth(0.5).stroke("#999999");
+    y += 10;
+  });
+  doc.end();
+});
+// Teacher: weak-section study-sheet PDF — only that section's facts.
+app.get("/api/teacher/map-game/study-sheet/:id/:stage.pdf", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const stage = Number(req.params.stage);
+  const st = mapGameStage(stage);
+  const stu = db.prepare("SELECT id, display_name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!st || !stu) return res.status(404).json({ error: "No such student or stage." });
+  const sheet = MAP_GAME.MAP_GAME_SHEETS[stage];
+  const doc = new PDFDocument({ size: "A4", margin: 0 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="Map-Study-Sheet-Stage${stage}-${stu.ad_no || stu.id}.pdf"`);
+  doc.pipe(res);
+  mapPdfFooter(doc);
+  let { W, H, M, y } = mapPdfHead(doc, `Map Study — Study Sheet: ${st.title}`,
+    `${stu.display_name} (Ad ${stu.ad_no || "—"}) · BNS31 · Stage ${stage} of 8`);
+  doc.fillColor("#000000").font("Helvetica").fontSize(11)
+    .text("Study this sheet, then play the stage again in the game. Tick each fact when you know it by heart.", M, y, { width: W - 2 * M });
+  y += 26;
+  for (const f of sheet.facts) {
+    const hh = doc.heightOfString("[ ]  " + f, { width: W - 2 * M });
+    y = mapPdfNeedPage(doc, y, hh + 10);
+    doc.fillColor("#000000").font("Helvetica").fontSize(10)
+      .text("[ ]  " + f, M, y, { width: W - 2 * M });
+    y += hh + 6;
+  }
+  if (stage === 4) {
+    y += 8;
+    y = mapPdfNeedPage(doc, y, 30);
+    doc.fillColor("#000000").font("Helvetica-Bold").fontSize(12).text("All 65 capitals to learn", M, y, { width: W - 2 * M });
+    y += 20;
+    const cols = [M, M + 250];
+    const caps = MAP_GAME.MAP_GAME_ALL_CAPITALS;
+    const half = Math.ceil(caps.length / 2);
+    for (let i = 0; i < half; i++) {
+      y = mapPdfNeedPage(doc, y, 16);
+      doc.fillColor("#000000").font("Helvetica").fontSize(9);
+      doc.text(`${caps[i][0]} — ${caps[i][1]}`, cols[0], y);
+      if (caps[i + half]) doc.text(`${caps[i + half][0]} — ${caps[i + half][1]}`, cols[1], y);
+      y += 13;
+    }
+  }
+  doc.end();
+});
+
 // ── Points board, authors, writer of week, badges ─────────────
 app.get("/api/points-board", requireLogin, (req, res) => {
   const period = req.query.period === "month" ? "month" : "all";
@@ -2262,7 +3056,9 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "learning_tasks","learning_task_done","completion_certs","completion_exams","student_marks",
   "messages","notices","notice_reads","finance_entries","general_expenses","app_settings",
   "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback","letter_feedback_locks",
-  "gala_players","gala_scores"];
+  "gala_players","gala_scores",
+  "map_game_players","map_game_attempts","map_game_answers","map_game_progress","map_game_revisions",
+  "map_game_key_status","map_game_round2_attempts","map_game_round2_answers","map_game_revision_answers"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
