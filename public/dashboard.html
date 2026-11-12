@@ -43,6 +43,7 @@
   <button class="tile" onclick="openDashSec('gala',this)"><span class="tile-circ">🎉</span><span class="tile-t">Twelfth Gala</span><span class="tile-n" id="tc-gala">…</span></button>
   <button class="tile" id="tile-mapgame" onclick="openDashSec('mapgame',this)"><span class="tile-circ">🗺️</span><span class="tile-t">Map Study Game</span><span class="tile-n" id="tc-mapgame">…</span></button>
   <button class="tile" id="tile-gkgame" onclick="openDashSec('gkgame',this)"><span class="tile-circ">🧠</span><span class="tile-t">GK Kids</span><span class="tile-n" id="tc-gkgame">…</span></button>
+  <button class="tile" id="tile-wfgame" onclick="openDashSec('wfgame',this)"><span class="tile-circ">⚔️</span><span class="tile-t">Word Fight</span><span class="tile-n" id="tc-wfgame">…</span></button>
   <button class="tile" onclick="openDashSec('msgs',this)"><span class="tile-circ">💬</span><span class="tile-t">Messages</span><span class="tile-n" id="tc-msgs">…</span></button>
   <button class="tile" onclick="openDashSec('diary',this)"><span class="tile-circ">🏖️</span><span class="tile-t">Holiday Diary</span><span class="tile-n" id="tc-diary">…</span></button>
   <button class="tile" onclick="openDashSec('cert',this)"><span class="tile-circ">📜</span><span class="tile-t">My Certificate</span><span class="tile-n" id="tc-cert">…</span></button>
@@ -60,6 +61,7 @@
   <div class="dsec" id="sec-gala" style="display:none"><h2>🎉 Twelfth Gala</h2><div id="galabody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-mapgame" style="display:none"><h2>🗺️ Map Study Game</h2><div id="mapgamebody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-gkgame" style="display:none"><h2>🧠 GK Kids</h2><div id="gkgamebody"><p class="muted">Loading…</p></div></div>
+  <div class="dsec" id="sec-wfgame" style="display:none"><h2>⚔️ Word Fight</h2><div id="wfgamebody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-msgs" style="display:none"><h2 id="msgs-h2">💬 Messages from Teacher</h2><div id="mymsgs"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-diary" style="display:none"><div id="diarycard"></div></div>
   <div class="dsec" id="sec-cert" style="display:none"><div id="compcert"></div></div>
@@ -423,6 +425,20 @@ function allWorksHtml(works) {
         <a class="btn" href="/gk-game.html">${next ? "▶ Play " + esc(next.title) : "▶ Open GK Kids"}</a>`;
     }
   } catch (e) { document.getElementById("gkgamebody").innerHTML = ""; }
+  // Word Fight — only for players (Thalha for now); hidden otherwise.
+  try {
+    const wf = await api("GET", "/api/my/wf-game");
+    const tile = document.getElementById("tile-wfgame");
+    if (!wf.isPlayer) { if (tile) tile.style.display = "none"; }
+    else {
+      const rq = wf.revisionQueue || { count: 0, cleared: 0 };
+      setTc("tc-wfgame", (wf.best !== null ? "Best " + wf.best + " / " + wf.maxTotal : "Not played yet") + (rq.count ? ` · 🔁 ${rq.count} to revise` : ""));
+      document.getElementById("wfgamebody").innerHTML = `
+        <p>${wf.best !== null ? `Best match so far: <b>${wf.best} / ${wf.maxTotal}</b> · Matches finished: ${wf.matchesPlayed}.` : "Word Fight Eng (BNS35) — 10 players, you + 9 AI. A full match is 6 phases, maximum " + wf.maxTotal + " points."} Game scores are only for the Word Fight game — they never change your writing points.</p>
+        ${rq.count ? `<p>🔁 <b>${rq.count} mistake${rq.count === 1 ? "" : "s"}</b> to revise${rq.cleared ? ` · ✅ ${rq.cleared} cleared` : ""} — open the game and play the Revision Game.</p>` : ""}
+        <a class="btn" href="/wf-game.html">▶ Open Word Fight</a>`;
+    }
+  } catch (e) { document.getElementById("wfgamebody").innerHTML = ""; }
   // My marks
   try {
     const md = await api("GET", "/api/my/marks");

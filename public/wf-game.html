@@ -1,0 +1,458 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Word Fight · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+.wf-opt{display:block;width:100%;text-align:left;padding:14px 16px;margin:8px 0;font-size:1.05rem;
+  background:#fff;border:2px solid #cbd5e1;border-radius:12px;cursor:pointer}
+.wf-opt.on{border-color:#0e7c8c;background:#ecfeff}
+.wf-opt:disabled{opacity:.75;cursor:default}
+.wf-opt.correct{border-color:#16a34a;background:#dcfce7}
+.wf-opt.wrong{border-color:#dc2626;background:#fee2e2}
+.phase-card{margin:10px 0}
+.phase-card.locked{opacity:.6}
+.seat{display:inline-block;width:34px;height:34px;line-height:34px;text-align:center;border-radius:50%;background:#e2e8f0;font-weight:800;margin:3px;font-size:13px}
+.seat.cur{background:#facc15}
+.seat.you{border:2px solid #0b4f63}
+.chip{display:inline-block;background:#f1f5f9;border-radius:8px;padding:5px 8px;margin:3px;font-size:14px}
+.tabs button{padding:9px 10px;border-radius:20px;border:1px solid #cbd5e1;background:#fff;margin:3px;font-weight:700;cursor:pointer}
+.tabs button.on{background:#0b4f63;color:#fff}
+.timer{font-size:22px;font-weight:800;color:#dc2626}
+.good{background:#dcfce7;border-radius:10px;padding:10px;font-size:14px;line-height:1.5}
+.bad{background:#fee2e2;border-radius:10px;padding:10px;font-size:14px;line-height:1.5}
+.warn{background:#fef9c3;border:1px solid #facc15;border-radius:10px;padding:10px;font-size:14px;line-height:1.5}
+input[type=text]{width:100%;padding:14px;font-size:18px;border:2px solid #cbd5e1;border-radius:12px}
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="game"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
+</div>
+<script>
+let S = null;          // phases data from /api/my/wf-game
+let BANK = null;       // study bank
+let MATCH = null;      // { match_id, ai, startLetters, phases }
+let PLAY = null;       // current phase play state
+let timerInt = null;
+
+function clearTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
+function startTimer(sec, onTimeout) {
+  clearTimer();
+  const el = document.getElementById("wftimer");
+  if (!sec) { if (el) el.textContent = "No timer"; return; }
+  let t = sec;
+  if (el) el.textContent = t + "s";
+  timerInt = setInterval(() => {
+    t--;
+    if (el) el.textContent = t + "s";
+    if (t <= 0) { clearTimer(); onTimeout(); }
+  }, 1000);
+}
+function shuf(a) { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; }
+function bankWords(cat) { return cat === "verbs" ? BANK.verbs : cat === "nouns" ? BANK.nouns : BANK.adjectives; }
+
+async function loadHome() {
+  S = await api("GET", "/api/my/wf-game");
+  renderHome();
+}
+function phaseTimerText(p) { return p.timer === null ? "No timer" : p.timer + "s per turn / question"; }
+function renderHome() {
+  const box = document.getElementById("game");
+  if (!S.isPlayer) {
+    box.innerHTML = `<div class="card"><h1>⚔️ Word Fight</h1><p>The Word Fight game is only for Thalha for now.</p><a class="btn" href="/dashboard.html">← Back home</a></div>`;
+    return;
+  }
+  const rq = S.revisionQueue || { count: 0, mcqCount: 0, repeatCount: 0, cleared: 0 };
+  box.innerHTML = `<h1>⚔️ Word Fight</h1>
+    <p class="muted">SIBAQ 26 · Word Fight Eng (BNS35) · Stage · 90 minutes · Linguistics. 10 players — you + 9 AI players. A full match is 6 phases in order, maximum <b>${S.maxTotal} points</b>.</p>
+    <div class="card" style="background:#f8fafc"><b>Official concept:</b> “The programme follows a multifaceted structure designed to assess participants' word power across different areas. The first phase is Word Passing, conducted in three rounds: verbs, nouns, and adjectives. The subsequent phases focus on synonyms, antonyms and phrasal verbs, along with their meanings. There will be no minus marks. Marks will be awarded in every phase, and the final result will be based on the cumulative score throughout the programme.”</div>
+    <div class="warn"><b>⚠️ Practice rules (Samad):</b> in practice, a REPEAT word = <b>−2 points</b> — the official SIBAQ rule says no minus marks, so a repeat is 0 in the real stage. Timer: Verbs — no timer; Nouns 20s; Adjectives 15s; Synonyms 15s; Antonyms 10s; Phrasal Verbs 10s.</div>
+    <div class="warn"><b>Word Passing rule:</b> this is a <b>word chain</b> — each word must start with the last letter of the last accepted word (e.g. pla<b>y</b> → <b>y</b>awn). The concept book does not say how the word moves from player to player, so this is the rule we are practising with. If no unused word in the bank starts with the needed letter, the chain restarts with a new letter.</div>
+    <div class="card" style="border:2px solid #0e7c8c"><h3>🔁 Mistakes Revision Game</h3>
+      <p>${rq.count ? `You have <b>${rq.count} item${rq.count === 1 ? "" : "s"}</b> still wrong — ${rq.mcqCount} question${rq.mcqCount === 1 ? "" : "s"} and ${rq.repeatCount} repeated word${rq.repeatCount === 1 ? "" : "s"}. Play them again until you get them right.` : "No mistakes right now — well done! 🌟"}
+      ${rq.cleared ? `<br>✅ You have already cleared <b>${rq.cleared}</b> mistake${rq.cleared === 1 ? "" : "s"} by answering them right.` : ""}</p>
+      ${rq.count ? `<button class="btn" id="play-rev">▶ Play Revision Game</button>` : ""}
+    </div>
+    ${S.best !== null ? `<p><b>Best match so far: ${S.best} / ${S.maxTotal}</b> · Matches finished: ${S.matchesPlayed}</p>` : ""}
+    <button class="btn" id="start-match">▶ Start a Full Match — 10 Players</button>
+    <button class="btn ghost" id="open-bank">📖 Study Bank (all words)</button>
+    ${S.phases.map(p => `
+      <div class="card phase-card">
+        <h3>Phase ${p.n} — ${esc(p.title)}</h3>
+        <p class="muted">${p.kind === "word" ? "Word Passing — 3 turns each, 30 turns in the round" : "10 questions, +3 each"} · ⏱️ ${phaseTimerText(p)} · Max ${p.max} points</p>
+        <p>${p.best !== null ? `Best: <b>${p.best}/${p.max}</b>${p.latest !== null ? ` · Latest: ${p.latest}/${p.max}` : ""}` : "Not played yet"}
+        ${p.attempts ? ` · Played ${p.attempts} time${p.attempts === 1 ? "" : "s"}` : ""}
+        <br>📖 Words / questions covered: <b>${p.coveragePct}%</b> (${p.seen} of ${p.poolTotal} seen)</p>
+      </div>`).join("")}
+    <p class="muted" style="font-size:.85rem">Game scores are only for the Word Fight game. They never change your writing points, Points Board, clubs or certificates.</p>`;
+  document.getElementById("start-match").onclick = startMatch;
+  document.getElementById("open-bank").onclick = openBank;
+  const pr = document.getElementById("play-rev");
+  if (pr) pr.onclick = startRevision;
+}
+async function openBank() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading the Study Bank…</p></div>`;
+  try {
+    BANK = await api("GET", "/api/wf-game/bank");
+    renderBank("verbs");
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+function renderBank(tab) {
+  const box = document.getElementById("game");
+  const tabs = [["verbs", "Verbs"], ["nouns", "Nouns"], ["adjectives", "Adjectives"], ["synonyms", "Synonyms"], ["antonyms", "Antonyms"], ["phrasal", "Phrasal Verbs"]];
+  let body = "";
+  if (tab === "verbs") body = BANK.verbs.map(w => `<span class="chip">${esc(w)}</span>`).join("");
+  if (tab === "nouns") body = BANK.nouns.map(w => `<span class="chip">${esc(w)}</span>`).join("");
+  if (tab === "adjectives") body = BANK.adjectives.map(w => `<span class="chip">${esc(w)}</span>`).join("");
+  if (tab === "synonyms") body = BANK.synonyms.map(q => `<div>• <b>${esc(q.word)}</b> = ${esc(q.answer)}</div>`).join("");
+  if (tab === "antonyms") body = BANK.antonyms.map(q => `<div>• <b>${esc(q.word)}</b> ↔ ${esc(q.answer)}</div>`).join("");
+  if (tab === "phrasal") body = BANK.phrasal.map(q => `<div>• <b>${esc(q.word)}</b> = ${esc(q.answer)}</div>`).join("");
+  box.innerHTML = `<div class="card"><h2>📖 Study Bank — learn first, then play</h2>
+    <p class="muted">Word Passing only accepts words from this bank. If you give a good word that is not in the bank, you get 0 — tell your teacher and he can add it.</p>
+    <div class="tabs">${tabs.map(t => `<button class="${tab === t[0] ? "on" : ""}" data-tab="${t[0]}">${t[1]}</button>`).join("")}</div>
+    <div style="margin-top:10px">${body}</div>
+    <button class="btn ghost" id="bank-back">← Back to Word Fight</button></div>`;
+  box.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => renderBank(b.dataset.tab));
+  document.getElementById("bank-back").onclick = loadHome;
+}
+async function startMatch() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Starting your match…</p></div>`;
+  try {
+    if (!BANK) BANK = await api("GET", "/api/wf-game/bank");
+    MATCH = await api("POST", "/api/wf-game/match/start", {});
+    PLAY = { phaseIdx: 0, aiScores: {}, leaderboard: null };
+    runPhase();
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+function boardHtml(players) {
+  const rows = [...players].sort((a, b) => b.score - a.score);
+  return `<table style="width:100%;font-size:.9rem"><tr><th>#</th><th>Player</th><th>Score</th></tr>` +
+    rows.map((p, i) => `<tr ${p.level === "you" ? 'style="font-weight:800;background:#fef9c3"' : ""}><td>${i + 1}</td><td>${esc(p.name)}${p.level !== "you" ? " (" + p.level + ")" : ""}</td><td>${p.score}</td></tr>`).join("") + `</table>`;
+}
+function currentScores() {
+  const players = [{ name: "Thalha (You)", level: "you", score: PLAY.childTotal || 0 }];
+  for (const a of MATCH.ai) players.push({ name: a.name, level: a.level, score: PLAY.aiScores[a.name] || 0 });
+  return players;
+}
+function runPhase() {
+  const p = MATCH.phases[PLAY.phaseIdx];
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card">
+    <div style="display:flex;justify-content:space-between"><b>Phase ${p.n} — ${esc(p.title)}</b><span class="timer" id="wftimer"></span></div>
+    <p class="muted">${p.kind === "word" ? "Word Passing — 10 players, 3 turns each (30 turns). Correct new word +2 · Repeat −2 · Wrong / no word 0." : "10 questions — each correct answer +3."} ⏱️ ${phaseTimerText(p)}</p>
+    <div id="seats"></div>
+    <h3>🏆 Live Leaderboard</h3><div id="board">${boardHtml(currentScores())}</div>
+    <div id="playArea"></div><div id="feed"></div>
+    <button class="btn ghost" id="quit-match">Quit match</button></div>`;
+  document.getElementById("quit-match").onclick = () => { clearTimer(); loadHome(); };
+  if (p.kind === "word") startWPPhase(p);
+  else startMCQPhase(p);
+}
+// ── Word Passing ──
+function wpNeedLetter(bank, need, used) {
+  if (bank.some(w => w[0] === need && !used.includes(w))) return { need, resetFrom: null };
+  const avail = ["s", "b", "t", "c", "p", "r", "e", "l", "h", "w", "a", "g", "m", "n", "d"]
+    .filter(L => bank.some(w => w[0] === L && !used.includes(w)));
+  if (!avail.length) return { need, resetFrom: null };
+  // Deterministic reset — same rule as the server, or the chains diverge.
+  return { need: avail[0], resetFrom: need };
+}
+function pickAIWord(p, need, used) {
+  const bank = bankWords(p.cat).filter(w => w[0] === need && !used.includes(w));
+  const player = PLAY.seats[PLAY.turn % 10];
+  const r = Math.random();
+  const failRate = player.level === "strong" ? 0.05 : player.level === "medium" ? 0.20 : 0.40;
+  if (!bank.length || r < failRate) {
+    if (used.length && Math.random() < 0.6) return { word: used[Math.floor(Math.random() * used.length)], kind: "repeat" };
+    return { word: "", kind: "fail" };
+  }
+  return { word: bank[Math.floor(Math.random() * bank.length)], kind: "ok" };
+}
+function startWPPhase(p) {
+  PLAY.wp = { used: [], lastWord: "", need: MATCH.startLetters[p.id] || "s", turn: 0, turns: [], feed: [] };
+  PLAY.seats = [{ name: "you", level: "you" }, ...MATCH.ai.map(a => ({ name: a.name, level: a.level }))];
+  document.getElementById("playArea").innerHTML = `<div class="good">Chain starts with <b>${PLAY.wp.need.toUpperCase()}</b> · Used words: <span id="usedList">—</span></div><div id="turnBox"></div>`;
+  nextWPTurn(p);
+}
+function wpRenderSeats(p) {
+  document.getElementById("seats").innerHTML = PLAY.seats.map((s, i) =>
+    `<span class="seat ${i === PLAY.wp.turn % 10 ? "cur" : ""} ${s.level === "you" ? "you" : ""}">${s.level === "you" ? "YOU" : i + 1}</span>`).join("") + ` <span class="muted">● = whose turn</span>`;
+  const ul = document.getElementById("usedList");
+  if (ul) ul.textContent = PLAY.wp.used.join(", ") || "—";
+}
+function nextWPTurn(p) {
+  wpRenderSeats(p);
+  document.getElementById("board").innerHTML = boardHtml(currentScores());
+  if (PLAY.wp.turn >= 30) { submitWPPhase(p); return; }
+  const chk = wpNeedLetter(bankWords(p.cat), PLAY.wp.need, PLAY.wp.used);
+  if (chk.resetFrom) {
+    PLAY.wp.need = chk.need;
+    feedHtml(`<div class="muted">🔄 No unused word in the bank starts with “${chk.resetFrom.toUpperCase()}” — new start letter: <b>${chk.need.toUpperCase()}</b></div>`);
+  }
+  const player = PLAY.seats[PLAY.wp.turn % 10];
+  const box = document.getElementById("turnBox");
+  if (player.level === "you") {
+    box.innerHTML = `<h3>Your turn — give a ${esc(p.cat.slice(0, -1))} starting with “${PLAY.wp.need.toUpperCase()}”</h3>
+      <p class="muted">Last accepted word: <b>${esc(PLAY.wp.lastWord || "— (start)")}</b> · Need letter: <b>${PLAY.wp.need.toUpperCase()}</b></p>
+      <input id="wIn" type="text" placeholder="Type your word…" autocomplete="off">
+      <button class="btn" id="wSubmit">Submit word</button>
+      <p class="muted">A word already used in this round = −2, even if it is correct.</p>`;
+    const inp = document.getElementById("wIn");
+    inp.focus();
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") submitWPWord(p); });
+    document.getElementById("wSubmit").onclick = () => submitWPWord(p);
+    startTimer(p.timer, () => submitWPWord(p, true));
+  } else {
+    box.innerHTML = `<h3>${esc(player.name)} (${player.level}) is thinking…</h3><p class="muted">Need letter: <b>${PLAY.wp.need.toUpperCase()}</b> · Last word: <b>${esc(PLAY.wp.lastWord || "—")}</b></p>`;
+    startTimer(null, () => {});
+    setTimeout(() => {
+      const res = pickAIWord(p, PLAY.wp.need, PLAY.wp.used);
+      PLAY.wp.turns.push({ player: player.name, word: res.word });
+      if (res.kind === "ok") {
+        PLAY.wp.used.push(res.word);
+        PLAY.wp.lastWord = res.word;
+        PLAY.wp.need = res.word.slice(-1);
+        PLAY.aiScores[player.name] = (PLAY.aiScores[player.name] || 0) + 2;
+        feedHtml(`<div class="good"><b>${esc(player.name)}</b>: “${esc(res.word)}” — +2</div>`);
+      } else if (res.kind === "repeat") {
+        PLAY.aiScores[player.name] = (PLAY.aiScores[player.name] || 0) - 2;
+        feedHtml(`<div class="bad"><b>${esc(player.name)}</b>: “${esc(res.word)}” — REPEAT! −2</div>`);
+      } else {
+        feedHtml(`<p class="muted"><b>${esc(player.name)}</b>: no word — 0 points.</p>`);
+      }
+      PLAY.wp.turn++;
+      nextWPTurn(p);
+    }, 900);
+  }
+}
+function feedHtml(html) {
+  const f = document.getElementById("feed");
+  if (f) f.innerHTML = html + f.innerHTML;
+}
+function submitWPWord(p, timedOut) {
+  clearTimer();
+  const inp = document.getElementById("wIn");
+  const w = timedOut ? "" : (inp ? inp.value.trim().toLowerCase() : "");
+  PLAY.wp.turns.push({ player: "you", word: w });
+  if (!w) {
+    feedHtml(`<div class="bad">${timedOut ? "⏰ Time up — " : ""}No word — 0 points.</div>`);
+  } else if (PLAY.wp.used.includes(w)) {
+    PLAY.childTotal = (PLAY.childTotal || 0) - 2;
+    feedHtml(`<div class="bad">🔁 <b>REPEAT!</b> “${esc(w)}” was already used. <b>−2 points</b> (the teacher will re-check this).</div>`);
+  } else if (w[0] !== PLAY.wp.need) {
+    feedHtml(`<div class="bad">“${esc(w)}” does not start with “${PLAY.wp.need.toUpperCase()}”. 0 points — turn passed.</div>`);
+  } else if (!bankWords(p.cat).includes(w)) {
+    feedHtml(`<div class="bad">“${esc(w)}” is not in the Study Bank. 0 points — tell your teacher if it is correct.</div>`);
+  } else {
+    PLAY.wp.used.push(w);
+    PLAY.wp.lastWord = w;
+    PLAY.wp.need = w.slice(-1);
+    PLAY.childTotal = (PLAY.childTotal || 0) + 2;
+    feedHtml(`<div class="good">✅ “${esc(w)}” — <b>+2</b>. Next letter: <b>${PLAY.wp.need.toUpperCase()}</b></div>`);
+  }
+  PLAY.wp.turn++;
+  setTimeout(() => nextWPTurn(p), 900);
+}
+async function submitWPPhase(p) {
+  clearTimer();
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Checking your round with the teacher's bank…</p></div>`;
+  try {
+    const r = await api("POST", `/api/wf-game/phase/${p.id}/word-attempt`, { match_id: MATCH.match_id, turns: PLAY.wp.turns });
+    // Server score is authoritative — keep a running total from phase results.
+    MATCH.phaseTotals = MATCH.phaseTotals || {};
+    MATCH.phaseTotals[p.id] = r.score;
+    PLAY.childTotal = Object.values(MATCH.phaseTotals).reduce((a, b) => a + b, 0);
+    PLAY.aiScores = {};
+    for (const a of r.aiScores) PLAY.aiScores[a.name] = (PLAY.aiScores[a.name] || 0) + a.score;
+    const rank = [...currentScores()].sort((a, b) => b.score - a.score).findIndex(x => x.level === "you") + 1;
+    box.innerHTML = `<div class="card"><h2>${esc(p.title)} — finished</h2>
+      <p style="font-size:1.2rem">Your score this round: <b>${r.score} / ${r.max}</b> · Your rank so far: <b>#${rank} of 10</b></p>
+      ${r.detail.filter(d => d.player === "you").map(d => `<p>${d.points === 2 ? "✅" : d.points === -2 ? "🔁" : "❌"} “${esc(d.word || "(no word)")}” — ${d.outcome} (${d.points > 0 ? "+" : ""}${d.points})${d.outcome !== "correct" && d.correct ? ` · Try: ${esc(d.correct)}` : ""}</p>`).join("")}
+      <button class="btn" id="next-phase">${PLAY.phaseIdx === 5 ? "See Final Result →" : "Next Phase →"}</button></div>`;
+    document.getElementById("next-phase").onclick = () => {
+      PLAY.phaseIdx++;
+      if (PLAY.phaseIdx > 5) finishMatch();
+      else runPhase();
+    };
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+// ── MCQ phases ──
+async function startMCQPhase(p) {
+  const box = document.getElementById("game");
+  try {
+    const d = await api("GET", `/api/wf-game/phase/${p.id}/questions`);
+    PLAY.mcq = { phase: p, questions: d.questions, idx: 0, answers: [] };
+    renderMCQ();
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+function renderMCQ() {
+  const p = PLAY.mcq.phase;
+  const q = PLAY.mcq.questions[PLAY.mcq.idx];
+  const box = document.getElementById("game");
+  const card = box.querySelector(".card");
+  card.querySelector("#playArea").innerHTML = `<h3>Q${PLAY.mcq.idx + 1} of ${PLAY.mcq.questions.length} — ${esc(p.title)}</h3>
+    <div style="font-size:18px;margin:8px 0">${esc(q.q)}</div>
+    ${q.options.map(o => `<button class="wf-opt" data-opt="${esc(o)}">${esc(o)}</button>`).join("")}
+    <button class="btn" id="qnext" disabled>${PLAY.mcq.idx + 1 === PLAY.mcq.questions.length ? "Finish ✅" : "Next →"}</button>
+    <p class="muted">Tap one answer, then Next.</p>`;
+  wpRenderSeatsMCQ();
+  let picked = null;
+  card.querySelectorAll("[data-opt]").forEach(b => b.onclick = () => {
+    if (picked !== null) return;
+    picked = b.dataset.opt;
+    card.querySelectorAll("[data-opt]").forEach(x => { x.disabled = true; if (x.dataset.opt === picked) x.classList.add("on"); });
+    document.getElementById("qnext").disabled = false;
+  });
+  document.getElementById("qnext").onclick = () => submitMCQOne(picked === null ? "" : picked);
+  startTimer(p.timer, () => submitMCQOne(""));
+}
+function wpRenderSeatsMCQ() {
+  const el = document.getElementById("seats");
+  if (el) el.innerHTML = `<span class="muted">All 10 players answer the same question — watch the leaderboard move.</span>`;
+}
+function submitMCQOne(given) {
+  clearTimer();
+  PLAY.mcq.answers.push({ key: PLAY.mcq.questions[PLAY.mcq.idx].key, given: given === null || given === undefined ? "" : String(given) });
+  PLAY.mcq.idx++;
+  if (PLAY.mcq.idx >= PLAY.mcq.questions.length) submitMCQPhase();
+  else renderMCQ();
+}
+function aiMcqScores() {
+  return MATCH.ai.map(a => {
+    const rate = a.level === "strong" ? 0.9 : a.level === "medium" ? 0.7 : 0.5;
+    let correct = 0;
+    for (let i = 0; i < 10; i++) if (Math.random() < rate) correct++;
+    return { name: a.name, score: correct * 3 };
+  });
+}
+async function submitMCQPhase() {
+  clearTimer();
+  const p = PLAY.mcq.phase;
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Checking your answers…</p></div>`;
+  try {
+    const aiScores = aiMcqScores();
+    const r = await api("POST", `/api/wf-game/phase/${p.id}/attempt`, { match_id: MATCH.match_id, answers: PLAY.mcq.answers, aiScores });
+    MATCH.phaseTotals = MATCH.phaseTotals || {};
+    MATCH.phaseTotals[p.id] = r.score;
+    PLAY.childTotal = Object.values(MATCH.phaseTotals).reduce((a, b) => a + b, 0);
+    PLAY.aiScores = {};
+    for (const a of r.aiScores) PLAY.aiScores[a.name] = (PLAY.aiScores[a.name] || 0) + a.score;
+    const wrong = r.detail.filter(d => !d.correct);
+    const rank = [...currentScores()].sort((a, b) => b.score - a.score).findIndex(x => x.level === "you") + 1;
+    box.innerHTML = `<div class="card"><h2>${esc(p.title)} — finished</h2>
+      <p style="font-size:1.2rem"><b>${r.score} / ${r.max} points</b> (${r.score / 3} of 10 correct) · Your rank so far: <b>#${rank} of 10</b></p>
+      ${r.detail.map((d, i) => `<p>${d.correct ? "✅" : "❌"} <b>Q${i + 1}.</b> ${esc(d.question)}<br><span class="muted">You: ${esc(d.given || "(no answer)")} · Correct: <b>${esc(d.answer)}</b></span><br><span style="font-size:.9rem">💡 ${esc(d.point)}</span></p>`).join("")}
+      ${wrong.length ? `<p class="muted">Your teacher will get these ${wrong.length} question(s) with the correct answers, so you can learn them.</p>` : `<p>🌟 Perfect — no wrong answers this time!</p>`}
+      <button class="btn" id="next-phase">${PLAY.phaseIdx === 5 ? "See Final Result →" : "Next Phase →"}</button></div>`;
+    document.getElementById("next-phase").onclick = () => {
+      PLAY.phaseIdx++;
+      if (PLAY.phaseIdx > 5) finishMatch();
+      else runPhase();
+    };
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+async function finishMatch() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Adding up the whole match…</p></div>`;
+  try {
+    const r = await api("POST", `/api/wf-game/match/${MATCH.match_id}/finish`, {});
+    box.innerHTML = `<div class="card"><h1>🏁 Final Result</h1>
+      <p style="text-align:center;font-size:1.4rem"><b>#${r.rank} of 10</b><br>Your total: <b>${r.total} / ${r.max}</b><br>${r.rank === 1 ? "🏆 Champion!" : r.rank <= 3 ? "🥉 Top 3 — very close!" : "Keep practising — play again and beat your best!"}</p>
+      <p class="muted">Best match so far: ${r.best} / ${r.max} · Matches finished: ${r.matchesPlayed}</p>
+      <h3>Final Leaderboard</h3>${boardHtml(r.leaderboard.map(x => ({ name: x.name, level: x.level, score: x.score })))}
+      <p><button class="btn" id="again">🔁 Play Again</button>
+      <button class="btn ghost" id="back-home">← Back to Word Fight</button></p>
+      <p class="muted">Game scores are only for the Word Fight game — they never change your writing points.</p></div>`;
+    document.getElementById("again").onclick = startMatch;
+    document.getElementById("back-home").onclick = loadHome;
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+// ── Mistakes Revision Game ──
+async function startRevision() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading your mistakes…</p></div>`;
+  try {
+    const d = await api("GET", "/api/wf-game/revision");
+    if (!d.mcq.length && !d.repeats.length) { toast("No mistakes right now — well done!"); loadHome(); return; }
+    PLAY = { rev: d, mcqIdx: 0, answers: [], words: [] };
+    renderRevision();
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+function renderRevision() {
+  const box = document.getElementById("game");
+  const total = PLAY.rev.mcq.length + PLAY.rev.repeats.length;
+  const idx = PLAY.mcqIdx;
+  if (idx < PLAY.rev.mcq.length) {
+    const q = PLAY.rev.mcq[idx];
+    box.innerHTML = `<div class="card"><p><b>🔁 Mistakes Revision</b> <span class="pill">Question ${idx + 1} of ${total}</span></p>
+      <h2 style="font-size:1.15rem">${esc(q.q)}</h2>
+      <div>${q.options.map(o => `<button class="wf-opt" data-opt="${esc(o)}">${esc(o)}</button>`).join("")}</div>
+      <button class="btn" id="qnext" disabled>${idx + 1 === total ? "Finish ✅" : "Next →"}</button>
+      <p class="muted">Tap one answer, then Next.</p></div>`;
+    let picked = null;
+    box.querySelectorAll("[data-opt]").forEach(b => b.onclick = () => {
+      if (picked !== null) return;
+      picked = b.dataset.opt;
+      box.querySelectorAll("[data-opt]").forEach(x => { x.disabled = true; if (x.dataset.opt === picked) x.classList.add("on"); });
+      document.getElementById("qnext").disabled = false;
+    });
+    document.getElementById("qnext").onclick = () => {
+      PLAY.answers.push({ key: q.key, given: picked === null ? "" : picked });
+      PLAY.mcqIdx++;
+      renderRevision();
+    };
+  } else {
+    const r = PLAY.rev.repeats[idx - PLAY.rev.mcq.length];
+    box.innerHTML = `<div class="card"><p><b>🔁 Mistakes Revision — repeated word</b> <span class="pill">Question ${idx + 1} of ${total}</span></p>
+      <h2 style="font-size:1.15rem">${esc(r.question)}</h2>
+      <p class="muted">Type a NEW word from the Study Bank. It must start with “${esc(r.needLetter.toUpperCase())}” and must not be “${esc(r.word)}”.</p>
+      <input id="revWord" type="text" placeholder="Type a new word…" autocomplete="off">
+      <button class="btn" id="qnext">${idx + 1 === total ? "Finish ✅" : "Next →"}</button></div>`;
+    const inp = document.getElementById("revWord");
+    inp.focus();
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("qnext").click(); });
+    document.getElementById("qnext").onclick = () => {
+      PLAY.words.push({ key: r.key, givenWord: inp.value.trim() });
+      PLAY.mcqIdx++;
+      renderRevision();
+    };
+  }
+  if (PLAY.mcqIdx >= total) submitRevision();
+}
+async function submitRevision() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Checking your revision…</p></div>`;
+  try {
+    const r = await api("POST", "/api/wf-game/revision/attempt", { answers: PLAY.answers, words: PLAY.words });
+    box.innerHTML = `<div class="card"><h1>${r.remaining ? "💪 Keep revising!" : "🎉 All clear!"}</h1>
+      <p><b>${r.mcqScore} / ${r.mcqTotal}</b> revision questions right · <b>${r.wordScore} / ${r.wordTotal}</b> repeated words fixed</p>
+      <p>${r.remaining ? `There are still <b>${r.remaining}</b> mistake${r.remaining === 1 ? "" : "s"} left — play the Revision Game again to clear them. (✅ Cleared so far: ${r.cleared}.)` : "🌟 No mistakes left at all — you cleared every one!"}</p>
+      ${r.detail.map((d, i) => `<p>${d.correct ? "✅" : "❌"} ${esc(d.question)}<br><span class="muted">You: ${esc(d.given || "(no answer)")} · Correct: <b>${esc(d.answer)}</b></span><br><span style="font-size:.9rem">💡 ${esc(d.point)}</span></p>`).join("")}
+      ${r.wordDetail.map(d => `<p>${d.correct ? "✅" : "❌"} ${esc(d.question)}<br><span class="muted">You: ${esc(d.given || "(no answer)")} · ${esc(d.point)}</span></p>`).join("")}
+      <p><button class="btn" id="backhome">← Back to Word Fight</button>
+      ${r.remaining ? `<button class="btn" id="retry" style="margin-left:8px">🔁 Play Revision again</button>` : ""}</p></div>`;
+    document.getElementById("backhome").onclick = loadHome;
+    const rt = document.getElementById("retry");
+    if (rt) rt.onclick = startRevision;
+  } catch (e) { toast(e.message, false); loadHome(); }
+}
+(async () => {
+  const user = await guard("student"); if (!user) return;
+  document.getElementById("nav").innerHTML = studentNav("wf-game.html");
+  try { await loadHome(); }
+  catch (e) {
+    document.getElementById("game").innerHTML = `<div class="card"><h1>⚔️ Word Fight</h1>
+      <p>${esc(e.message)}</p><a class="btn" href="/dashboard.html">← Back home</a></div>`;
+  }
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>

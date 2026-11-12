@@ -23,7 +23,7 @@
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["diary","🏖️ Holiday Diary"],
   ["checklist","📋 Checklist"],
   ["letterfb","💌 Letter Feedback"],
-  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["gkgame","🧠 GK Kids"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
+  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["gkgame","🧠 GK Kids"],["wfgame","⚔️ Word Fight"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
   ["messages","💬 Little Hands Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
@@ -44,6 +44,7 @@ const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width
   challenges: '<svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a2 2 0 0 0 2 4h1M17 6h3a2 2 0 0 1-2 4h-1"/></svg>',
   gala: '<svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="5"/><path d="M12 4.5l1.1 2.6 2.8.3-2 2 .5 2.8-2.4-1.4-2.4 1.4.5-2.8-2-2 2.8-.3L12 4.5z"/><path d="M8.5 13.5L7 21l5-2.5L17 21l-1.5-7.5"/></svg>',
   mapgame: '<svg viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14M9 4l6 2M3 6l6-2"/></svg>',
+  wfgame: '<svg viewBox="0 0 24 24"><path d="M4 4l12 12M20 4L8 16"/><path d="M14 20l-2-2M20 14l-2-2M4 20l2-2M4 14l2-2"/></svg>',
   marks: '<svg viewBox="0 0 24 24"><path d="M17 3l4 4L8 20l-5 1 1-5L17 3z"/><path d="M14 6l4 4"/></svg>',
   finance: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg>',
   tasks: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 15h4"/></svg>',
@@ -53,7 +54,7 @@ const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width
   activity: '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
   account: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>' };
 // Main tiles first, then the smaller "More" tiles.
-const TILE_MAIN = ["approvals", "diary", "checklist", "letterfb", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "gala", "mapgame", "gkgame", "marks", "finance"];
+const TILE_MAIN = ["approvals", "diary", "checklist", "letterfb", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "gala", "mapgame", "gkgame", "wfgame", "marks", "finance"];
 const TILE_MORE = ["tasks", "wow", "notices", "settings", "activity", "account"];
 // Deep link: /teacher.html#messages opens the Messages tab (used by the 🔔 bell).
 if (location.hash === "#messages") cur = "messages";
@@ -100,7 +101,7 @@ async function updateTileCounts(o) {
   set("students", o.students + " boys");
   set("parents", o.students + " parents");
   try {
-    const [m, l, d, b, c, lf, g, mg, gk] = await Promise.allSettled([
+    const [m, l, d, b, c, lf, g, mg, gk, wf] = await Promise.allSettled([
       api("GET", "/api/teacher/messages"),
       api("GET", "/api/teacher/learning-progress"),
       api("GET", "/api/teacher/holiday-diary"),
@@ -110,6 +111,7 @@ async function updateTileCounts(o) {
       api("GET", "/api/gala/board"),
       api("GET", "/api/teacher/map-game/overview"),
       api("GET", "/api/teacher/gk-game/overview"),
+      api("GET", "/api/teacher/wf-game/overview"),
     ]);
     if (m.status === "fulfilled") {
       const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
@@ -151,6 +153,13 @@ async function updateTileCounts(o) {
         ? (f.totals.pct === null ? "Not played yet" : `${f.totals.pct}% · ${f.totals.weakTests.length} weak test${f.totals.weakTests.length === 1 ? "" : "s"}`)
         : "Faaz only");
     }
+    if (wf.status === "fulfilled") {
+      const pls = wf.value.players || [];
+      const f = pls[0];
+      set("wfgame", pls.length
+        ? (f.totals.best === null ? "Not played yet" : `Best ${f.totals.best} / 108 · ${f.totals.weakPhases.length} weak phase${f.totals.weakPhases.length === 1 ? "" : "s"}`)
+        : "Thalha only");
+    }
     if (lf.status === "fulfilled") {
       const s = lf.value.summary || {};
       set("letterfb", (s.parents_ticked || 0) + " / " + (s.total || 38) + " ticked");
@@ -175,7 +184,7 @@ async function render() {
   // not when the tab opens — see vMessages.
   document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame, gkgame: vGkGame,
+  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame, gkgame: vGkGame, wfgame: vWfGame,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
@@ -1424,6 +1433,89 @@ async function vGkGame(p) {
     catch (e) { toast(e.message, false); render(); }
   });
   p.querySelectorAll("[data-gk-wrong]").forEach(b => b.onclick = () => { gkSub = "summary"; render(); });
+}
+
+// ── Word Fight — SIBAQ 2026, Bidaya BNS35 (Samad, Nov 2026) ─────
+// 6 phases in order, full match max 108 points. Game scores are
+// SEPARATE from writing points — they never touch the Points Board,
+// clubs or certificates. Practice rules: repeat word = -2 (official
+// SIBAQ has no minus marks); timer Verbs none, Nouns 20s, Adjectives
+// 15s, Synonyms 15s, Antonyms 10s, Phrasal Verbs 10s.
+let wfSub = "board", wfBoy = null;
+async function vWfGame(p) {
+  const [ov, players] = await Promise.all([
+    api("GET", "/api/teacher/wf-game/overview"),
+    api("GET", "/api/teacher/wf-game/players"),
+  ]);
+  const pls = ov.players || [];
+  if (!wfBoy || !pls.some(x => x.id === wfBoy)) wfBoy = pls.length ? pls[0].id : null;
+  const me = pls.find(x => x.id === wfBoy) || null;
+  const subBtn = (k, label) => `<button class="btn small ${wfSub === k ? "" : "ghost"}" data-wfsub="${k}">${label}</button>`;
+  let html = `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h2 style="color:#fff;margin:0">⚔️ Word Fight</h2>
+    <p style="margin:6px 0 0;color:#d4f0f5">SIBAQ 2026 Word Fight Eng (BNS35) · 6 phases in order · Full match max 108 points · 🔁 Revision Game</p>
+    <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">10 players — Thalha + 9 AI. Practice rules: repeat word = −2 (official SIBAQ has no minus marks). Timer: Verbs no timer, Nouns 20s, Adjectives 15s, Synonyms 15s, Antonyms 10s, Phrasal Verbs 10s. Word Passing is a word chain (last letter → next word). Game scores are separate from writing points — they never touch the Points Board, clubs or certificates.</p></div>
+    <div class="card"><label>Boy</label>
+      <select id="wf-boy" style="padding:8px;max-width:100%">${pls.map(x => `<option value="${x.id}" ${x.id === wfBoy ? "selected" : ""}>${esc(x.display_name)} (Ad ${esc(x.ad_no)})</option>`).join("") || `<option value="">No players yet</option>`}</select>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0">${subBtn("board", "📊 Monitoring")}${subBtn("summary", "📝 Total Summary")}</div></div>`;
+  if (!me) {
+    html += `<div class="card"><p class="muted">No boy can play yet. Add Thalha below (Who can play), then he can open the game any time.</p></div>`;
+  } else if (wfSub === "board") {
+    const pctCell = (t) => t.pct === null ? "—"
+      : `<b style="color:${t.weak ? "#dc2626" : t.strong ? "#15803d" : "#0b3c46"}">${t.pct}%</b>${t.weak ? " 🔴 weak" : t.strong ? " 🟢 strong" : ""}`;
+    const rq = await api("GET", "/api/teacher/wf-game/revision-queue/" + me.id);
+    const hist = (me.matches || []).slice().sort((x, y) => (y.created_at || "").localeCompare(x.created_at || ""));
+    html += `<div class="card"><h3>📊 ${esc(me.display_name)} — per-phase scores</h3>
+      <p class="muted">${me.totals.best !== null ? `Best match: <b>${me.totals.best} / 108</b> (${me.totals.pct}%)` : "Not played yet."}
+      ${me.totals.finished ? ` · Matches finished: ${me.totals.finished}` : ""}${me.totals.weakPhases.length ? ` · Weak: ${me.totals.weakPhases.join(", ")}` : ""}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}
+      <br>🔁 Revision queue: <b>${me.revision.count}</b> still wrong (${me.revision.mcqCount} questions + ${me.revision.repeatCount} repeated words) · ✅ ${me.revision.cleared} cleared · ${me.revision.everWrong} ever wrong.</p>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>Phase</th><th>Best</th><th>Latest</th><th>Played</th><th>%</th><th>Covered</th><th>Timer</th></tr>
+      ${me.perPhase.map(t => `<tr><td>${t.n}. ${esc(t.title)}</td>
+        <td><b>${t.best === null ? "—" : t.best + "/" + t.max}</b></td><td>${t.latest === null ? "—" : t.latest + "/" + t.max}</td>
+        <td>${t.attempts}</td><td>${pctCell(t)}</td>
+        <td>${t.seen}/${t.poolTotal} (${t.coveragePct}%)</td><td>${t.timer === null ? "No timer" : t.timer + "s"}</td></tr>`).join("")}
+      </table></div>
+      <p class="muted" style="font-size:.85rem">🔴 Weak = under 60% · 🟢 Strong = 80% or more. Covered = how much of the phase the boy has met (seen questions / all questions, or correct bank words / all bank words for Word Passing).</p></div>
+    <div class="card"><h3>🔁 Mistakes Revision Game — still wrong (${rq.count})</h3>
+      ${rq.mcq.length ? rq.mcq.map((q, i) => `<p><b>Q${i + 1}.</b> ${esc(q.question)} <span class="muted">(${esc(q.phase)})</span><br>
+        <span class="muted">Correct answer: <b>${esc(q.answer)}</b> · ${esc(q.point)}</span></p>`).join("") : ""}
+      ${rq.repeats.length ? `<h4>Repeated words (${rq.repeats.length})</h4>` + rq.repeats.map(r => `<p>🔁 <b>${esc(r.word)}</b> <span class="muted">(${esc(r.phase)} — give a new ${esc(r.category.slice(0, -1))} starting with “${esc(r.needLetter.toUpperCase())}”)</span></p>`).join("") : ""}
+      ${!rq.mcq.length && !rq.repeats.length ? `<p class="muted">Nothing left in the revision queue — every mistake has been cleared. 🌟</p>` : ""}
+      <p class="muted" style="font-size:.85rem">These come back in the boy's Revision Game until he answers them right. ✅ Cleared: ${rq.cleared} · Ever wrong: ${rq.everWrong}.</p></div>
+    <div class="card"><h3>🕒 Match history</h3>
+      ${hist.length ? `<div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>When</th><th>Total</th><th>Rank</th></tr>
+      ${hist.map(a => `<tr><td>${fmtDateTime(a.created_at)}</td>
+        <td><b>${a.finished_at ? a.total_score + " / 108" : "— (unfinished)"}</b></td>
+        <td>${a.finished_at ? "#" + a.rank + " of 10" : "—"}</td></tr>`).join("")}
+      </table></div>` : `<p class="muted">No games yet.</p>`}
+      <p><a class="btn" href="/api/teacher/wf-game/summary/${me.id}/wrong-answers.pdf" target="_blank">📄 Wrong-answers PDF (all games)</a></p></div>
+    <div class="card"><h3>👦 Who can play</h3>
+      <p class="muted">Thalha plays first — he is the only Bidaya candidate for Word Fight Eng. Tick more boys later to let them play too — each boy only ever sees his own game and scores.</p>
+      ${(players.students || []).map(s => `<label style="display:block;padding:5px 0"><input type="checkbox" data-wf-player="${s.id}" ${s.enabled ? "checked" : ""} style="width:18px;height:18px;accent-color:#0e7c8c"> <b>${esc(s.display_name)}</b> <span class="muted">(Ad ${esc(s.ad_no)})</span></label>`).join("")}</div>`;
+  } else if (wfSub === "summary") {
+    const s = await api("GET", "/api/teacher/wf-game/summary/" + me.id);
+    html += `<div class="card"><h3>📝 Total Summary — ${esc(me.display_name)}</h3>
+      <p>${s.totals.best !== null ? `Best match: <b>${s.totals.best} / 108</b> (${s.totals.pct}%).` : "Not played yet."}
+      ${s.totals.finished ? ` Matches finished: ${s.totals.finished}.` : ""} MCQ: ${s.totals.correct} correct out of ${s.totals.questions} · Word Passing: ${s.totals.wpCorrect} turns right out of ${s.totals.wpTurns} · Repeats: ${s.totals.repeats}.
+      ${s.totals.weakPhases.length ? ` Weak: ${s.totals.weakPhases.join(", ")}.` : ""}${s.totals.strongPhases.length ? ` Strong: ${s.totals.strongPhases.join(", ")}.` : ""}</p>
+      <p><a class="btn" href="/api/teacher/wf-game/summary/${me.id}/wrong-answers.pdf" target="_blank">📄 Wrong-answers PDF — print &amp; give to the boy</a></p>
+      ${s.wrongAnswers.length ? s.wrongAnswers.map((a, i) => `<div style="padding:10px 0;border-bottom:1px solid #e2e8f0">
+        <b>Q${i + 1}.</b> ${esc(a.question)} <span class="muted">(${esc(a.phase)}${a.mode && a.mode !== "Round" ? ` · ${esc(a.mode)}` : ""})</span><br>
+        ${a.kind === "word"
+          ? `<span style="color:#991b1b">The boy answered: ${esc(a.given_answer || "(no answer)")} — REPEAT, −2 points</span><br><b>Try instead: ${esc(a.correct_answer || "(any new word starting with that letter)")}</b>`
+          : `<span style="color:#991b1b">The boy answered: ${esc(a.given_answer || "(no answer)")}</span><br><b>Correct answer: ${esc(a.correct_answer)}</b><br><span class="muted">Learn: ${esc(a.point)}</span>`}
+      </div>`).join("") : `<p class="muted">No wrong answers — well done! 🌟</p>`}</div>`;
+  }
+  p.innerHTML = html;
+  p.querySelectorAll("[data-wfsub]").forEach(b => b.onclick = () => { wfSub = b.dataset.wfsub; render(); });
+  const boySel = document.getElementById("wf-boy");
+  if (boySel) boySel.onchange = () => { wfBoy = +boySel.value; render(); };
+  p.querySelectorAll("[data-wf-player]").forEach(cb => cb.onchange = async () => {
+    try { await api("POST", "/api/teacher/wf-game/players", { student_id: +cb.dataset.wfPlayer, enabled: cb.checked }); toast(cb.checked ? "Boy can play Word Fight now. ⚔️" : "Boy removed from Word Fight."); render(); }
+    catch (e) { toast(e.message, false); render(); }
+  });
 }
 
 async function vStudents(p) {
