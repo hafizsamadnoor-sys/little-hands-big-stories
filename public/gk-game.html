@@ -49,8 +49,10 @@ function renderHome() {
         <p class="muted">${esc(t.desc)}</p>
         <p>${t.passed ? `✅ Passed! Best: <b>${t.best}/${t.total}</b>` : t.best !== null ? `Best so far: <b>${t.best}/${t.total}</b> — need ${S.passMark} to pass` : "Not played yet"}
         ${t.attempts ? ` · Played ${t.attempts} round${t.attempts === 1 ? "" : "s"}` : ""}
-        <br>📖 Questions covered: <b>${t.coveragePct}%</b> (${t.seen} of ${t.poolTotal} seen)</p>
-        ${t.locked
+        ${t.poolTotal === 0 ? `📖 Questions coming soon — Samad will add them.</p>` : `📖 Questions covered: <b>${t.coveragePct}%</b> (${t.seen} of ${t.poolTotal} seen)</p>`}
+        ${t.poolTotal === 0
+          ? `<button class="btn ghost" disabled>📝 Questions coming soon</button>`
+          : t.locked
           ? `<button class="btn ghost" disabled>🔒 Locked — pass Test ${t.n - 1} first</button>`
           : `<button class="btn" data-play="${t.id}">${t.passed ? "▶ Play again" : "▶ Play " + esc(t.title)}</button>`}
       </div>`).join("")}
@@ -66,6 +68,7 @@ async function startTest(id) {
   box.innerHTML = `<div class="card"><p class="muted">Loading ${esc(id)}…</p></div>`;
   try {
     const d = await api("GET", `/api/gk-game/test/${id}/questions`);
+    if (!d.questions.length) { toast("Questions coming soon — Samad will add them."); loadTests(); return; }
     PLAY = { mode: "round", test: d.test, questions: d.questions, idx: 0, answers: [], picked: null };
     renderQ();
   } catch (e) { toast(e.message, false); loadTests(); }
