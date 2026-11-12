@@ -42,6 +42,7 @@
   <button class="tile" onclick="openDashSec('works',this)"><span class="tile-circ">✅</span><span class="tile-t">My Approved Works</span><span class="tile-n" id="tc-works">…</span></button>
   <button class="tile" onclick="openDashSec('gala',this)"><span class="tile-circ">🎉</span><span class="tile-t">Twelfth Gala</span><span class="tile-n" id="tc-gala">…</span></button>
   <button class="tile" id="tile-mapgame" onclick="openDashSec('mapgame',this)"><span class="tile-circ">🗺️</span><span class="tile-t">Map Study Game</span><span class="tile-n" id="tc-mapgame">…</span></button>
+  <button class="tile" id="tile-gkgame" onclick="openDashSec('gkgame',this)"><span class="tile-circ">🧠</span><span class="tile-t">GK Kids</span><span class="tile-n" id="tc-gkgame">…</span></button>
   <button class="tile" onclick="openDashSec('msgs',this)"><span class="tile-circ">💬</span><span class="tile-t">Messages</span><span class="tile-n" id="tc-msgs">…</span></button>
   <button class="tile" onclick="openDashSec('diary',this)"><span class="tile-circ">🏖️</span><span class="tile-t">Holiday Diary</span><span class="tile-n" id="tc-diary">…</span></button>
   <button class="tile" onclick="openDashSec('cert',this)"><span class="tile-circ">📜</span><span class="tile-t">My Certificate</span><span class="tile-n" id="tc-cert">…</span></button>
@@ -58,6 +59,7 @@
   <div class="dsec" id="sec-works" style="display:none"><h2>✅ Your Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-gala" style="display:none"><h2>🎉 Twelfth Gala</h2><div id="galabody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-mapgame" style="display:none"><h2>🗺️ Map Study Game</h2><div id="mapgamebody"><p class="muted">Loading…</p></div></div>
+  <div class="dsec" id="sec-gkgame" style="display:none"><h2>🧠 GK Kids</h2><div id="gkgamebody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-msgs" style="display:none"><h2 id="msgs-h2">💬 Messages from Teacher</h2><div id="mymsgs"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-diary" style="display:none"><div id="diarycard"></div></div>
   <div class="dsec" id="sec-cert" style="display:none"><div id="compcert"></div></div>
@@ -405,6 +407,22 @@ function allWorksHtml(works) {
         <a class="btn" href="/map-game.html">${next ? "▶ Play Stage " + next.n + " — " + esc(next.title) : "▶ Open the Map Study Game"}</a>`;
     }
   } catch (e) { document.getElementById("mapgamebody").innerHTML = ""; }
+  // GK Kids — only for players (Faaz for now); hidden otherwise.
+  try {
+    const gk = await api("GET", "/api/my/gk-game");
+    const tile = document.getElementById("tile-gkgame");
+    if (!gk.isPlayer) { if (tile) tile.style.display = "none"; }
+    else {
+      const done = gk.tests.filter(t => t.passed).length;
+      const rq = gk.revisionQueue || { count: 0, cleared: 0 };
+      setTc("tc-gkgame", done + " / 4 tests" + (rq.count ? ` · 🔁 ${rq.count} to revise` : ""));
+      const next = gk.tests.find(t => !t.locked && !t.passed);
+      document.getElementById("gkgamebody").innerHTML = `
+        <p>${done} of 4 mock tests passed. Game scores are only for the GK Kids game — they never change your writing points.</p>
+        ${rq.count ? `<p>🔁 <b>${rq.count} mistake${rq.count === 1 ? "" : "s"}</b> to revise${rq.cleared ? ` · ✅ ${rq.cleared} cleared` : ""} — open the game and play the Revision Game.</p>` : ""}
+        <a class="btn" href="/gk-game.html">${next ? "▶ Play " + esc(next.title) : "▶ Open GK Kids"}</a>`;
+    }
+  } catch (e) { document.getElementById("gkgamebody").innerHTML = ""; }
   // My marks
   try {
     const md = await api("GET", "/api/my/marks");

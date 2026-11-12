@@ -23,7 +23,7 @@
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["diary","🏖️ Holiday Diary"],
   ["checklist","📋 Checklist"],
   ["letterfb","💌 Letter Feedback"],
-  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
+  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["gkgame","🧠 GK Kids"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
   ["messages","💬 Little Hands Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
@@ -53,7 +53,7 @@ const TILE_ICON = { approvals: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width
   activity: '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
   account: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>' };
 // Main tiles first, then the smaller "More" tiles.
-const TILE_MAIN = ["approvals", "diary", "checklist", "letterfb", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "gala", "mapgame", "marks", "finance"];
+const TILE_MAIN = ["approvals", "diary", "checklist", "letterfb", "learning", "messages", "students", "parents", "completion", "points", "books", "challenges", "gala", "mapgame", "gkgame", "marks", "finance"];
 const TILE_MORE = ["tasks", "wow", "notices", "settings", "activity", "account"];
 // Deep link: /teacher.html#messages opens the Messages tab (used by the 🔔 bell).
 if (location.hash === "#messages") cur = "messages";
@@ -100,7 +100,7 @@ async function updateTileCounts(o) {
   set("students", o.students + " boys");
   set("parents", o.students + " parents");
   try {
-    const [m, l, d, b, c, lf, g, mg] = await Promise.allSettled([
+    const [m, l, d, b, c, lf, g, mg, gk] = await Promise.allSettled([
       api("GET", "/api/teacher/messages"),
       api("GET", "/api/teacher/learning-progress"),
       api("GET", "/api/teacher/holiday-diary"),
@@ -109,6 +109,7 @@ async function updateTileCounts(o) {
       api("GET", "/api/teacher/letter-feedback"),
       api("GET", "/api/gala/board"),
       api("GET", "/api/teacher/map-game/overview"),
+      api("GET", "/api/teacher/gk-game/overview"),
     ]);
     if (m.status === "fulfilled") {
       const seen = +(localStorage.getItem("lhbs_teacher_seen_msg") || 0);
@@ -143,6 +144,13 @@ async function updateTileCounts(o) {
         ? (f.totals.pct === null ? "Not played yet" : `${f.totals.pct}% · ${f.totals.weakStages.length} weak section${f.totals.weakStages.length === 1 ? "" : "s"}`)
         : "Faaz only");
     }
+    if (gk.status === "fulfilled") {
+      const pls = gk.value.players || [];
+      const f = pls[0];
+      set("gkgame", pls.length
+        ? (f.totals.pct === null ? "Not played yet" : `${f.totals.pct}% · ${f.totals.weakTests.length} weak test${f.totals.weakTests.length === 1 ? "" : "s"}`)
+        : "Faaz only");
+    }
     if (lf.status === "fulfilled") {
       const s = lf.value.summary || {};
       set("letterfb", (s.parents_ticked || 0) + " / " + (s.total || 38) + " ticked");
@@ -167,7 +175,7 @@ async function render() {
   // not when the tab opens — see vMessages.
   document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame,
+  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame, gkgame: vGkGame,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
@@ -1336,6 +1344,86 @@ async function vMapGame(p) {
     try { await api("POST", "/api/teacher/map-game/revision/" + b.dataset.mgRevdone + "/done", { done: +b.dataset.mgDone }); render(); }
     catch (e) { toast(e.message, false); }
   });
+}
+
+// ── GK Kids — SIBAQ 2026 GK Quiz (Samad, Nov 2026) ──────────
+// 4 mock tests in order (8/10 in a round to pass and unlock the
+// next). Game scores are SEPARATE from writing points — they never
+// touch the Points Board, clubs or certificates.
+let gkSub = "board", gkBoy = null;
+async function vGkGame(p) {
+  const [ov, players] = await Promise.all([
+    api("GET", "/api/teacher/gk-game/overview"),
+    api("GET", "/api/teacher/gk-game/players"),
+  ]);
+  const pls = ov.players || [];
+  if (!gkBoy || !pls.some(x => x.id === gkBoy)) gkBoy = pls.length ? pls[0].id : null;
+  const me = pls.find(x => x.id === gkBoy) || null;
+  const subBtn = (k, label) => `<button class="btn small ${gkSub === k ? "" : "ghost"}" data-gksub="${k}">${label}</button>`;
+  let html = `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h2 style="color:#fff;margin:0">🧠 GK Kids</h2>
+    <p style="margin:6px 0 0;color:#d4f0f5">SIBAQ 2026 GK Quiz (Bidaya &amp; Uoola) · 4 mock tests · 8/10 in a round to pass and open the next test · 🔁 Revision Game · Test 4 has photos</p>
+    <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">The boy can play any time. Game scores are separate from writing points — they never touch the Points Board, clubs or certificates. When he passes all 4 tests, this pack is deleted and a new syllabus is made.</p></div>
+    <div class="card"><label>Boy</label>
+      <select id="gk-boy" style="padding:8px;max-width:100%">${pls.map(x => `<option value="${x.id}" ${x.id === gkBoy ? "selected" : ""}>${esc(x.display_name)} (Ad ${esc(x.ad_no)})</option>`).join("") || `<option value="">No players yet</option>`}</select>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0">${subBtn("board", "📊 Monitoring")}${subBtn("summary", "📝 Total Summary")}</div></div>`;
+  if (!me) {
+    html += `<div class="card"><p class="muted">No boy can play yet. Add Faaz below (Who can play), then he can open the game any time.</p></div>`;
+  } else if (gkSub === "board") {
+    const pctCell = (t) => t.pct === null ? "—"
+      : `<b style="color:${t.weak ? "#dc2626" : t.strong ? "#15803d" : "#0b3c46"}">${t.pct}%</b>${t.weak ? " 🔴 weak" : t.strong ? " 🟢 strong" : ""}`;
+    const rq = await api("GET", "/api/teacher/gk-game/revision-queue/" + me.id);
+    const hist = (me.attempts || []).slice().sort((x, y) => (y.created_at || "").localeCompare(x.created_at || ""));
+    html += `<div class="card"><h3>📊 ${esc(me.display_name)} — per-test scores</h3>
+      <p class="muted">${me.totals.attempts ? `${me.totals.correct} correct out of ${me.totals.questions} questions in ${me.totals.attempts} round(s) (${me.totals.pct}%)` : "Not played yet."}
+      ${me.totals.weakTests.length ? ` · Weak: ${me.totals.weakTests.join(", ")}` : ""}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}
+      <br>🔁 Revision queue: <b>${me.revision.count}</b> still wrong · ✅ ${me.revision.cleared} cleared · ${me.revision.everWrong} ever wrong.</p>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>Test</th><th>Best</th><th>Latest</th><th>Played</th><th>%</th><th>Covered</th></tr>
+      ${me.perTest.map(t => `<tr><td>${t.icon} ${t.id}. ${esc(t.title)}</td>
+        <td><b>${t.best === null ? "—" : t.best + "/" + t.total}</b></td><td>${t.latest === null ? "—" : t.latest + "/" + t.total}</td>
+        <td>${t.attempts}</td><td>${pctCell(t)}</td>
+        <td>${t.seen}/${t.poolTotal} (${t.coveragePct}%)</td></tr>`).join("")}
+      </table></div>
+      <p class="muted" style="font-size:.85rem">🔴 Weak = under 60% · 🟢 Strong = 80% or more. Covered = how much of the test the boy has met (seen questions / all questions in that test).</p></div>
+    <div class="card"><h3>🔁 Mistakes Revision Game — still wrong (${rq.count})</h3>
+      ${rq.queue.length ? rq.queue.map((q, i) => `<p><b>Q${i + 1}.</b> ${esc(q.question)} <span class="muted">(${esc(q.test)}${q.is_image ? " · photo" : ""})</span><br>
+        <span class="muted">Correct answer: <b>${esc(q.answer)}</b> · ${esc(q.point)}</span></p>`).join("")
+        : `<p class="muted">Nothing left in the revision queue — every mistake has been cleared. 🌟</p>`}
+      <p class="muted" style="font-size:.85rem">These questions come back in the boy's Revision Game until he answers them right. ✅ Cleared: ${rq.cleared} · Ever wrong: ${rq.everWrong}.</p></div>
+    <div class="card"><h3>🕒 Attempt history</h3>
+      ${hist.length ? `<div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>When</th><th>Test</th><th>Score</th><th></th></tr>
+      ${hist.map(a => `<tr><td>${fmtDateTime(a.created_at)}</td><td>${esc(a.test)}</td>
+        <td><b>${a.score}/${a.total}</b>${a.score >= 8 ? " ✅" : ""}</td>
+        <td>${a.score < a.total ? `<button class="btn small ghost" data-gk-wrong="${a.id}">Wrong answers</button>` : ""}</td></tr>`).join("")}
+      </table></div>` : `<p class="muted">No games yet.</p>`}
+      <p><a class="btn" href="/api/teacher/gk-game/summary/${me.id}/wrong-answers.pdf" target="_blank">📄 Wrong-answers PDF (all games)</a></p></div>
+    <div class="card"><h3>👦 Who can play</h3>
+      <p class="muted">Faaz plays first. Tick more boys later to let them play too — each boy only ever sees his own game and scores.</p>
+      ${(players.students || []).map(s => `<label style="display:block;padding:5px 0"><input type="checkbox" data-gk-player="${s.id}" ${s.enabled ? "checked" : ""} style="width:18px;height:18px;accent-color:#0e7c8c"> <b>${esc(s.display_name)}</b> <span class="muted">(Ad ${esc(s.ad_no)})</span></label>`).join("")}</div>`;
+  } else if (gkSub === "summary") {
+    const s = await api("GET", "/api/teacher/gk-game/summary/" + me.id);
+    html += `<div class="card"><h3>📝 Total Summary — ${esc(me.display_name)}</h3>
+      <p>${s.totals.attempts ? `${s.totals.correct} correct out of ${s.totals.questions} questions in ${s.totals.attempts} round(s) (${s.totals.pct}%).` : "Not played yet."}
+      ${s.totals.weakTests.length ? ` Weak: ${s.totals.weakTests.join(", ")}.` : ""}${s.totals.strongTests.length ? ` Strong: ${s.totals.strongTests.join(", ")}.` : ""}</p>
+      <p><a class="btn" href="/api/teacher/gk-game/summary/${me.id}/wrong-answers.pdf" target="_blank">📄 Wrong-answers PDF — print &amp; give to the boy</a></p>
+      ${s.wrongAnswers.length ? s.wrongAnswers.map((a, i) => `<div style="padding:10px 0;border-bottom:1px solid #e2e8f0">
+        <b>Q${i + 1}.</b> ${esc(a.question)} <span class="muted">(${esc(a.test)}${a.mode && a.mode !== "Round" ? ` · ${esc(a.mode)}` : ""}${a.is_image ? " · photo" : ""})</span><br>
+        <span style="color:#991b1b">The boy answered: ${esc(a.given_answer || "(no answer)")}</span><br>
+        <b>Correct answer: ${esc(a.correct_answer)}</b><br>
+        <span class="muted">Learn: ${esc(a.point)}</span>
+      </div>`).join("") : `<p class="muted">No wrong answers — well done! 🌟</p>`}</div>`;
+  }
+  p.innerHTML = html;
+  p.querySelectorAll("[data-gksub]").forEach(b => b.onclick = () => { gkSub = b.dataset.gksub; render(); });
+  const boySel = document.getElementById("gk-boy");
+  if (boySel) boySel.onchange = () => { gkBoy = +boySel.value; render(); };
+  p.querySelectorAll("[data-gk-player]").forEach(cb => cb.onchange = async () => {
+    try { await api("POST", "/api/teacher/gk-game/players", { student_id: +cb.dataset.gkPlayer, enabled: cb.checked }); toast(cb.checked ? "Boy can play GK Kids now. 🧠" : "Boy removed from GK Kids."); render(); }
+    catch (e) { toast(e.message, false); render(); }
+  });
+  p.querySelectorAll("[data-gk-wrong]").forEach(b => b.onclick = () => { gkSub = "summary"; render(); });
 }
 
 async function vStudents(p) {

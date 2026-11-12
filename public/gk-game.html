@@ -1,0 +1,171 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GK Kids · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+.gk-opt{display:block;width:100%;text-align:left;padding:14px 16px;margin:8px 0;font-size:1.05rem;
+  background:#fff;border:2px solid #cbd5e1;border-radius:12px;cursor:pointer}
+.gk-opt.on{border-color:#0e7c8c;background:#ecfeff}
+.gk-opt:disabled{opacity:.75;cursor:default}
+.test-card{margin:10px 0}
+.test-card.locked{opacity:.6}
+.qimg{width:100%;max-width:420px;border-radius:12px;margin:8px 0;display:block}
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="game"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
+</div>
+<script>
+let S = null;          // tests data
+let PLAY = null;       // { mode, test, questions, idx, answers, picked }
+
+async function loadTests() {
+  S = await api("GET", "/api/gk-game/tests");
+  renderHome();
+}
+function renderHome() {
+  const box = document.getElementById("game");
+  const next = S.tests.find(t => !t.locked && !t.passed);
+  const rq = S.revisionQueue || { count: 0, cleared: 0 };
+  const passedCount = S.tests.filter(t => t.passed).length;
+  box.innerHTML = `<h1>🧠 GK Kids</h1>
+    <p class="muted">SIBAQ 26 · GK Quiz — Bidaya &amp; Uoola · 4 mock tests, one after the other.
+    Finish a test with ${S.passMark} out of 10 in a round to open the next one. You can play any time you like, and play a finished test again.
+    Each round picks 10 questions — new ones first, then the ones you got wrong, then review — so the whole test comes to you, bit by bit.</p>
+    <div class="card" style="border:2px solid #0e7c8c"><h3>🔁 Mistakes Revision Game</h3>
+      <p>${rq.count ? `You have <b>${rq.count} question${rq.count === 1 ? "" : "s"}</b> still wrong. Play them again until you get them right — a question leaves this game only when you answer it correctly.` : "No mistakes right now — well done! 🌟"}
+      ${rq.cleared ? `<br>✅ You have already cleared <b>${rq.cleared}</b> mistake${rq.cleared === 1 ? "" : "s"} by answering them right.` : ""}</p>
+      ${rq.count ? `<button class="btn" id="play-rev">▶ Play Revision Game (${Math.min(rq.count, 10)} questions)</button>` : ""}
+    </div>
+    ${S.tests.map(t => `
+      <div class="card test-card ${t.locked ? "locked" : ""}">
+        <h3>${t.icon} ${esc(t.title)}</h3>
+        <p class="muted">${esc(t.desc)}</p>
+        <p>${t.passed ? `✅ Passed! Best: <b>${t.best}/${t.total}</b>` : t.best !== null ? `Best so far: <b>${t.best}/${t.total}</b> — need ${S.passMark} to pass` : "Not played yet"}
+        ${t.attempts ? ` · Played ${t.attempts} round${t.attempts === 1 ? "" : "s"}` : ""}
+        <br>📖 Questions covered: <b>${t.coveragePct}%</b> (${t.seen} of ${t.poolTotal} seen)</p>
+        ${t.locked
+          ? `<button class="btn ghost" disabled>🔒 Locked — pass Test ${t.n - 1} first</button>`
+          : `<button class="btn" data-play="${t.id}">${t.passed ? "▶ Play again" : "▶ Play " + esc(t.title)}</button>`}
+      </div>`).join("")}
+    <p class="muted" style="font-size:.85rem">Game scores are only for the GK Kids game. They never change your writing points, Points Board, clubs or certificates.
+    When you pass all 4 tests, this pack is deleted and a new syllabus is made.</p>
+    <p class="muted" style="font-size:.85rem">${passedCount} of 4 tests passed.</p>`;
+  box.querySelectorAll("[data-play]").forEach(b => b.onclick = () => startTest(b.dataset.play));
+  const pr = document.getElementById("play-rev");
+  if (pr) pr.onclick = startRevision;
+}
+async function startTest(id) {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading ${esc(id)}…</p></div>`;
+  try {
+    const d = await api("GET", `/api/gk-game/test/${id}/questions`);
+    PLAY = { mode: "round", test: d.test, questions: d.questions, idx: 0, answers: [], picked: null };
+    renderQ();
+  } catch (e) { toast(e.message, false); loadTests(); }
+}
+async function startRevision() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading your mistakes…</p></div>`;
+  try {
+    const d = await api("GET", "/api/gk-game/revision");
+    if (!d.queue.length) { toast("No mistakes right now — well done!"); loadTests(); return; }
+    PLAY = { mode: "revision", test: null, questions: d.queue, idx: 0, answers: [], picked: null, total: d.count };
+    renderQ();
+  } catch (e) { toast(e.message, false); loadTests(); }
+}
+function renderQ() {
+  const box = document.getElementById("game");
+  const q = PLAY.questions[PLAY.idx];
+  const total = PLAY.questions.length;
+  const modeTitle = PLAY.mode === "revision" ? "🔁 Mistakes Revision"
+    : `${PLAY.test.icon} ${esc(PLAY.test.title)}`;
+  const modePill = PLAY.mode === "revision" ? "Revision — only your mistakes" : "Round — 10 questions";
+  box.innerHTML = `<div class="card">
+    <p><b>${modeTitle}</b>
+    <span class="pill">${modePill}</span>
+    <span class="pill">Question ${PLAY.idx + 1} of ${total}</span></p>
+    <h2 style="font-size:1.15rem">${esc(q.q)}</h2>
+    ${q.img ? `<img class="qimg" src="${esc(q.img)}" alt="Question photo">` : ""}
+    ${q.is_image ? `<p><span class="pill">🖼️ Look at the photo, then choose</span></p>` : ""}
+    <div>${q.options.map((o, i) => `<button class="gk-opt" data-opt="${esc(o)}">${esc(o)}</button>`).join("")}</div>
+    <button class="btn" id="qnext" disabled>${PLAY.idx + 1 === total ? "Finish ✅" : "Next →"}</button>
+    <p class="muted" style="font-size:.85rem">Tap one answer, then Next.</p>
+    </div>`;
+  let picked = null;
+  box.querySelectorAll("[data-opt]").forEach(b => b.onclick = () => {
+    if (picked !== null) return;
+    picked = b.dataset.opt;
+    PLAY.picked = picked;
+    box.querySelectorAll("[data-opt]").forEach(x => { x.disabled = true; if (x.dataset.opt === picked) x.classList.add("on"); });
+    document.getElementById("qnext").disabled = false;
+  });
+  document.getElementById("qnext").onclick = () => { submitOne(PLAY.picked === null ? "" : PLAY.picked); };
+}
+function submitOne(given) {
+  PLAY.answers.push({ key: PLAY.questions[PLAY.idx].key, given: given === null || given === undefined ? "" : String(given) });
+  PLAY.picked = null;
+  PLAY.idx++;
+  if (PLAY.idx >= PLAY.questions.length) finishRound();
+  else renderQ();
+}
+async function finishRound() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Checking your answers…</p></div>`;
+  const url = PLAY.mode === "revision" ? "/api/gk-game/revision/attempt"
+    : `/api/gk-game/test/${PLAY.test.id}/attempt`;
+  try {
+    const r = await api("POST", url, { answers: PLAY.answers });
+    const wrong = r.detail.filter(d => !d.correct);
+    const title = PLAY.mode === "revision" ? (wrong.length ? "💪 Keep revising!" : "🎉 All clear!")
+      : (r.passed ? "🎉 You passed!" : "💪 Keep going!");
+    let extra = "";
+    if (PLAY.mode === "round") {
+      const nextTest = S.tests.find(t => t.n === PLAY.test.n + 1);
+      extra = r.passed
+        ? (r.unlocked > PLAY.test.n && nextTest ? `✅ ${esc(nextTest.title)} is now open!` : "✅ You finished all 4 tests — amazing! Tell your teacher — the new syllabus comes next!")
+        : `You need ${S.passMark} out of ${r.total} to open the next test. Play again — you can do it!`;
+    } else {
+      extra = r.remaining ? `There are still <b>${r.remaining}</b> mistake${r.remaining === 1 ? "" : "s"} left — play the Revision Game again to clear them. (✅ Cleared so far: ${r.cleared}.)`
+        : `🌟 No mistakes left at all — you cleared every one!`;
+    }
+    box.innerHTML = `<div class="card">
+      <h1>${title}</h1>
+      <p style="font-size:1.3rem"><b>${r.score} / ${r.total} correct</b>${PLAY.mode === "round" ? ` · ${esc(PLAY.test.title)}` : " · Revision Game"}</p>
+      <p>${extra}</p>
+      <p><button class="btn" id="backhome">← Back to tests</button>
+      ${PLAY.mode === "round" && r.passed && r.unlocked > PLAY.test.n ? `<button class="btn" id="gonext" style="margin-left:8px">▶ Play next test</button>` : ""}
+      ${PLAY.mode === "round" && !r.passed ? `<button class="btn" id="retry" style="margin-left:8px">↻ Play this test again</button>` : ""}
+      ${PLAY.mode === "revision" && r.remaining ? `<button class="btn" id="retry" style="margin-left:8px">🔁 Play Revision again</button>` : ""}</p>
+      </div>
+      <div class="card"><h3>📝 Your answers</h3>
+      ${r.detail.map((d, i) => `<p>${d.correct ? "✅" : "❌"} <b>Q${i + 1}.</b> ${esc(d.question)}<br>
+        ${d.img ? `<img class="qimg" src="${esc(d.img)}" alt="Question photo">` : ""}
+        <span class="muted">You: ${esc(d.given || "(no answer)")} · Correct: <b>${esc(d.answer)}</b></span><br>
+        <span style="font-size:.9rem">💡 ${esc(d.point)}</span></p>`).join("")}
+      ${wrong.length ? `<p class="muted">Your teacher will get these ${wrong.length} question(s) with the correct answers, so you can learn them.</p>` : `<p>🌟 Perfect — no wrong answers this time!</p>`}
+      </div>`;
+    document.getElementById("backhome").onclick = loadTests;
+    const gn = document.getElementById("gonext"); if (gn) gn.onclick = () => startTest(S.tests.find(t => t.n === PLAY.test.n + 1).id);
+    const rt = document.getElementById("retry");
+    if (rt) rt.onclick = () => PLAY.mode === "revision" ? startRevision() : startTest(PLAY.test.id);
+    window.scrollTo(0, 0);
+  } catch (e) { toast(e.message, false); loadTests(); }
+}
+(async () => {
+  const user = await guard("student"); if (!user) return;
+  document.getElementById("nav").innerHTML = studentNav("gk-game.html");
+  try { await loadTests(); }
+  catch (e) {
+    document.getElementById("game").innerHTML = `<div class="card"><h1>🧠 GK Kids</h1>
+      <p>${esc(e.message)}</p><a class="btn" href="/dashboard.html">← Back home</a></div>`;
+  }
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
