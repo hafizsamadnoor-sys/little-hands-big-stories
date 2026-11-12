@@ -630,8 +630,8 @@ function js(v) { return JSON.stringify(v, null, 2); }
 const out =
   header +
   `const MAP_GAME_STAGES = ${js(OLD.MAP_GAME_STAGES)};\n\n` +
-  `// Pass mark to finish a stage and unlock the next one: 6 of 10.\n` +
-  `const MAP_GAME_PASS_MARK = ${OLD.MAP_GAME_PASS_MARK};\n` +
+  `// Pass mark to finish a stage and unlock the next one: 8 of 10 (Samad, 12 Nov 2026).\n` +
+  `const MAP_GAME_PASS_MARK = 8;\n` +
   `const MAP_GAME_TIME_PER_Q = ${js(OLD.MAP_GAME_TIME_PER_Q)}; // seconds; 0 = no timer\n` +
   `// Questions drawn per play (one stage = one play of 10).\n` +
   `const MAP_GAME_PLAY_COUNT = 10;\n` +
