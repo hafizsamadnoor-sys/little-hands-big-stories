@@ -13,6 +13,7 @@ const { DatabaseSync } = require("node:sqlite");
 const STUDENTS = require("./students");
 const MAP_GAME = require("./map-game-data");
 const GK_GAME = require("./gk-game-data");
+const WF_GAME = require("./wf-game-data");
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -596,8 +597,94 @@ CREATE TABLE IF NOT EXISTS gk_game_revision_answers (
   session_id TEXT NOT NULL DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 );
+-- Word Fight game (SIBAQ 2026, Bidaya BNS35 — Samad): game scores live ONLY
+-- here, never in points_log / Points Board / clubs / certificates.
+-- wf_game_players: which boys may play (Thalha first; add more later).
+-- wf_game_matches: one row per full match (6 phases, max 108 points).
+-- wf_game_attempts: one row per finished phase in a match (WP round or
+--   MCQ phase). ai_scores is JSON: the 9 AI players' scores that phase.
+-- wf_game_answers: one row per turn / question answered. kind 'word'
+--   = a Word Passing turn (points +2 / -2 repeat / 0); kind 'mcq' =
+--   a Synonym / Antonym / Phrasal Verb question (+3 / 0).
+-- wf_game_progress: per-boy cache — matches played, best total.
+-- wf_game_key_status: latest right/wrong per boy per MCQ question key —
+--   the single source of truth for MCQ coverage and the revision queue.
+-- wf_game_revision_answers: mistakes-revision plays (wrong MCQ questions
+--   + repeated Word Passing words, repeated until right); stored
+--   separately from match scores.
+CREATE TABLE IF NOT EXISTS wf_game_players (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  added_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS wf_game_matches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  total_score INTEGER NOT NULL DEFAULT 0,
+  total_max INTEGER NOT NULL DEFAULT 108,
+  ai_scores TEXT NOT NULL DEFAULT '',
+  phase_scores TEXT NOT NULL DEFAULT '',
+  start_letters TEXT NOT NULL DEFAULT '',
+  rank INTEGER,
+  finished_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS wf_game_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  match_id INTEGER NOT NULL REFERENCES wf_game_matches(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phase TEXT NOT NULL,
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  ai_scores TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS wf_game_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES wf_game_attempts(id) ON DELETE CASCADE,
+  match_id INTEGER NOT NULL REFERENCES wf_game_matches(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phase TEXT NOT NULL,
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  points INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'mcq',
+  player TEXT NOT NULL DEFAULT 'you',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS wf_game_progress (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  matches_played INTEGER NOT NULL DEFAULT 0,
+  best_score INTEGER,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS wf_game_key_status (
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  question_key TEXT NOT NULL,
+  phase TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (student_id, question_key)
+);
+CREATE TABLE IF NOT EXISTS wf_game_revision_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  phase TEXT NOT NULL,
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  session_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
+// Word Fight answers: which player made the turn ('you' or an AI name) —
+// AI turns must never count in the boy's totals, coverage or revision queue.
+try { db.exec("ALTER TABLE wf_game_answers ADD COLUMN player TEXT NOT NULL DEFAULT 'you'"); } catch (e) { /* already there */ }
 
 // Which teacher session an impersonated student session came from (for "back to teacher").
 try { db.exec("ALTER TABLE sessions ADD COLUMN impersonated_from TEXT"); } catch (e) { /* already there */ }
@@ -708,6 +795,20 @@ function seedGKGamePlayers() {
   } catch (e) { console.log("GK game seeding:", e.message); }
 }
 seedGKGamePlayers();
+// Word Fight game: Thalha Ibrahim (Ad 503, N1325) is the only player for
+// now — the only Bidaya candidate for Word Fight Eng (BNS35). Other boys
+// are added later by the teacher (Teacher Panel → Word Fight).
+// Named (not an IIFE) so the restore handler below can call it too: a
+// wipe-restore replaces wf_game_players from the backup, and a backup
+// taken before Thalha was ticked would drop him — re-seeding keeps the
+// Word Fight player enrolled after every deploy, wipe and restore.
+function seedWFGamePlayers() {
+  try {
+    const thalha = db.prepare("SELECT id FROM users WHERE role='student' AND (ad_no='503' OR display_name LIKE '%THALHA%')").get();
+    if (thalha) db.prepare("INSERT OR IGNORE INTO wf_game_players (student_id) VALUES (?)").run(thalha.id);
+  } catch (e) { console.log("Word Fight game seeding:", e.message); }
+}
+seedWFGamePlayers();
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
@@ -2903,6 +3004,593 @@ app.get("/api/teacher/gk-game/summary/:id/wrong-answers.pdf", requireTeacher, (r
   doc.end();
 });
 
+// ── Word Fight — SIBAQ 2026, Bidaya BNS35 ─────────────────────
+// 6 phases in concept order. A full match: Word Passing 3 turns each
+// per round (30 turns a round, 3 of them Thalha's) + 10 MCQ questions
+// in each of Synonyms / Antonyms / Phrasal Verbs. Maximum 108.
+// Game scores are separate from writing points — nothing here touches
+// points_log, awardPoints, the Points Board, clubs or certificates.
+// Server re-scores every Word Passing turn from the bank + the used
+// set, and every MCQ answer from the bank. Client scores are never
+// trusted. AI scores are computed from the submitted turn log (Word
+// Passing) or reported with the MCQ attempt (AI answers the same 10
+// questions) — they only decide the fun leaderboard, never points.
+const wfPhase = (id) => WF_GAME.WF_GAME_PHASES.find(p => p.id === id) || null;
+const wfIsPlayer = (sid) => !!db.prepare("SELECT 1 FROM wf_game_players WHERE student_id=?").get(sid);
+const wfBankWords = (cat) => cat === "verbs" ? WF_GAME.WF_GAME_VERBS
+  : cat === "nouns" ? WF_GAME.WF_GAME_NOUNS : WF_GAME.WF_GAME_ADJECTIVES;
+const wfMcqBank = (phaseId) => WF_GAME.WF_GAME_QUESTIONS[phaseId] || [];
+const wfPhaseOrder = (matchId) => new Set(db.prepare("SELECT phase FROM wf_game_attempts WHERE match_id=?").all(matchId).map(r => r.phase));
+function wfTouchKey(sid, phaseId, key, isCorrect) {
+  db.prepare(`INSERT INTO wf_game_key_status (student_id, question_key, phase, is_correct, updated_at)
+    VALUES (?,?,?, ?, datetime('now'))
+    ON CONFLICT(student_id, question_key) DO UPDATE SET is_correct=excluded.is_correct, phase=excluded.phase, updated_at=datetime('now')`)
+    .run(sid, key, phaseId, isCorrect ? 1 : 0);
+}
+const WF_MCQ_BANK_BY_KEY = (() => {
+  const m = new Map();
+  for (const pid of ["SYN", "ANT", "PHR"])
+    for (const q of WF_GAME.WF_GAME_QUESTIONS[pid] || []) m.set(q.key, { ...q, phase: pid });
+  return m;
+})();
+function wfMcqQuestionText(phaseId, q) {
+  if (phaseId === "SYN") return `What is the synonym of ${q.word.toUpperCase()}? (with its meaning)`;
+  if (phaseId === "ANT") return `What is the antonym (opposite) of ${q.word.toUpperCase()}?`;
+  return `What does the phrasal verb “${q.word}” mean?`;
+}
+// Mistakes revision queue: MCQ keys whose LATEST answer is wrong, plus
+// Word Passing words the boy repeated (points -2). A question / word
+// leaves the queue when it is next answered correctly.
+function wfRevisionInfo(sid) {
+  const wrongKeys = db.prepare("SELECT question_key, phase FROM wf_game_key_status WHERE student_id=? AND is_correct=0 ORDER BY phase, question_key").all(sid);
+  const mcqQueue = wrongKeys.map(r => WF_MCQ_BANK_BY_KEY.get(r.question_key)).filter(Boolean);
+  const repeatRows = db.prepare(`
+    SELECT phase, given_answer FROM wf_game_answers
+    WHERE student_id=? AND kind='word' AND points=-2 AND player='you'
+    GROUP BY phase, given_answer ORDER BY MAX(created_at) DESC`).all(sid);
+  // A repeated word leaves the queue once the boy fixes it in revision.
+  const clearedRepeatKeys = new Set(db.prepare(`
+    SELECT DISTINCT question_key FROM wf_game_revision_answers
+    WHERE student_id=? AND question_key LIKE 'repeat:%' AND is_correct=1`).all(sid).map(r => r.question_key));
+  const repeats = repeatRows
+    .filter(r => !clearedRepeatKeys.has(`repeat:${r.phase}:${r.given_answer}`))
+    .map(r => {
+    const ph = wfPhase(r.phase);
+    return { key: `repeat:${r.phase}:${r.given_answer}`, phase: r.phase, word: r.given_answer,
+      category: ph ? ph.cat : "", needLetter: (r.given_answer || "")[0] || "",
+      question: `You repeated “${r.given_answer}” in ${ph ? ph.title : r.phase}. Give a NEW ${ph ? ph.cat.slice(0, -1) : "word"} starting with “${(r.given_answer || "")[0].toUpperCase()}” that you have not used.` };
+  });
+  const everWrongMcq = db.prepare(`
+    SELECT question_key FROM wf_game_answers WHERE student_id=? AND kind='mcq' AND is_correct=0
+    UNION SELECT question_key FROM wf_game_revision_answers WHERE student_id=? AND is_correct=0`).all(sid, sid);
+  const correctKeys = new Set(db.prepare("SELECT question_key FROM wf_game_key_status WHERE student_id=? AND is_correct=1").all(sid).map(r => r.question_key));
+  const clearedMcq = everWrongMcq.filter(r => correctKeys.has(r.question_key)).length;
+  const clearedRepeats = db.prepare(`
+    SELECT COUNT(DISTINCT question_key) c FROM wf_game_revision_answers
+    WHERE student_id=? AND question_key LIKE 'repeat:%' AND is_correct=1`).get(sid).c;
+  const everRepeats = db.prepare(`
+    SELECT COUNT(DISTINCT question_key) c FROM wf_game_revision_answers
+    WHERE student_id=? AND question_key LIKE 'repeat:%'`).get(sid).c;
+  return { mcqQueue, repeats,
+    mcqCount: mcqQueue.length, repeatCount: repeats.length,
+    count: mcqQueue.length + repeats.length,
+    cleared: clearedMcq + clearedRepeats, everWrong: everWrongMcq.length + repeatRows.length };
+}
+// Draw N MCQ questions: UNSEEN first, then past mistakes, then review.
+function wfDraw(sid, phaseId, count) {
+  const bank = wfMcqBank(phaseId);
+  const rows = db.prepare("SELECT question_key, is_correct FROM wf_game_key_status WHERE student_id=? AND phase=?").all(sid, phaseId);
+  const seen = new Set(rows.map(r => r.question_key));
+  const mistakes = new Set(rows.filter(r => !r.is_correct).map(r => r.question_key));
+  const shuf = (a) => { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
+  const unseen = shuf(bank.filter(q => !seen.has(q.key)));
+  const wrong = shuf(bank.filter(q => mistakes.has(q.key)));
+  const review = shuf(bank.filter(q => seen.has(q.key) && !mistakes.has(q.key)));
+  return shuf([...unseen, ...wrong, ...review].slice(0, count));
+}
+function wfPerPhase(sid) {
+  const attempts = db.prepare("SELECT * FROM wf_game_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  return WF_GAME.WF_GAME_PHASES.map(p => {
+    const atts = attempts.filter(a => a.phase === p.id);
+    const best = atts.length ? Math.max(...atts.map(a => a.score)) : null;
+    const latest = atts.length ? atts[0].score : null;
+    const pct = best === null ? null : Math.round(best / p.max * 100);
+    let poolTotal, seen;
+    if (p.kind === "word") {
+      poolTotal = wfBankWords(p.cat).length;
+      seen = db.prepare("SELECT COUNT(DISTINCT given_answer) c FROM wf_game_answers WHERE student_id=? AND phase=? AND kind='word' AND is_correct=1 AND player='you'").get(sid, p.id).c;
+    } else {
+      poolTotal = wfMcqBank(p.id).length;
+      seen = db.prepare("SELECT COUNT(*) c FROM wf_game_key_status WHERE student_id=? AND phase=?").get(sid, p.id).c;
+    }
+    return { id: p.id, n: p.n, kind: p.kind, cat: p.cat, title: p.title, timer: p.timer, max: p.max,
+      attempts: atts.length, best, latest, total: p.max, pct,
+      poolTotal, seen, coveragePct: poolTotal ? Math.round(seen / poolTotal * 100) : 0,
+      weak: pct !== null && pct < 60, strong: pct !== null && pct >= 80 };
+  });
+}
+function wfAllWrongAnswers(sid) {
+  const mcq = db.prepare(`
+    SELECT question_key, phase, question, given_answer, correct_answer, is_correct, '' AS point, created_at, 'Round' AS mode, 'mcq' AS kind FROM wf_game_answers WHERE student_id=? AND kind='mcq' AND is_correct=0
+    UNION ALL SELECT question_key, phase, question, given_answer, correct_answer, is_correct, '' AS point, created_at, 'Revision' AS mode, 'mcq' AS kind FROM wf_game_revision_answers WHERE student_id=? AND is_correct=0 AND question_key NOT LIKE 'repeat:%'
+    ORDER BY phase, created_at`).all(sid, sid);
+  const repeats = db.prepare(`
+    SELECT 'repeat:' || phase || ':' || given_answer AS question_key, phase,
+      question, given_answer, correct_answer, is_correct, '' AS point, created_at, 'Round' AS mode, 'word' AS kind
+    FROM wf_game_answers WHERE student_id=? AND kind='word' AND points=-2 AND player='you' ORDER BY phase, created_at`).all(sid);
+  // wf_game_answers has no point column — enrich MCQ wrongs from the bank.
+  for (const r of mcq) {
+    const q = WF_MCQ_BANK_BY_KEY.get(r.question_key);
+    if (q) r.point = q.point;
+  }
+  return [...mcq, ...repeats];
+}
+function wfSummary(sid) {
+  const stu = db.prepare("SELECT id, display_name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!stu) return null;
+  const matches = db.prepare("SELECT * FROM wf_game_matches WHERE student_id=? ORDER BY id DESC").all(sid);
+  const attempts = db.prepare("SELECT * FROM wf_game_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  const wrong = wfAllWrongAnswers(sid);
+  const perPhase = wfPerPhase(sid);
+  const rev = wfRevisionInfo(sid);
+  const finished = matches.filter(m => m.finished_at);
+  const best = finished.length ? Math.max(...finished.map(m => m.total_score)) : null;
+  const mcqQ = db.prepare("SELECT COUNT(*) c FROM wf_game_answers WHERE student_id=? AND kind='mcq' AND player='you'").get(sid).c;
+  const mcqRight = db.prepare("SELECT COUNT(*) c FROM wf_game_answers WHERE student_id=? AND kind='mcq' AND is_correct=1 AND player='you'").get(sid).c;
+  const wpTurns = db.prepare("SELECT COUNT(*) c FROM wf_game_answers WHERE student_id=? AND kind='word' AND player='you'").get(sid).c;
+  const wpRight = db.prepare("SELECT COUNT(*) c FROM wf_game_answers WHERE student_id=? AND kind='word' AND is_correct=1 AND player='you'").get(sid).c;
+  const repeats = db.prepare("SELECT COUNT(*) c FROM wf_game_answers WHERE student_id=? AND kind='word' AND points=-2 AND player='you'").get(sid).c;
+  return { student: stu, matches, attempts, perPhase, wrongAnswers: wrong,
+    revision: { mcqCount: rev.mcqCount, repeatCount: rev.repeatCount, count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong },
+    totals: { matches: matches.length, finished: finished.length, best,
+      questions: mcqQ, correct: mcqRight, wpTurns, wpCorrect: wpRight, repeats,
+      pct: best === null ? null : Math.round(best / WF_GAME.WF_GAME_MAX_TOTAL * 100),
+      weakPhases: perPhase.filter(s => s.weak).map(s => s.id),
+      strongPhases: perPhase.filter(s => s.strong).map(s => s.id) } };
+}
+function wfRefreshProgress(sid) {
+  const finished = db.prepare("SELECT COUNT(*) c, MAX(total_score) b FROM wf_game_matches WHERE student_id=? AND finished_at IS NOT NULL").get(sid);
+  db.prepare(`INSERT INTO wf_game_progress (student_id, matches_played, best_score, updated_at)
+    VALUES (?,?,?, datetime('now'))
+    ON CONFLICT(student_id) DO UPDATE SET matches_played=excluded.matches_played, best_score=excluded.best_score, updated_at=datetime('now')`)
+    .run(sid, finished.c, finished.b);
+  return { matches_played: finished.c, best_score: finished.b };
+}
+// ── Server-side Word Passing scorer ──
+// Walks the full 30-turn log in order. Repeat = -2 (practice rule),
+// correct new bank word starting with the needed letter = +2, anything
+// else = 0. Only an accepted word advances the chain; a repeat / wrong
+// word / no word leaves the needed letter unchanged. Dead letter:
+// if no unused bank word starts with the needed letter, the chain
+// restarts with a new start letter (recorded in the detail).
+function wfScoreWordTurns(phase, startLetter, turns) {
+  const bank = wfBankWords(phase.cat);
+  const bankSet = new Set(bank);
+  let need = (startLetter || "s").toLowerCase();
+  const used = [];
+  const detail = [];
+  const aiTotals = {};
+  let childScore = 0;
+  const startLetters = ["s", "b", "t", "c", "p", "r", "e", "l", "h", "w", "a", "g", "m", "n", "d"];
+  const suggestion = (letter) => bank.find(w => w[0] === letter && !used.includes(w)) || "";
+  for (let i = 0; i < turns.length; i++) {
+    const t = turns[i] || {};
+    const player = String(t.player || "");
+    const word = String(t.word || "").trim().toLowerCase();
+    let resetFrom = null;
+    if (!bank.some(w => w[0] === need && !used.includes(w))) {
+      // Deterministic reset (first available letter, fixed order) — the
+      // browser plays the same turns locally, so both sides must pick
+      // the same new letter or their chains would diverge.
+      const avail = startLetters.filter(L => bank.some(w => w[0] === L && !used.includes(w)));
+      if (avail.length) { resetFrom = need; need = avail[0]; }
+    }
+    const needAtStart = need;
+    let points = 0, outcome = "no word", correct = "";
+    if (!word) { outcome = "no word"; correct = suggestion(need); }
+    else if (used.includes(word)) { points = -2; outcome = "repeat"; correct = suggestion(need); }
+    else if (word[0] !== need) { outcome = "wrong letter"; correct = suggestion(need); }
+    else if (!bankSet.has(word)) { outcome = "not in bank"; correct = suggestion(need); }
+    else {
+      points = 2; outcome = "correct";
+      used.push(word);
+      need = word.slice(-1);
+    }
+    if (player === "you") childScore += points;
+    else if (player) aiTotals[player] = (aiTotals[player] || 0) + points;
+    detail.push({ turn: i + 1, player, word, points, outcome, need: needAtStart, nextNeed: need,
+      resetFrom, correct, question: `${phase.title}: give a ${phase.cat.slice(0, -1)} starting with “${needAtStart.toUpperCase()}”` });
+  }
+  return { detail, childScore, aiTotals, used };
+}
+function wfLeaderboard(match) {
+  const ai = (() => { try { return JSON.parse(match.ai_scores || "[]"); } catch (_) { return []; } })();
+  const rows = [{ name: "Thalha (You)", level: "you", score: match.total_score || 0 }, ...ai];
+  rows.sort((a, b) => b.score - a.score); // stable: Thalha first on a tie
+  return rows.map((r, i) => ({ ...r, rank: i + 1 }));
+}
+// Student: my phases (best / latest / coverage / timers) + revision queue.
+app.get("/api/wf-game/phases", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const rev = wfRevisionInfo(req.user.id);
+  const prog = db.prepare("SELECT * FROM wf_game_progress WHERE student_id=?").get(req.user.id);
+  res.json({ phases: wfPerPhase(req.user.id), maxTotal: WF_GAME.WF_GAME_MAX_TOTAL,
+    ai: WF_GAME.WF_GAME_AI, best: prog ? prog.best_score : null,
+    matchesPlayed: prog ? prog.matches_played : 0,
+    revisionQueue: { count: rev.count, mcqCount: rev.mcqCount, repeatCount: rev.repeatCount, cleared: rev.cleared, everWrong: rev.everWrong } });
+});
+app.get("/api/my/wf-game", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.json({ isPlayer: false });
+  const rev = wfRevisionInfo(req.user.id);
+  const prog = db.prepare("SELECT * FROM wf_game_progress WHERE student_id=?").get(req.user.id);
+  res.json({ isPlayer: true, phases: wfPerPhase(req.user.id), maxTotal: WF_GAME.WF_GAME_MAX_TOTAL,
+    best: prog ? prog.best_score : null, matchesPlayed: prog ? prog.matches_played : 0,
+    revisionQueue: { count: rev.count, mcqCount: rev.mcqCount, repeatCount: rev.repeatCount, cleared: rev.cleared } });
+});
+// Student: the Study Bank (words + MCQ questions WITH answers — study
+// material, not the play draw). Play draws never send answers.
+app.get("/api/wf-game/bank", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  res.json({ verbs: WF_GAME.WF_GAME_VERBS, nouns: WF_GAME.WF_GAME_NOUNS, adjectives: WF_GAME.WF_GAME_ADJECTIVES,
+    synonyms: WF_GAME.WF_GAME_QUESTIONS.SYN, antonyms: WF_GAME.WF_GAME_QUESTIONS.ANT, phrasal: WF_GAME.WF_GAME_QUESTIONS.PHR });
+});
+// Student: start a full match. The server picks the Word Passing start
+// letter for each round and returns the AI roster.
+app.post("/api/wf-game/match/start", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const letters = ["s", "b", "t", "c", "p", "r"];
+  const pick = () => letters[Math.floor(Math.random() * letters.length)];
+  const startLetters = { WP1: pick(), WP2: pick(), WP3: pick() };
+  const m = db.prepare("INSERT INTO wf_game_matches (student_id, total_score, total_max, ai_scores, phase_scores, start_letters) VALUES (?,?,?,?,?,?)")
+    .run(req.user.id, 0, WF_GAME.WF_GAME_MAX_TOTAL, "[]", "{}", JSON.stringify(startLetters));
+  res.json({ ok: true, match_id: m.lastInsertRowid, ai: WF_GAME.WF_GAME_AI,
+    startLetters, phases: WF_GAME.WF_GAME_PHASES });
+});
+// Student: draw 10 MCQ questions for one phase — UNSEEN first, then
+// past mistakes, then review. Correct answers are NEVER sent.
+app.get("/api/wf-game/phase/:id/questions", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const id = String(req.params.id).toUpperCase();
+  const p = wfPhase(id);
+  if (!p) return res.status(404).json({ error: "No such phase." });
+  if (p.kind !== "mcq") return res.status(400).json({ error: "Word Passing has no questions — use the Study Bank." });
+  const drawn = wfDraw(req.user.id, id, WF_GAME.WF_GAME_PLAY_COUNT);
+  const shuf = (a) => { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
+  const qs = drawn.map(q => ({ key: q.key, q: wfMcqQuestionText(id, q), options: shuf(q.options) }));
+  const seen = db.prepare("SELECT COUNT(*) c FROM wf_game_key_status WHERE student_id=? AND phase=?").get(req.user.id, id).c;
+  res.json({ phase: p, questions: qs,
+    coverage: { seen, total: wfMcqBank(id).length, pct: Math.round(seen / wfMcqBank(id).length * 100) } });
+});
+// Student: submit one finished Word Passing round (30 turns, seats in
+// order, 3 turns each). Body: { match_id, turns: [{ player, word }] }.
+// The server re-scores every turn from the bank + used set.
+app.post("/api/wf-game/phase/:id/word-attempt", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const id = String(req.params.id).toUpperCase();
+  const p = wfPhase(id);
+  if (!p) return res.status(404).json({ error: "No such phase." });
+  if (p.kind !== "word") return res.status(400).json({ error: "This phase is an MCQ phase." });
+  const matchId = Number((req.body || {}).match_id);
+  const match = db.prepare("SELECT * FROM wf_game_matches WHERE id=? AND student_id=?").get(matchId, req.user.id);
+  if (!match) return res.status(404).json({ error: "No such match." });
+  if (match.finished_at) return res.status(400).json({ error: "This match is already finished." });
+  const done = wfPhaseOrder(matchId);
+  if (done.has(id)) return res.status(400).json({ error: "This phase was already played in this match." });
+  for (const prev of WF_GAME.WF_GAME_PHASES.filter(x => x.n < p.n)) {
+    if (!done.has(prev.id)) return res.status(400).json({ error: `Play ${prev.title} first.` });
+  }
+  const turns = (req.body || {}).turns || [];
+  const seats = ["you", ...WF_GAME.WF_GAME_AI.map(a => a.name)];
+  const expectedTurns = seats.length * WF_GAME.WF_GAME_WP_TURNS_EACH;
+  if (!Array.isArray(turns) || turns.length !== expectedTurns)
+    return res.status(400).json({ error: `Send all ${expectedTurns} turns (10 players × ${WF_GAME.WF_GAME_WP_TURNS_EACH}).` });
+  for (let i = 0; i < turns.length; i++) {
+    if (String((turns[i] || {}).player) !== seats[i % seats.length])
+      return res.status(400).json({ error: `Turn ${i + 1} should be ${seats[i % seats.length]}.` });
+  }
+  let startLetters = {};
+  try { startLetters = JSON.parse(match.start_letters || "{}"); } catch (_) {}
+  const scored = wfScoreWordTurns(p, startLetters[id] || "s", turns);
+  const aiScores = WF_GAME.WF_GAME_AI.map(a => ({ name: a.name, level: a.level, score: scored.aiTotals[a.name] || 0 }));
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO wf_game_attempts (match_id, student_id, phase, score, total, ai_scores) VALUES (?,?,?,?,?,?)")
+      .run(matchId, req.user.id, id, scored.childScore, p.max, JSON.stringify(aiScores));
+    const ins = db.prepare(`INSERT INTO wf_game_answers
+      (attempt_id, match_id, student_id, phase, question_key, question, given_answer, correct_answer, is_correct, points, kind, player)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
+    scored.detail.forEach((d, i) => {
+      ins.run(att.lastInsertRowid, matchId, req.user.id, id, `wp:${id}:${i + 1}`, d.question,
+        d.word || "", d.outcome === "correct" ? d.word : (d.correct || ""),
+        d.outcome === "correct" ? 1 : 0, d.points, "word", d.player);
+    });
+    const ps = (() => { try { return JSON.parse(match.phase_scores || "{}"); } catch (_) { return {}; } })();
+    ps[id] = scored.childScore;
+    db.prepare("UPDATE wf_game_matches SET phase_scores=? WHERE id=?").run(JSON.stringify(ps), matchId);
+    db.exec("COMMIT");
+    res.json({ ok: true, attempt_id: att.lastInsertRowid, phase: p, score: scored.childScore, max: p.max,
+      aiScores, detail: scored.detail, phases: wfPerPhase(req.user.id) });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your round." }); }
+});
+// Student: submit one finished MCQ phase (10 drawn questions).
+// Body: { match_id, answers: [{ key, given }], aiScores: [{ name, score }] }.
+// aiScores are the AI players' scores on the same 10 questions (they
+// only decide the leaderboard). The boy's score is re-checked here.
+app.post("/api/wf-game/phase/:id/attempt", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const id = String(req.params.id).toUpperCase();
+  const p = wfPhase(id);
+  if (!p) return res.status(404).json({ error: "No such phase." });
+  if (p.kind !== "mcq") return res.status(400).json({ error: "This phase is a Word Passing round." });
+  const matchId = Number((req.body || {}).match_id);
+  const match = db.prepare("SELECT * FROM wf_game_matches WHERE id=? AND student_id=?").get(matchId, req.user.id);
+  if (!match) return res.status(404).json({ error: "No such match." });
+  if (match.finished_at) return res.status(400).json({ error: "This match is already finished." });
+  const done = wfPhaseOrder(matchId);
+  if (done.has(id)) return res.status(400).json({ error: "This phase was already played in this match." });
+  for (const prev of WF_GAME.WF_GAME_PHASES.filter(x => x.n < p.n)) {
+    if (!done.has(prev.id)) return res.status(400).json({ error: `Play ${prev.title} first.` });
+  }
+  const bank = wfMcqBank(id);
+  const byKey = new Map(bank.map(q => [q.key, q]));
+  const given = (req.body || {}).answers || [];
+  if (!Array.isArray(given) || given.length !== WF_GAME.WF_GAME_PLAY_COUNT)
+    return res.status(400).json({ error: `Answer all ${WF_GAME.WF_GAME_PLAY_COUNT} questions.` });
+  const aiIn = (req.body || {}).aiScores || [];
+  const aiScores = [];
+  for (const a of WF_GAME.WF_GAME_AI) {
+    const row = Array.isArray(aiIn) ? aiIn.find(x => x && x.name === a.name) : null;
+    const sc = row ? Number(row.score) : 0;
+    if (!Number.isInteger(sc) || sc < 0 || sc > p.max || sc % 3 !== 0)
+      return res.status(400).json({ error: "AI scores must be 0–30 in steps of 3." });
+    aiScores.push({ name: a.name, level: a.level, score: sc });
+  }
+  let score = 0;
+  const detail = [];
+  const seenKeys = new Set();
+  for (const a of given) {
+    const q = byKey.get(a && a.key);
+    if (!q) return res.status(400).json({ error: "One of the questions is not from this phase." });
+    if (seenKeys.has(q.key)) return res.status(400).json({ error: "The same question was answered twice." });
+    seenKeys.add(q.key);
+    const g = a.given === undefined || a.given === null ? "" : String(a.given);
+    if (g !== "" && !q.options.includes(g)) return res.status(400).json({ error: "One answer is not one of the options." });
+    const ok = g === q.answer;
+    if (ok) score += 3;
+    detail.push({ key: q.key, question: wfMcqQuestionText(id, q), given: g, correct: ok, answer: q.answer, point: q.point });
+  }
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO wf_game_attempts (match_id, student_id, phase, score, total, ai_scores) VALUES (?,?,?,?,?,?)")
+      .run(matchId, req.user.id, id, score, p.max, JSON.stringify(aiScores));
+    const ins = db.prepare(`INSERT INTO wf_game_answers
+      (attempt_id, match_id, student_id, phase, question_key, question, given_answer, correct_answer, is_correct, points, kind)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const d of detail) {
+      ins.run(att.lastInsertRowid, matchId, req.user.id, id, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0, d.correct ? 3 : 0, "mcq");
+      wfTouchKey(req.user.id, id, d.key, d.correct);
+    }
+    const ps = (() => { try { return JSON.parse(match.phase_scores || "{}"); } catch (_) { return {}; } })();
+    ps[id] = score;
+    db.prepare("UPDATE wf_game_matches SET phase_scores=? WHERE id=?").run(JSON.stringify(ps), matchId);
+    db.exec("COMMIT");
+    res.json({ ok: true, attempt_id: att.lastInsertRowid, phase: p, score, max: p.max,
+      aiScores, detail, phases: wfPerPhase(req.user.id),
+      revisionQueue: wfRevisionInfo(req.user.id).count });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your phase." }); }
+});
+// Student: finish a match (all 6 phases played). Rank is the boy's
+// place among the 10 players; ties put the boy first.
+app.post("/api/wf-game/match/:id/finish", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const matchId = Number(req.params.id);
+  const match = db.prepare("SELECT * FROM wf_game_matches WHERE id=? AND student_id=?").get(matchId, req.user.id);
+  if (!match) return res.status(404).json({ error: "No such match." });
+  if (match.finished_at) {
+    return res.json({ ok: true, match_id: matchId, total: match.total_score, max: match.total_max,
+      rank: match.rank, leaderboard: wfLeaderboard(match) });
+  }
+  const done = wfPhaseOrder(matchId);
+  const missing = WF_GAME.WF_GAME_PHASES.filter(x => !done.has(x.id));
+  if (missing.length) return res.status(400).json({ error: `Play ${missing.map(m => m.title).join(", ")} first.` });
+  const atts = db.prepare("SELECT * FROM wf_game_attempts WHERE match_id=?").all(matchId);
+  const total = atts.reduce((a, x) => a + x.score, 0);
+  const aiTotals = {};
+  for (const a of atts) {
+    try { for (const s of JSON.parse(a.ai_scores || "[]")) aiTotals[s.name] = (aiTotals[s.name] || 0) + (s.score || 0); } catch (_) {}
+  }
+  const aiScores = WF_GAME.WF_GAME_AI.map(x => ({ name: x.name, level: x.level, score: aiTotals[x.name] || 0 }));
+  const rows = [{ name: "Thalha (You)", level: "you", score: total }, ...aiScores];
+  rows.sort((a, b) => b.score - a.score);
+  const rank = rows.findIndex(r => r.level === "you") + 1;
+  db.prepare("UPDATE wf_game_matches SET total_score=?, ai_scores=?, rank=?, finished_at=datetime('now') WHERE id=?")
+    .run(total, JSON.stringify(aiScores), rank, matchId);
+  const prog = wfRefreshProgress(req.user.id);
+  const m2 = db.prepare("SELECT * FROM wf_game_matches WHERE id=?").get(matchId);
+  res.json({ ok: true, match_id: matchId, total, max: WF_GAME.WF_GAME_MAX_TOTAL, rank,
+    leaderboard: rows.map((r, i) => ({ ...r, rank: i + 1 })),
+    best: prog.best_score, matchesPlayed: prog.matches_played });
+});
+// ── Mistakes Revision Game ──
+// Wrong MCQ questions (latest answer wrong) + repeated Word Passing
+// words. A question / word leaves the queue when answered correctly;
+// revision plays never touch match scores.
+app.get("/api/wf-game/revision", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const rev = wfRevisionInfo(req.user.id);
+  const shuf = (a) => { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
+  const mcq = rev.mcqQueue.slice(0, WF_GAME.WF_GAME_PLAY_COUNT).map(q => ({
+    key: q.key, phase: q.phase, q: wfMcqQuestionText(q.phase, q), options: shuf(q.options) }));
+  res.json({ mcq, repeats: rev.repeats, count: rev.count, mcqCount: rev.mcqCount,
+    repeatCount: rev.repeatCount, cleared: rev.cleared, everWrong: rev.everWrong });
+});
+// Student: submit one revision play. Body: { answers: [{ key, given }],
+// words: [{ key, givenWord }] }. MCQ answers are checked against the
+// bank; a repeated word is cleared by typing a NEW bank word of the
+// same kind starting with the same letter.
+app.post("/api/wf-game/revision/attempt", requireStudent, (req, res) => {
+  if (!wfIsPlayer(req.user.id)) return res.status(403).json({ error: "The Word Fight game is only for Thalha for now." });
+  const rev = wfRevisionInfo(req.user.id);
+  const mcqInQueue = new Set(rev.mcqQueue.map(q => q.key));
+  const repeatInQueue = new Map(rev.repeats.map(r => [r.key, r]));
+  const answers = (req.body || {}).answers || [];
+  const words = (req.body || {}).words || [];
+  if ((!Array.isArray(answers) || !answers.length) && (!Array.isArray(words) || !words.length))
+    return res.status(400).json({ error: "Answer at least one revision question." });
+  if (answers.length + words.length > WF_GAME.WF_GAME_PLAY_COUNT)
+    return res.status(400).json({ error: `Answer at most ${WF_GAME.WF_GAME_PLAY_COUNT} revision items.` });
+  let mcqScore = 0;
+  const detail = [];
+  const wordDetail = [];
+  const seenKeys = new Set();
+  for (const a of answers) {
+    const q = WF_MCQ_BANK_BY_KEY.get(a && a.key);
+    if (!q || !mcqInQueue.has(q.key)) return res.status(400).json({ error: "One of the questions is not in your revision queue." });
+    if (seenKeys.has(q.key)) return res.status(400).json({ error: "The same question was answered twice." });
+    seenKeys.add(q.key);
+    const g = a.given === undefined || a.given === null ? "" : String(a.given);
+    if (g !== "" && !q.options.includes(g)) return res.status(400).json({ error: "One answer is not one of the options." });
+    const ok = g === q.answer;
+    if (ok) mcqScore++;
+    detail.push({ key: q.key, phase: q.phase, question: wfMcqQuestionText(q.phase, q), given: g, correct: ok, answer: q.answer, point: q.point });
+  }
+  for (const w of words) {
+    const item = repeatInQueue.get(w && w.key);
+    if (!item) return res.status(400).json({ error: "One of the words is not in your revision queue." });
+    if (seenKeys.has(w.key)) return res.status(400).json({ error: "The same word was answered twice." });
+    seenKeys.add(w.key);
+    const given = String((w && w.givenWord) || "").trim().toLowerCase();
+    const bank = wfBankWords(item.category);
+    const ok = given !== "" && given !== item.word && given[0] === item.needLetter && bank.includes(given);
+    const suggestion = bank.find(x => x[0] === item.needLetter && x !== item.word) || "";
+    wordDetail.push({ key: item.key, phase: item.phase, question: item.question, given,
+      correct: ok, answer: ok ? given : suggestion, point: ok ? `“${given}” is a new ${item.category.slice(0, -1)} starting with “${item.needLetter.toUpperCase()}”.` : `Give a new ${item.category.slice(0, -1)} starting with “${item.needLetter.toUpperCase()}” — not “${item.word}”.` });
+  }
+  const sessionId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+  db.exec("BEGIN");
+  try {
+    const ins = db.prepare(`INSERT INTO wf_game_revision_answers
+      (student_id, phase, question_key, question, given_answer, correct_answer, is_correct, session_id)
+      VALUES (?,?,?,?,?,?,?,?)`);
+    for (const d of detail) {
+      ins.run(req.user.id, d.phase, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0, sessionId);
+      wfTouchKey(req.user.id, d.phase, d.key, d.correct);
+    }
+    for (const d of wordDetail) {
+      ins.run(req.user.id, d.phase, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0, sessionId);
+    }
+    db.exec("COMMIT");
+    const after = wfRevisionInfo(req.user.id);
+    res.json({ ok: true, mcqScore, mcqTotal: detail.length, wordScore: wordDetail.filter(d => d.correct).length,
+      wordTotal: wordDetail.length, detail, wordDetail,
+      remaining: after.count, cleared: after.cleared });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your revision game." }); }
+});
+// Teacher: who can play + add/remove a boy (Thalha first, others later).
+app.get("/api/teacher/wf-game/players", requireTeacher, (req, res) => {
+  const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY CAST(ad_no AS INTEGER)").all();
+  const enabled = new Set(db.prepare("SELECT student_id FROM wf_game_players").all().map(r => r.student_id));
+  res.json({ students: students.map(s => ({ ...s, enabled: enabled.has(s.id) })) });
+});
+app.post("/api/teacher/wf-game/players", requireTeacher, (req, res) => {
+  const sid = Number((req.body || {}).student_id);
+  const enabled = (req.body || {}).enabled;
+  const s = db.prepare("SELECT id, display_name FROM users WHERE id=? AND role='student'").get(sid);
+  if (!s) return res.status(404).json({ error: "No such student." });
+  if (enabled) db.prepare("INSERT OR IGNORE INTO wf_game_players (student_id) VALUES (?)").run(sid);
+  else db.prepare("DELETE FROM wf_game_players WHERE student_id=?").run(sid);
+  logActivity(req.user.id, "teacher", "wf_game_player", `${s.display_name}: ${enabled ? "can play" : "removed from"} Word Fight`);
+  res.json({ ok: true });
+});
+// Teacher: monitoring overview — every player, per-phase best, totals.
+app.get("/api/teacher/wf-game/overview", requireTeacher, (req, res) => {
+  const players = db.prepare(`SELECT u.id, u.display_name, u.ad_no FROM wf_game_players p
+    JOIN users u ON u.id = p.student_id ORDER BY CAST(u.ad_no AS INTEGER)`).all();
+  res.json({ players: players.map(p => {
+    const s = wfSummary(p.id);
+    const last = s.matches[0] || null;
+    return { ...p, perPhase: s.perPhase, totals: s.totals, matches: s.matches,
+      revision: s.revision, lastPlayedAt: last ? last.created_at : null };
+  }) });
+});
+// Teacher: total summary for one boy, viewable at any time.
+app.get("/api/teacher/wf-game/summary/:id", requireTeacher, (req, res) => {
+  const s = wfSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such student." });
+  res.json(s);
+});
+// Teacher: the boy's mistakes-revision queue (what is still wrong,
+// what he has already cleared by answering it right).
+app.get("/api/teacher/wf-game/revision-queue/:id", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const stu = db.prepare("SELECT id, display_name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!stu) return res.status(404).json({ error: "No such student." });
+  const rev = wfRevisionInfo(sid);
+  res.json({ student: stu, count: rev.count, mcqCount: rev.mcqCount, repeatCount: rev.repeatCount,
+    cleared: rev.cleared, everWrong: rev.everWrong,
+    mcq: rev.mcqQueue.map(q => ({ key: q.key, phase: q.phase, question: wfMcqQuestionText(q.phase, q), answer: q.answer, point: q.point })),
+    repeats: rev.repeats });
+});
+function wfPdfFooter(doc) {
+  doc.fillColor("#666666").font("Helvetica").fontSize(8)
+    .text("Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch · BNS35 Word Fight",
+      48, 841.89 - 36, { width: 595.28 - 96, align: "center" });
+}
+// Teacher: wrong-answers PDF (B&W, print-ready, pdfkit — like the cert PDFs).
+app.get("/api/teacher/wf-game/summary/:id/wrong-answers.pdf", requireTeacher, (req, res) => {
+  const s = wfSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such student." });
+  if (!s.wrongAnswers.length) return res.status(404).json({ error: "No wrong answers yet — well done!" });
+  const doc = new PDFDocument({ size: "A4", margin: 0 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="Word-Fight-Wrong-Answers-${s.student.ad_no || s.student.id}.pdf"`);
+  doc.pipe(res);
+  wfPdfFooter(doc);
+  let { W, H, M, y } = mapPdfHead(doc, "Word Fight — Wrong Answers",
+    `${s.student.display_name} (Ad ${s.student.ad_no || "—"}) · SIBAQ 26 Word Fight Eng (BNS35)`);
+  doc.fillColor("#000000").font("Helvetica").fontSize(11)
+    .text(`Best match: ${s.totals.best === null ? "—" : s.totals.best + " / " + WF_GAME.WF_GAME_MAX_TOTAL} · Matches finished: ${s.totals.finished} · MCQ: ${s.totals.correct} correct out of ${s.totals.questions} · Word Passing turns right: ${s.totals.wpCorrect} out of ${s.totals.wpTurns} · Repeats: ${s.totals.repeats}.`, M, y, { width: W - 2 * M });
+  y += 30;
+  if (s.totals.weakPhases.length) {
+    doc.font("Helvetica-Bold").text("Weak phases (under 60%): " +
+      s.totals.weakPhases.map(id => `${id} — ${wfPhase(id).title}`).join("; "), M, y, { width: W - 2 * M });
+    y += 16;
+  }
+  doc.font("Helvetica").fontSize(10)
+    .text("Practice rule: a repeat word is -2 in practice (the official SIBAQ rule has no minus marks). Word Passing is a word chain: each word must start with the last letter of the last accepted word.", M, y, { width: W - 2 * M });
+  y += 28;
+  let lastPhase = "";
+  s.wrongAnswers.forEach((a, i) => {
+    if (a.phase !== lastPhase) {
+      y = mapPdfNeedPage(doc, y, 30);
+      lastPhase = a.phase;
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(12)
+        .text(`${a.phase} — ${wfPhase(a.phase) ? wfPhase(a.phase).title : a.phase}`, M, y, { width: W - 2 * M });
+      y += 18;
+    }
+    const lines = a.kind === "word"
+      ? [`Q${i + 1}. ${a.question}`,
+         `The boy answered: ${a.given_answer || "(no answer)"} — REPEAT, -2 points`,
+         `Try instead: ${a.correct_answer || "(any new word starting with that letter)"}`]
+      : [`Q${i + 1}. ${a.question}${a.mode && a.mode !== "Round" ? ` [${a.mode}]` : ""}`,
+         `The boy answered: ${a.given_answer || "(no answer)"}`,
+         `Correct answer: ${a.correct_answer}`,
+         `Learn: ${a.point}`];
+    const need = 16 + lines.length * 14;
+    y = mapPdfNeedPage(doc, y, need);
+    doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text(lines[0], M, y, { width: W - 2 * M });
+    y += 14;
+    for (const ln of lines.slice(1)) {
+      doc.fillColor("#000000").font("Helvetica").fontSize(10).text(ln, M, y, { width: W - 2 * M });
+      y += 14;
+    }
+    y += 2;
+    doc.moveTo(M, y).lineTo(W - M, y).lineWidth(0.5).stroke("#999999");
+    y += 10;
+  });
+  doc.end();
+});
+
 // ── Points board, authors, writer of week, badges ─────────────
 app.get("/api/points-board", requireLogin, (req, res) => {
   const period = req.query.period === "month" ? "month" : "all";
@@ -3489,7 +4177,8 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "gala_players","gala_scores",
   "map_game_players","map_game_attempts","map_game_answers","map_game_progress","map_game_revisions",
   "map_game_key_status","map_game_round2_attempts","map_game_round2_answers","map_game_revision_answers",
-  "gk_game_players","gk_game_attempts","gk_game_answers","gk_game_progress","gk_game_key_status","gk_game_revision_answers"];
+  "gk_game_players","gk_game_attempts","gk_game_answers","gk_game_progress","gk_game_key_status","gk_game_revision_answers",
+  "wf_game_players","wf_game_matches","wf_game_attempts","wf_game_answers","wf_game_progress","wf_game_key_status","wf_game_revision_answers"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -3524,6 +4213,7 @@ app.post("/api/teacher/restore", requireTeacher, (req, res) => {
     seedParentUsers(); // a stale backup may predate parent logins — re-create any missing ones
     seedMapGamePlayers(); // a backup taken before Faaz was ticked has 0 players — re-enrol him (BNS31)
     seedGKGamePlayers(); // same for the GK Kids player
+    seedWFGamePlayers(); // same for the Word Fight player (Thalha, BNS35)
     const skippedObj = {};
     for (const [t, s] of Object.entries(skipped)) skippedObj[t] = [...s].join(",");
     res.json({ ok: true, skippedColumns: skippedObj });
