@@ -12,6 +12,7 @@ const PDFDocument = require("pdfkit");
 const { DatabaseSync } = require("node:sqlite");
 const STUDENTS = require("./students");
 const MAP_GAME = require("./map-game-data");
+const GK_GAME = require("./gk-game-data");
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -530,6 +531,71 @@ CREATE TABLE IF NOT EXISTS map_game_revision_answers (
   session_id TEXT NOT NULL DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 );
+-- GK Kids game (SIBAQ 2026 GK Quiz, Nov 2026 — Samad): game scores live ONLY
+-- here, never in points_log / Points Board / clubs / certificates.
+-- gk_game_players: which boys may play (Faaz first; add more later).
+-- gk_game_attempts: one row per finished test round (10 questions, 8 to pass).
+-- gk_game_answers: one row per question answered (Q + given + correct).
+-- gk_game_progress: per-boy cache — highest test unlocked, totals.
+-- gk_game_key_status: latest right/wrong per boy per question key —
+--   the single source of truth for coverage (seen keys) and the
+--   mistakes revision queue (keys last answered wrong).
+-- gk_game_revision_answers: mistakes-revision plays (only wrong
+--   questions, repeated until right); stored separately from test scores.
+CREATE TABLE IF NOT EXISTS gk_game_players (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  added_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS gk_game_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  test TEXT NOT NULL,
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS gk_game_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES gk_game_attempts(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  test TEXT NOT NULL,
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  is_image INTEGER NOT NULL DEFAULT 0,
+  point TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS gk_game_progress (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  highest_unlocked INTEGER NOT NULL DEFAULT 1,
+  total_attempts INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS gk_game_key_status (
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  question_key TEXT NOT NULL,
+  test TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (student_id, question_key)
+);
+CREATE TABLE IF NOT EXISTS gk_game_revision_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  test TEXT NOT NULL,
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  is_image INTEGER NOT NULL DEFAULT 0,
+  point TEXT NOT NULL DEFAULT '',
+  session_id TEXT NOT NULL DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
 
@@ -628,6 +694,20 @@ function seedMapGamePlayers() {
   } catch (e) { console.log("Map game seeding:", e.message); }
 }
 seedMapGamePlayers();
+// GK Kids game: Faaz (Ad 494) is the only player for now — the same boy as
+// the Map Study game (Ajmal mentors him for GK + Map). Other boys are added
+// later by the teacher (Teacher Panel → GK Kids).
+// Named (not an IIFE) so the restore handler below can call it too: a
+// wipe-restore replaces gk_game_players from the backup, and a backup
+// taken before Faaz was ticked would drop him — re-seeding keeps the
+// GK player enrolled after every deploy, wipe and restore.
+function seedGKGamePlayers() {
+  try {
+    const faaz = db.prepare("SELECT id FROM users WHERE role='student' AND (ad_no='494' OR display_name LIKE '%FAAZ%')").get();
+    if (faaz) db.prepare("INSERT OR IGNORE INTO gk_game_players (student_id) VALUES (?)").run(faaz.id);
+  } catch (e) { console.log("GK game seeding:", e.message); }
+}
+seedGKGamePlayers();
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
@@ -2478,6 +2558,351 @@ app.get("/api/teacher/map-game/study-sheet/:id/:stage.pdf", requireTeacher, (req
   doc.end();
 });
 
+// ── GK Kids — SIBAQ 2026 GK Quiz game ────────────────────────────
+// 4 mock tests in order, Test N+1 unlocks only after Test N is passed
+// (8/10 in one round). Each round draws 10 questions — UNSEEN first,
+// then past mistakes, then review. Game scores are separate from
+// writing points — nothing here touches points_log, awardPoints,
+// the Points Board, clubs or certificates.
+const gkGameTest = (id) => GK_GAME.GK_GAME_TESTS.find(t => t.id === id) || null;
+const gkGameTestByN = (n) => GK_GAME.GK_GAME_TESTS.find(t => t.n === n) || null;
+const gkGameIsPlayer = (sid) => !!db.prepare("SELECT 1 FROM gk_game_players WHERE student_id=?").get(sid);
+function gkGameUnlocked(sid) {
+  const rows = db.prepare("SELECT test, score FROM gk_game_attempts WHERE student_id=? AND score>=?").all(sid, GK_GAME.GK_GAME_PASS_MARK);
+  let maxN = 0;
+  for (const r of rows) { const t = gkGameTest(r.test); if (t && t.n > maxN) maxN = t.n; }
+  return Math.min(4, maxN + 1);
+}
+function gkGameRefreshProgress(sid) {
+  const unlocked = gkGameUnlocked(sid);
+  const total = db.prepare("SELECT COUNT(*) c FROM gk_game_attempts WHERE student_id=?").get(sid).c;
+  db.prepare(`INSERT INTO gk_game_progress (student_id, highest_unlocked, total_attempts, updated_at)
+    VALUES (?,?,?, datetime('now'))
+    ON CONFLICT(student_id) DO UPDATE SET highest_unlocked=excluded.highest_unlocked, total_attempts=excluded.total_attempts, updated_at=datetime('now')`)
+    .run(sid, unlocked, total);
+  return { highest_unlocked: unlocked, total_attempts: total };
+}
+// Latest right/wrong per question key (coverage + revision queue).
+function gkGameTouchKey(sid, testId, key, isCorrect) {
+  db.prepare(`INSERT INTO gk_game_key_status (student_id, question_key, test, is_correct, updated_at)
+    VALUES (?,?,?, ?, datetime('now'))
+    ON CONFLICT(student_id, question_key) DO UPDATE SET is_correct=excluded.is_correct, test=excluded.test, updated_at=datetime('now')`)
+    .run(sid, key, testId, isCorrect ? 1 : 0);
+}
+// Full bank by key, for the revision queue.
+const GK_GAME_BANK_BY_KEY = (() => {
+  const m = new Map();
+  for (const t of GK_GAME.GK_GAME_TESTS)
+    for (const q of GK_GAME.GK_GAME_QUESTIONS[t.id] || []) m.set(q.key, { ...q, test: t.id });
+  return m;
+})();
+// Mistakes revision queue: keys whose LATEST answer is wrong.
+// A question leaves the queue when it is next answered correctly.
+function gkGameRevisionInfo(sid) {
+  const wrongKeys = db.prepare("SELECT question_key, test FROM gk_game_key_status WHERE student_id=? AND is_correct=0 ORDER BY test, question_key").all(sid);
+  const queue = wrongKeys.map(r => GK_GAME_BANK_BY_KEY.get(r.question_key)).filter(Boolean);
+  const everWrongRows = db.prepare(`
+    SELECT question_key FROM gk_game_answers WHERE student_id=? AND is_correct=0
+    UNION SELECT question_key FROM gk_game_revision_answers WHERE student_id=? AND is_correct=0`).all(sid, sid);
+  const correctKeys = new Set(db.prepare("SELECT question_key FROM gk_game_key_status WHERE student_id=? AND is_correct=1").all(sid).map(r => r.question_key));
+  const cleared = everWrongRows.filter(r => correctKeys.has(r.question_key)).length;
+  return { queue, count: queue.length, cleared, everWrong: everWrongRows.length };
+}
+// Draw N questions for a test: UNSEEN first, then past mistakes, then
+// review — so repeated plays cover new ground instead of the same 10.
+function gkGameDraw(sid, testId, count) {
+  const bank = GK_GAME.GK_GAME_QUESTIONS[testId] || [];
+  const rows = db.prepare("SELECT question_key, is_correct FROM gk_game_key_status WHERE student_id=? AND test=?").all(sid, testId);
+  const seen = new Set(rows.map(r => r.question_key));
+  const mistakes = new Set(rows.filter(r => !r.is_correct).map(r => r.question_key));
+  const shuf = (a) => { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [x[i], x[j]] = [x[j], x[i]]; } return x; };
+  const unseen = shuf(bank.filter(q => !seen.has(q.key)));
+  const wrong = shuf(bank.filter(q => mistakes.has(q.key)));
+  const review = shuf(bank.filter(q => seen.has(q.key) && !mistakes.has(q.key)));
+  const picked = [...unseen, ...wrong, ...review].slice(0, count);
+  return shuf(picked); // mix the order within the play
+}
+function gkGamePerTest(sid) {
+  const attempts = db.prepare("SELECT * FROM gk_game_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  const unlocked = gkGameUnlocked(sid);
+  const PLAY = GK_GAME.GK_GAME_PLAY_COUNT;
+  return GK_GAME.GK_GAME_TESTS.map(t => {
+    const atts = attempts.filter(a => a.test === t.id);
+    const total = PLAY; // one round = 10 questions, whatever the pool size
+    const poolTotal = (GK_GAME.GK_GAME_QUESTIONS[t.id] || []).length;
+    const seen = db.prepare("SELECT COUNT(*) c FROM gk_game_key_status WHERE student_id=? AND test=?").get(sid, t.id).c;
+    const coveragePct = poolTotal ? Math.round(seen / poolTotal * 100) : 0;
+    const best = atts.length ? Math.max(...atts.map(a => a.score)) : null;
+    const latest = atts.length ? atts[0].score : null;
+    const pct = best === null ? null : Math.round(best / total * 100);
+    return { id: t.id, n: t.n, key: t.key, icon: t.icon, title: t.title, desc: t.desc,
+      attempts: atts.length, best, latest, total, pct,
+      poolTotal, seen, coveragePct,
+      locked: t.n > unlocked,
+      passed: best !== null && best >= GK_GAME.GK_GAME_PASS_MARK,
+      weak: pct !== null && pct < 60, strong: pct !== null && pct >= 80 };
+  });
+}
+// Every wrong answer ever, from both modes, for the total summary
+// and the wrong-answers PDF. `mode` is Round / Revision.
+function gkGameAllWrongAnswers(sid) {
+  return db.prepare(`
+    SELECT question_key, test, question, given_answer, correct_answer, is_correct, is_image, point, created_at, 'Round' AS mode FROM gk_game_answers WHERE student_id=? AND is_correct=0
+    UNION ALL SELECT question_key, test, question, given_answer, correct_answer, is_correct, is_image, point, created_at, 'Revision' AS mode FROM gk_game_revision_answers WHERE student_id=? AND is_correct=0
+    ORDER BY test, created_at`).all(sid, sid);
+}
+function gkGameSummary(sid) {
+  const stu = db.prepare("SELECT id, display_name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!stu) return null;
+  const attempts = db.prepare("SELECT * FROM gk_game_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  const wrong = gkGameAllWrongAnswers(sid);
+  const perTest = gkGamePerTest(sid);
+  const totalQ = attempts.reduce((a, x) => a + x.total, 0);
+  const totalRight = attempts.reduce((a, x) => a + x.score, 0);
+  const rev = gkGameRevisionInfo(sid);
+  return { student: stu, attempts, perTest, wrongAnswers: wrong,
+    revision: { count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong },
+    totals: { attempts: attempts.length, questions: totalQ, correct: totalRight,
+      pct: totalQ ? Math.round(totalRight / totalQ * 100) : null,
+      weakTests: perTest.filter(s => s.weak).map(s => s.id),
+      strongTests: perTest.filter(s => s.strong).map(s => s.id) } };
+}
+// Student: my tests (locked/unlocked, best scores, coverage) + revision queue.
+app.get("/api/gk-game/tests", requireStudent, (req, res) => {
+  if (!gkGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The GK Kids game is only for Faaz for now." });
+  const rev = gkGameRevisionInfo(req.user.id);
+  res.json({ tests: gkGamePerTest(req.user.id), unlocked: gkGameUnlocked(req.user.id),
+    passMark: GK_GAME.GK_GAME_PASS_MARK,
+    revisionQueue: { count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong } });
+});
+app.get("/api/my/gk-game", requireStudent, (req, res) => {
+  if (!gkGameIsPlayer(req.user.id)) return res.json({ isPlayer: false });
+  const rev = gkGameRevisionInfo(req.user.id);
+  res.json({ isPlayer: true, tests: gkGamePerTest(req.user.id),
+    unlocked: gkGameUnlocked(req.user.id),
+    revisionQueue: { count: rev.count, cleared: rev.cleared } });
+});
+// Student: draw 10 questions for one test — UNSEEN first, then past
+// mistakes, then review. Correct answers are NEVER sent — the client
+// only gets the question + 4 options (+ the photo, for Test 4).
+app.get("/api/gk-game/test/:id/questions", requireStudent, (req, res) => {
+  if (!gkGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The GK Kids game is only for Faaz for now." });
+  const id = String(req.params.id).toUpperCase();
+  const t = gkGameTest(id);
+  if (!t) return res.status(404).json({ error: "No such test." });
+  const unlocked = gkGameUnlocked(req.user.id);
+  if (t.n > unlocked) return res.status(403).json({ error: `Pass Test ${unlocked} first — then ${t.title} opens.` });
+  const drawn = gkGameDraw(req.user.id, id, GK_GAME.GK_GAME_PLAY_COUNT);
+  const poolTotal = (GK_GAME.GK_GAME_QUESTIONS[id] || []).length;
+  const seen = db.prepare("SELECT COUNT(*) c FROM gk_game_key_status WHERE student_id=? AND test=?").get(req.user.id, id).c;
+  const qs = drawn.map(q => ({
+    key: q.key, q: q.q, options: q.options, img: q.img || null, is_image: !!q.img,
+  }));
+  res.json({ test: t, questions: qs,
+    coverage: { seen, total: poolTotal, pct: poolTotal ? Math.round(seen / poolTotal * 100) : 0 } });
+});
+// Student: submit one finished test round (10 drawn questions).
+// Body: { answers: [{ key, given }] }. Re-checks the test lock
+// server-side, scores against the bank, and stores the attempt + every
+// answer. Game points are stored here only — never in points_log.
+app.post("/api/gk-game/test/:id/attempt", requireStudent, (req, res) => {
+  if (!gkGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The GK Kids game is only for Faaz for now." });
+  const id = String(req.params.id).toUpperCase();
+  const t = gkGameTest(id);
+  if (!t) return res.status(404).json({ error: "No such test." });
+  const unlocked = gkGameUnlocked(req.user.id);
+  if (t.n > unlocked) return res.status(403).json({ error: `Pass Test ${unlocked} first — then ${t.title} opens.` });
+  const bank = GK_GAME.GK_GAME_QUESTIONS[id] || [];
+  const byKey = new Map(bank.map(q => [q.key, q]));
+  const given = (req.body && req.body.answers) || [];
+  if (!Array.isArray(given) || given.length !== GK_GAME.GK_GAME_PLAY_COUNT)
+    return res.status(400).json({ error: `Answer all ${GK_GAME.GK_GAME_PLAY_COUNT} questions.` });
+  let score = 0;
+  const detail = [];
+  const seenKeys = new Set();
+  for (const a of given) {
+    const q = byKey.get(a && a.key);
+    if (!q) return res.status(400).json({ error: "One of the questions is not from this test." });
+    if (seenKeys.has(q.key)) return res.status(400).json({ error: "The same question was answered twice." });
+    seenKeys.add(q.key);
+    const g = a.given === undefined || a.given === null ? "" : String(a.given);
+    if (g !== "" && !q.options.includes(g)) return res.status(400).json({ error: `One answer is not one of the options.` });
+    const ok = g === q.answer;
+    if (ok) score++;
+    detail.push({ key: q.key, question: q.q, given: g, correct: ok, answer: q.answer,
+      point: q.point, is_image: !!q.img, img: q.img || null });
+  }
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO gk_game_attempts (student_id, test, score, total) VALUES (?,?,?,?)")
+      .run(req.user.id, id, score, GK_GAME.GK_GAME_PLAY_COUNT);
+    const ins = db.prepare(`INSERT INTO gk_game_answers
+      (attempt_id, student_id, test, question_key, question, given_answer, correct_answer, is_correct, is_image, point)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`);
+    for (const d of detail) {
+      ins.run(att.lastInsertRowid, req.user.id, id, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0,
+        d.is_image ? 1 : 0, d.point);
+      gkGameTouchKey(req.user.id, id, d.key, d.correct);
+    }
+    gkGameRefreshProgress(req.user.id);
+    db.exec("COMMIT");
+    const passed = score >= GK_GAME.GK_GAME_PASS_MARK;
+    res.json({ ok: true, attempt_id: att.lastInsertRowid, score, total: GK_GAME.GK_GAME_PLAY_COUNT, passed,
+      detail, unlocked: gkGameUnlocked(req.user.id), perTest: gkGamePerTest(req.user.id),
+      revisionQueue: gkGameRevisionInfo(req.user.id).count });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your game." }); }
+});
+// ── Mistakes Revision Game ──
+// Only the questions Faaz got wrong (latest answer wrong, any mode).
+// A question leaves the queue when answered correctly; wrong again
+// and it stays. Revision plays never touch test round scores.
+// Student: my revision queue (up to 10, oldest mistakes first by test).
+app.get("/api/gk-game/revision", requireStudent, (req, res) => {
+  if (!gkGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The GK Kids game is only for Faaz for now." });
+  const rev = gkGameRevisionInfo(req.user.id);
+  const qs = rev.queue.slice(0, GK_GAME.GK_GAME_PLAY_COUNT).map(q => ({
+    key: q.key, q: q.q, options: q.options, img: q.img || null, is_image: !!q.img,
+    test: q.test,
+  }));
+  res.json({ queue: qs, count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong });
+});
+// Student: submit one revision play. Body: { answers: [{ key, given }] }.
+app.post("/api/gk-game/revision/attempt", requireStudent, (req, res) => {
+  if (!gkGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The GK Kids game is only for Faaz for now." });
+  const given = (req.body && req.body.answers) || [];
+  if (!Array.isArray(given) || !given.length || given.length > GK_GAME.GK_GAME_PLAY_COUNT)
+    return res.status(400).json({ error: `Answer 1 to ${GK_GAME.GK_GAME_PLAY_COUNT} revision questions.` });
+  const rev = gkGameRevisionInfo(req.user.id);
+  const inQueue = new Set(rev.queue.map(q => q.key));
+  let score = 0;
+  const detail = [];
+  const seenKeys = new Set();
+  for (const a of given) {
+    const q = GK_GAME_BANK_BY_KEY.get(a && a.key);
+    if (!q || !inQueue.has(q.key)) return res.status(400).json({ error: "One of the questions is not in your revision queue." });
+    if (seenKeys.has(q.key)) return res.status(400).json({ error: "The same question was answered twice." });
+    seenKeys.add(q.key);
+    const g = a.given === undefined || a.given === null ? "" : String(a.given);
+    if (g !== "" && !q.options.includes(g)) return res.status(400).json({ error: `One answer is not one of the options.` });
+    const ok = g === q.answer;
+    if (ok) score++;
+    detail.push({ key: q.key, test: q.test, question: q.q, given: g, correct: ok, answer: q.answer,
+      point: q.point, is_image: !!q.img, img: q.img || null });
+  }
+  const sessionId = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+  db.exec("BEGIN");
+  try {
+    const ins = db.prepare(`INSERT INTO gk_game_revision_answers
+      (student_id, test, question_key, question, given_answer, correct_answer, is_correct, is_image, point, session_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?)`);
+    for (const d of detail) {
+      ins.run(req.user.id, d.test, d.key, d.question, d.given, d.answer, d.correct ? 1 : 0,
+        d.is_image ? 1 : 0, d.point, sessionId);
+      gkGameTouchKey(req.user.id, d.test, d.key, d.correct);
+    }
+    db.exec("COMMIT");
+    const after = gkGameRevisionInfo(req.user.id);
+    res.json({ ok: true, score, total: detail.length, detail,
+      remaining: after.count, cleared: after.cleared });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your revision game." }); }
+});
+// Teacher: who can play + add/remove a boy (Faaz first, others later).
+app.get("/api/teacher/gk-game/players", requireTeacher, (req, res) => {
+  const students = db.prepare("SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY CAST(ad_no AS INTEGER)").all();
+  const enabled = new Set(db.prepare("SELECT student_id FROM gk_game_players").all().map(r => r.student_id));
+  res.json({ students: students.map(s => ({ ...s, enabled: enabled.has(s.id) })) });
+});
+app.post("/api/teacher/gk-game/players", requireTeacher, (req, res) => {
+  const sid = Number((req.body || {}).student_id);
+  const enabled = (req.body || {}).enabled;
+  const s = db.prepare("SELECT id, display_name FROM users WHERE id=? AND role='student'").get(sid);
+  if (!s) return res.status(404).json({ error: "No such student." });
+  if (enabled) db.prepare("INSERT OR IGNORE INTO gk_game_players (student_id) VALUES (?)").run(sid);
+  else db.prepare("DELETE FROM gk_game_players WHERE student_id=?").run(sid);
+  logActivity(req.user.id, "teacher", "gk_game_player", `${s.display_name}: ${enabled ? "can play" : "removed from"} GK Kids`);
+  res.json({ ok: true });
+});
+// Teacher: monitoring overview — every player, per-test %, attempts.
+app.get("/api/teacher/gk-game/overview", requireTeacher, (req, res) => {
+  const players = db.prepare(`SELECT u.id, u.display_name, u.ad_no FROM gk_game_players p
+    JOIN users u ON u.id = p.student_id ORDER BY CAST(u.ad_no AS INTEGER)`).all();
+  res.json({ players: players.map(p => {
+    const s = gkGameSummary(p.id);
+    const last = s.attempts[0] || null;
+    return { ...p, perTest: s.perTest, totals: s.totals,
+      revision: s.revision, lastPlayedAt: last ? last.created_at : null };
+  }) });
+});
+// Teacher: total summary for one boy, viewable at any time.
+app.get("/api/teacher/gk-game/summary/:id", requireTeacher, (req, res) => {
+  const s = gkGameSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such student." });
+  res.json(s);
+});
+// Teacher: the boy's mistakes-revision queue (what is still wrong,
+// what he has already cleared by answering it right).
+app.get("/api/teacher/gk-game/revision-queue/:id", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const stu = db.prepare("SELECT id, display_name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!stu) return res.status(404).json({ error: "No such student." });
+  const rev = gkGameRevisionInfo(sid);
+  res.json({ student: stu, count: rev.count, cleared: rev.cleared, everWrong: rev.everWrong,
+    queue: rev.queue.map(q => ({ key: q.key, test: q.test, question: q.q, answer: q.answer, point: q.point, is_image: !!q.img })) });
+});
+// Teacher: wrong-answers PDF (B&W, print-ready, pdfkit — like the cert PDFs).
+app.get("/api/teacher/gk-game/summary/:id/wrong-answers.pdf", requireTeacher, (req, res) => {
+  const s = gkGameSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such student." });
+  if (!s.wrongAnswers.length) return res.status(404).json({ error: "No wrong answers yet — well done!" });
+  const doc = new PDFDocument({ size: "A4", margin: 0 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="GK-Kids-Wrong-Answers-${s.student.ad_no || s.student.id}.pdf"`);
+  doc.pipe(res);
+  mapPdfFooter(doc);
+  let { W, H, M, y } = mapPdfHead(doc, "GK Kids — Wrong Answers",
+    `${s.student.display_name} (Ad ${s.student.ad_no || "—"}) · SIBAQ 26 GK Quiz`);
+  doc.fillColor("#000000").font("Helvetica").fontSize(11)
+    .text(`Total: ${s.totals.correct} correct out of ${s.totals.questions} questions in ${s.totals.attempts} round(s) (${s.totals.pct === null ? "—" : s.totals.pct + "%"}).`, M, y, { width: W - 2 * M });
+  y += 18;
+  if (s.totals.weakTests.length) {
+    doc.font("Helvetica-Bold").text("Weak tests (under 60%): " +
+      s.totals.weakTests.map(id => `${id} — ${gkGameTest(id).title}`).join("; "), M, y, { width: W - 2 * M });
+    y += 16;
+  }
+  doc.font("Helvetica").fontSize(10)
+    .text("For every question below: what the boy answered, and the correct answer. Photo questions (Test 4) show the answer — the photo itself is in the app.", M, y, { width: W - 2 * M });
+  y += 22;
+  let lastTest = "";
+  s.wrongAnswers.forEach((a, i) => {
+    if (a.test !== lastTest) {
+      y = mapPdfNeedPage(doc, y, 30);
+      lastTest = a.test;
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(12)
+        .text(`${a.test} — ${gkGameTest(a.test).title}`, M, y, { width: W - 2 * M });
+      y += 18;
+    }
+    const lines = [
+      `Q${i + 1}. ${a.question}${a.mode && a.mode !== "Round" ? ` [${a.mode}]` : ""}${a.is_image ? " [photo question]" : ""}`,
+      `The boy answered: ${a.given_answer || "(no answer)"}`,
+      `Correct answer: ${a.correct_answer}`,
+      `Learn: ${a.point}`,
+    ];
+    const need = 16 + lines.length * 14;
+    y = mapPdfNeedPage(doc, y, need);
+    doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text(lines[0], M, y, { width: W - 2 * M });
+    y += 14;
+    doc.fillColor("#000000").font("Helvetica").fontSize(10).text(lines[1], M, y, { width: W - 2 * M });
+    y += 14;
+    doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text(lines[2], M, y, { width: W - 2 * M });
+    y += 14;
+    doc.fillColor("#000000").font("Helvetica").fontSize(10).text(lines[3], M, y, { width: W - 2 * M });
+    y += 16;
+    doc.moveTo(M, y).lineTo(W - M, y).lineWidth(0.5).stroke("#999999");
+    y += 10;
+  });
+  doc.end();
+});
+
 // ── Points board, authors, writer of week, badges ─────────────
 app.get("/api/points-board", requireLogin, (req, res) => {
   const period = req.query.period === "month" ? "month" : "all";
@@ -3063,7 +3488,8 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback","letter_feedback_locks",
   "gala_players","gala_scores",
   "map_game_players","map_game_attempts","map_game_answers","map_game_progress","map_game_revisions",
-  "map_game_key_status","map_game_round2_attempts","map_game_round2_answers","map_game_revision_answers"];
+  "map_game_key_status","map_game_round2_attempts","map_game_round2_answers","map_game_revision_answers",
+  "gk_game_players","gk_game_attempts","gk_game_answers","gk_game_progress","gk_game_key_status","gk_game_revision_answers"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -3097,6 +3523,7 @@ app.post("/api/teacher/restore", requireTeacher, (req, res) => {
     db.exec("COMMIT");
     seedParentUsers(); // a stale backup may predate parent logins — re-create any missing ones
     seedMapGamePlayers(); // a backup taken before Faaz was ticked has 0 players — re-enrol him (BNS31)
+    seedGKGamePlayers(); // same for the GK Kids player
     const skippedObj = {};
     for (const [t, s] of Object.entries(skipped)) skippedObj[t] = [...s].join(",");
     res.json({ ok: true, skippedColumns: skippedObj });
