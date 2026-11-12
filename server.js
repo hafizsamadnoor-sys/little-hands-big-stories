@@ -1804,7 +1804,7 @@ app.post("/api/teacher/gala/scores", requireTeacher, (req, res) => {
 
 // ── Bidaya Map Study game (BNS31) ────────────────────────────
 // Anytime play, stage-by-stage: 8 stages in order, Stage N+1 unlocks
-// only after Stage N is passed (6/10). Game scores are separate from
+// only after Stage N is passed (8/10). Game scores are separate from
 // writing points — nothing here touches points_log, awardPoints,
 // the Points Board, clubs or certificates.
 const mapGameStage = (n) => MAP_GAME.MAP_GAME_STAGES.find(s => s.n === n) || null;

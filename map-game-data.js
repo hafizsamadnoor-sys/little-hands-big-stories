@@ -83,8 +83,8 @@ const MAP_GAME_STAGES = [
   }
 ];
 
-// Pass mark to finish a stage and unlock the next one: 6 of 10.
-const MAP_GAME_PASS_MARK = 6;
+// Pass mark to finish a stage and unlock the next one: 8 of 10 (Samad, 12 Nov 2026).
+const MAP_GAME_PASS_MARK = 8;
 const MAP_GAME_TIME_PER_Q = {
   "easy": 0,
   "medium": 45,
