@@ -41,6 +41,7 @@
   <button class="tile" onclick="openDashSec('champ',this)"><span class="tile-circ">🎓</span><span class="tile-t">Our Champions</span><span class="tile-n" id="tc-champ">…</span></button>
   <button class="tile" onclick="openDashSec('works',this)"><span class="tile-circ">✅</span><span class="tile-t">My Approved Works</span><span class="tile-n" id="tc-works">…</span></button>
   <button class="tile" onclick="openDashSec('gala',this)"><span class="tile-circ">🎉</span><span class="tile-t">Twelfth Gala</span><span class="tile-n" id="tc-gala">…</span></button>
+  <button class="tile" id="tile-mapgame" onclick="openDashSec('mapgame',this)"><span class="tile-circ">🗺️</span><span class="tile-t">Map Study Game</span><span class="tile-n" id="tc-mapgame">…</span></button>
   <button class="tile" onclick="openDashSec('msgs',this)"><span class="tile-circ">💬</span><span class="tile-t">Messages</span><span class="tile-n" id="tc-msgs">…</span></button>
   <button class="tile" onclick="openDashSec('diary',this)"><span class="tile-circ">🏖️</span><span class="tile-t">Holiday Diary</span><span class="tile-n" id="tc-diary">…</span></button>
   <button class="tile" onclick="openDashSec('cert',this)"><span class="tile-circ">📜</span><span class="tile-t">My Certificate</span><span class="tile-n" id="tc-cert">…</span></button>
@@ -56,6 +57,7 @@
   <div class="dsec" id="sec-champ" style="display:none"><h2>🎓 Our Champions</h2><div id="champions"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-works" style="display:none"><h2>✅ Your Approved Works</h2><div id="myworks"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-gala" style="display:none"><h2>🎉 Twelfth Gala</h2><div id="galabody"><p class="muted">Loading…</p></div></div>
+  <div class="dsec" id="sec-mapgame" style="display:none"><h2>🗺️ Map Study Game</h2><div id="mapgamebody"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-msgs" style="display:none"><h2 id="msgs-h2">💬 Messages from Teacher</h2><div id="mymsgs"><p class="muted">Loading…</p></div></div>
   <div class="dsec" id="sec-diary" style="display:none"><div id="diarycard"></div></div>
   <div class="dsec" id="sec-cert" style="display:none"><div id="compcert"></div></div>
@@ -383,6 +385,26 @@ function allWorksHtml(works) {
     setTc("tc-gala", gb.setup ? (gb.me ? gb.me.total + " pts · " + gb.me.team : "Door " + gb.teamTotals.Door + " — Window " + gb.teamTotals.Window) : "Coming soon");
     document.getElementById("galabody").innerHTML = window.galaBoardHtml(gb, "My");
   } catch (e) { document.getElementById("galabody").innerHTML = ""; }
+  // Map Study Game — only for players (Faaz for now); hidden otherwise.
+  try {
+    const mg = await api("GET", "/api/my/map-game");
+    const tile = document.getElementById("tile-mapgame");
+    if (!mg.isPlayer) { if (tile) tile.style.display = "none"; }
+    else {
+      const done = mg.stages.filter(s => s.passed).length;
+      const rq = mg.revisionQueue || { count: 0, cleared: 0 };
+      const r2 = mg.round2 || { unlocked: false, stages: [] };
+      const r2done = (r2.stages || []).filter(s => s.best !== null).length;
+      setTc("tc-mapgame", done + " / 8 stages" + (rq.count ? ` · 🔁 ${rq.count} to revise` : "") + (mg.nextRevision ? " · 📅 " + mg.nextRevision.revise_date : ""));
+      const next = mg.stages.find(s => !s.locked && !s.passed);
+      document.getElementById("mapgamebody").innerHTML = `
+        <p>${done} of 8 stages passed. Game scores are only for the Map Study Game — they never change your writing points.</p>
+        ${rq.count ? `<p>🔁 <b>${rq.count} mistake${rq.count === 1 ? "" : "s"}</b> to revise${rq.cleared ? ` · ✅ ${rq.cleared} cleared` : ""} — open the game and play the Revision Game.</p>` : ""}
+        ${r2.unlocked ? `<p>🏆 Round 2 is open — ${r2done} of 8 stages played without options.</p>` : ""}
+        ${mg.nextRevision ? `<div class="card" style="border:2px solid #b45309"><h3>📅 Your revision time</h3><p><b>${esc((mg.stages[mg.nextRevision.stage - 1] || {}).title || "")}</b><br>${esc(mg.nextRevision.revise_date)} at ${esc(mg.nextRevision.start_time)} · ${mg.nextRevision.minutes} minutes${mg.nextRevision.note ? "<br>" + esc(mg.nextRevision.note) : ""}</p></div>` : ""}
+        <a class="btn" href="/map-game.html">${next ? "▶ Play Stage " + next.n + " — " + esc(next.title) : "▶ Open the Map Study Game"}</a>`;
+    }
+  } catch (e) { document.getElementById("mapgamebody").innerHTML = ""; }
   // My marks
   try {
     const md = await api("GET", "/api/my/marks");

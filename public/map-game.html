@@ -1,0 +1,243 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Map Study Game · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+.map-opt{display:block;width:100%;text-align:left;padding:14px 16px;margin:8px 0;font-size:1.05rem;
+  background:#fff;border:2px solid #cbd5e1;border-radius:12px;cursor:pointer}
+.map-opt.on{border-color:#0e7c8c;background:#ecfeff}
+.map-opt:disabled{opacity:.75;cursor:default}
+.stage-card{margin:10px 0}
+.stage-card.locked{opacity:.6}
+.timer{font-weight:800;color:#b45309}
+.type-in{width:100%;padding:14px 16px;font-size:1.1rem;border:2px solid #0e7c8c;border-radius:12px;margin:8px 0}
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="game"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
+</div>
+<script>
+let S = null;          // stages data
+let LEVEL = "easy";    // picked level (Round 1)
+let PLAY = null;       // { mode, stage, questions, idx, answers, timerLeft, timerId }
+
+const levelLabel = (l) => l === "easy" ? "Easy — no timer, hints shown"
+  : l === "medium" ? "Medium — 45 seconds per question, hints shown"
+  : "Hard — 20 seconds per question, no hints";
+
+async function loadStages() {
+  S = await api("GET", "/api/map-game/stages");
+  renderHome();
+}
+function renderHome() {
+  const box = document.getElementById("game");
+  const rev = (S.revisions || []).find(r => !r.done);
+  const next = S.stages.find(s => !s.locked && !s.passed);
+  const rq = S.revisionQueue || { count: 0, cleared: 0 };
+  const r2 = S.round2 || { unlocked: false, stages: [] };
+  const r2done = (r2.stages || []).filter(s => s.best !== null).length;
+  box.innerHTML = `<h1>🗺️ Map Study Game</h1>
+    <p class="muted">SIBAQ 26 · Bidaya Map Study (BNS31) · 8 stages, one after the other.
+    Finish a stage with ${S.passMark} out of 10 to open the next one. You can play any time you like, and play a finished stage again.
+    Each play picks 10 questions — new ones first, then the ones you got wrong, then review — so the whole concept book comes to you, bit by bit.</p>
+    ${rev ? `<div class="card" style="border:2px solid #b45309"><h3>📅 Your revision time</h3>
+      <p><b>${esc(S.stages[rev.stage - 1] ? S.stages[rev.stage - 1].title : "Stage " + rev.stage)}</b><br>
+      ${esc(rev.revise_date)} at ${esc(rev.start_time)} · ${rev.minutes} minutes${rev.note ? "<br>" + esc(rev.note) : ""}</p></div>` : ""}
+    <div class="card" style="border:2px solid #0e7c8c"><h3>🔁 Mistakes Revision Game</h3>
+      <p>${rq.count ? `You have <b>${rq.count} question${rq.count === 1 ? "" : "s"}</b> still wrong. Play them again until you get them right — a question leaves this game only when you answer it correctly.` : "No mistakes right now — well done! 🌟"}
+      ${rq.cleared ? `<br>✅ You have already cleared <b>${rq.cleared}</b> mistake${rq.cleared === 1 ? "" : "s"} by answering them right.` : ""}</p>
+      ${rq.count ? `<button class="btn" id="play-rev">▶ Play Revision Game (${Math.min(rq.count, 10)} questions)</button>` : ""}
+    </div>
+    <div class="card"><h3>Round 1 — with options</h3>
+    <h3 style="margin-top:4px">Choose your level</h3>
+      ${["easy", "medium", "hard"].map(l => `
+        <label style="display:block;padding:8px 0;font-size:1rem">
+          <input type="radio" name="lvl" value="${l}" ${LEVEL === l ? "checked" : ""}> <b>${l[0].toUpperCase() + l.slice(1)}</b> — ${levelLabel(l)}</label>`).join("")}
+    </div>
+    ${S.stages.map(s => `
+      <div class="card stage-card ${s.locked ? "locked" : ""}">
+        <h3>${s.icon} Stage ${s.n} — ${esc(s.title)}</h3>
+        <p class="muted">${esc(s.desc)}</p>
+        <p>${s.passed ? `✅ Passed! Best: <b>${s.best}/${s.total}</b>` : s.best !== null ? `Best so far: <b>${s.best}/${s.total}</b> — need ${S.passMark} to pass` : "Not played yet"}
+        ${s.attempts ? ` · Played ${s.attempts} time${s.attempts === 1 ? "" : "s"}` : ""}
+        <br>📖 Concept covered: <b>${s.coveragePct}%</b> (${s.seen} of ${s.poolTotal} questions seen)</p>
+        ${s.locked
+          ? `<button class="btn ghost" disabled>🔒 Locked — finish Stage ${s.n - 1} first</button>`
+          : `<button class="btn" data-play="${s.n}">${s.passed ? "▶ Play again" : "▶ Play Stage " + s.n}</button>`}
+      </div>`).join("")}
+    <div class="card" style="border:2px solid #7c3aed"><h3>🏆 Round 2 — no options, type the answer</h3>
+      ${r2.unlocked
+        ? `<p>✅ Open! You passed all 8 stages in Round 1. Same questions, but now you must TYPE the answer — like the real exam. 45 seconds per question.</p>
+           <p>Round 2 done: <b>${r2done} / 8 stages</b></p>
+           ${(r2.stages || []).map(s => `
+             <p>${s.icon} Stage ${s.n} — ${esc(s.title)}: ${s.best === null ? "Not played yet" : `Best <b>${s.best}/10</b>`}
+             <button class="btn small" data-r2="${s.n}" style="margin-left:8px">▶ Play Round 2</button></p>`).join("")}`
+        : `<p class="muted">🔒 Locked — Round 2 opens after you pass all 8 stages in Round 1. (${(S.stages || []).filter(s => s.passed).length} of 8 passed so far.)</p>`}
+    </div>
+    <p class="muted" style="font-size:.85rem">Game scores are only for the Map Study Game. They never change your writing points, Points Board, clubs or certificates.</p>`;
+  box.querySelectorAll("input[name=lvl]").forEach(r => r.onchange = () => { LEVEL = r.value; });
+  box.querySelectorAll("[data-play]").forEach(b => b.onclick = () => startStage(+b.dataset.play));
+  box.querySelectorAll("[data-r2]").forEach(b => b.onclick = () => startRound2(+b.dataset.r2));
+  const pr = document.getElementById("play-rev");
+  if (pr) pr.onclick = startRevision;
+}
+async function startStage(n) {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading Stage ${n}…</p></div>`;
+  try {
+    const d = await api("GET", `/api/map-game/stage/${n}/questions?level=${LEVEL}`);
+    PLAY = { mode: "round1", stage: d.stage, level: LEVEL, timePerQ: d.timePerQ, questions: d.questions, idx: 0, answers: [], picked: null };
+    renderQ();
+  } catch (e) { toast(e.message, false); loadStages(); }
+}
+async function startRevision() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading your mistakes…</p></div>`;
+  try {
+    const d = await api("GET", "/api/map-game/revision");
+    if (!d.queue.length) { toast("No mistakes right now — well done!"); loadStages(); return; }
+    PLAY = { mode: "revision", stage: null, level: "easy", timePerQ: 0, questions: d.queue, idx: 0, answers: [], picked: null, total: d.count };
+    renderQ();
+  } catch (e) { toast(e.message, false); loadStages(); }
+}
+async function startRound2(n) {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading Round 2, Stage ${n}…</p></div>`;
+  try {
+    const d = await api("GET", `/api/map-game/round2/stage/${n}/questions`);
+    PLAY = { mode: "round2", stage: d.stage, level: "typed", timePerQ: d.timePerQ, questions: d.questions, idx: 0, answers: [], picked: null };
+    renderQ();
+  } catch (e) { toast(e.message, false); loadStages(); }
+}
+function renderQ() {
+  const box = document.getElementById("game");
+  const q = PLAY.questions[PLAY.idx];
+  const total = PLAY.questions.length;
+  const modeTitle = PLAY.mode === "revision" ? "🔁 Mistakes Revision"
+    : PLAY.mode === "round2" ? `🏆 Round 2 — Stage ${PLAY.stage.n} — ${esc(PLAY.stage.title)}`
+    : `${PLAY.stage.icon} Stage ${PLAY.stage.n} — ${esc(PLAY.stage.title)}`;
+  const modePill = PLAY.mode === "revision" ? "Revision — only your mistakes"
+    : PLAY.mode === "round2" ? "No options — type the answer"
+    : PLAY.level[0].toUpperCase() + PLAY.level.slice(1);
+  box.innerHTML = `<div class="card">
+    <p><b>${modeTitle}</b>
+    <span class="pill">${modePill}</span>
+    <span class="pill">Question ${PLAY.idx + 1} of ${total}</span>
+    ${PLAY.timePerQ ? `<span class="pill timer" id="qtimer">${PLAY.timePerQ}s</span>` : ""}</p>
+    <h2 style="font-size:1.15rem">${esc(q.q)}</h2>
+    ${q.is_map ? `<p><span class="pill">📍 Map question — find it on the map in your mind</span></p>` : ""}
+    ${q.hint ? `<p class="muted">💡 Hint: ${esc(q.hint)}</p>` : ""}
+    ${PLAY.mode === "round2"
+      ? `<input class="type-in" id="typed" placeholder="Type your answer here…" autocomplete="off" autocapitalize="off">
+         <p class="muted" style="font-size:.85rem">Spelling does not need capitals — "london" is fine for London. The correct spelling is shown after.</p>`
+      : `<div>${q.options.map((o, i) => `<button class="map-opt" data-opt="${esc(o)}">${esc(o)}</button>`).join("")}</div>`}
+    <button class="btn" id="qnext" disabled>${PLAY.idx + 1 === total ? "Finish ✅" : "Next →"}</button>
+    <p class="muted" style="font-size:.85rem">${PLAY.mode === "round2" ? "Type your answer, then Next. If the time runs out, it moves on with no answer." : "Tap one answer, then Next. If the time runs out, it moves on with no answer."}</p>
+    </div>`;
+  let picked = null;
+  if (PLAY.mode === "round2") {
+    const inp = document.getElementById("typed");
+    inp.focus();
+    inp.oninput = () => { document.getElementById("qnext").disabled = inp.value.trim() === ""; };
+    inp.onkeydown = (e) => { if (e.key === "Enter" && inp.value.trim() !== "") document.getElementById("qnext").click(); };
+    document.getElementById("qnext").onclick = () => { submitOne(inp.value); };
+  } else {
+    box.querySelectorAll("[data-opt]").forEach(b => b.onclick = () => {
+      if (picked !== null) return;
+      picked = b.dataset.opt;
+      PLAY.picked = picked;
+      box.querySelectorAll("[data-opt]").forEach(x => { x.disabled = true; if (x.dataset.opt === picked) x.classList.add("on"); });
+      document.getElementById("qnext").disabled = false;
+      stopTimer();
+    });
+    document.getElementById("qnext").onclick = () => { submitOne(PLAY.picked === null ? "" : PLAY.picked); };
+  }
+  if (PLAY.timePerQ) startTimer();
+}
+function submitOne(given) {
+  PLAY.answers.push({ key: PLAY.questions[PLAY.idx].key, given: given === null || given === undefined ? "" : String(given) });
+  PLAY.picked = null;
+  PLAY.idx++;
+  if (PLAY.idx >= PLAY.questions.length) finishStage();
+  else renderQ();
+}
+function startTimer() {
+  let left = PLAY.timePerQ;
+  const el = () => document.getElementById("qtimer");
+  stopTimer();
+  PLAY.timerId = setInterval(() => {
+    left--;
+    const t = el(); if (t) t.textContent = left + "s";
+    if (left <= 0) {
+      stopTimer();
+      // Time out: move on with no answer for this question.
+      submitOne("");
+    }
+  }, 1000);
+}
+function stopTimer() { if (PLAY.timerId) { clearInterval(PLAY.timerId); PLAY.timerId = null; } }
+async function finishStage() {
+  stopTimer();
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Checking your answers…</p></div>`;
+  const url = PLAY.mode === "revision" ? "/api/map-game/revision/attempt"
+    : PLAY.mode === "round2" ? `/api/map-game/round2/stage/${PLAY.stage.n}/attempt`
+    : `/api/map-game/stage/${PLAY.stage.n}/attempt`;
+  const body = PLAY.mode === "round1" ? { level: PLAY.level, answers: PLAY.answers } : { answers: PLAY.answers };
+  try {
+    const r = await api("POST", url, body);
+    const wrong = r.detail.filter(d => !d.correct);
+    const title = PLAY.mode === "revision" ? (wrong.length ? "💪 Keep revising!" : "🎉 All clear!")
+      : PLAY.mode === "round2" ? (r.passed ? "🎉 You passed Round 2!" : "💪 Keep going!")
+      : (r.passed ? "🎉 You passed!" : "💪 Keep going!");
+    let extra = "";
+    if (PLAY.mode === "round1") {
+      extra = r.passed
+        ? (r.unlocked > PLAY.stage.n ? `✅ Stage ${r.unlocked} is now open!` : "✅ You finished all 8 stages — amazing! Round 2 is now open!")
+        : `You need ${S.passMark} out of ${r.total} to open the next stage. Play again — you can do it!`;
+    } else if (PLAY.mode === "revision") {
+      extra = r.remaining ? `There are still <b>${r.remaining}</b> mistake${r.remaining === 1 ? "" : "s"} left — play the Revision Game again to clear them. (✅ Cleared so far: ${r.cleared}.)`
+        : `🌟 No mistakes left at all — you cleared every one!`;
+    } else {
+      extra = r.passed ? "✅ Stage passed in Round 2 — without any options!" : `You need ${S.passMark} out of ${r.total} to pass this Round 2 stage. Try again!`;
+    }
+    box.innerHTML = `<div class="card">
+      <h1>${title}</h1>
+      <p style="font-size:1.3rem"><b>${r.score} / ${r.total} correct</b>${PLAY.mode === "round1" ? ` · ${esc(PLAY.level)} · Stage ${PLAY.stage.n}` : PLAY.mode === "round2" ? ` · Round 2 · Stage ${PLAY.stage.n}` : " · Revision Game"}</p>
+      <p>${extra}</p>
+      <p><button class="btn" id="backhome">← Back to stages</button>
+      ${PLAY.mode === "round1" && r.passed && r.unlocked > PLAY.stage.n ? `<button class="btn" id="gonext" style="margin-left:8px">▶ Play Stage ${r.unlocked}</button>` : ""}
+      ${PLAY.mode === "round1" && !r.passed ? `<button class="btn" id="retry" style="margin-left:8px">↻ Play this stage again</button>` : ""}
+      ${PLAY.mode === "revision" && r.remaining ? `<button class="btn" id="retry" style="margin-left:8px">🔁 Play Revision again</button>` : ""}
+      ${PLAY.mode === "round2" && !r.passed ? `<button class="btn" id="retry" style="margin-left:8px">↻ Play Round 2 again</button>` : ""}</p>
+      </div>
+      <div class="card"><h3>📝 Your answers</h3>
+      ${r.detail.map((d, i) => `<p>${d.correct ? "✅" : "❌"} <b>Q${i + 1}.</b> ${esc(d.question)}<br>
+        <span class="muted">You: ${esc(d.given || "(no answer)")} · Correct: <b>${esc(d.answer)}</b></span><br>
+        <span style="font-size:.9rem">💡 ${esc(d.point)}</span></p>`).join("")}
+      ${wrong.length ? `<p class="muted">Your teacher will get these ${wrong.length} question(s) with the correct answers, so you can learn them.</p>` : `<p>🌟 Perfect — no wrong answers this time!</p>`}
+      </div>`;
+    document.getElementById("backhome").onclick = loadStages;
+    const gn = document.getElementById("gonext"); if (gn) gn.onclick = () => startStage(r.unlocked);
+    const rt = document.getElementById("retry");
+    if (rt) rt.onclick = () => PLAY.mode === "revision" ? startRevision() : PLAY.mode === "round2" ? startRound2(PLAY.stage.n) : startStage(PLAY.stage.n);
+    window.scrollTo(0, 0);
+  } catch (e) { toast(e.message, false); loadStages(); }
+}
+(async () => {
+  const user = await guard("student"); if (!user) return;
+  document.getElementById("nav").innerHTML = studentNav("map-game.html");
+  try { await loadStages(); }
+  catch (e) {
+    document.getElementById("game").innerHTML = `<div class="card"><h1>🗺️ Map Study Game</h1>
+      <p>${esc(e.message)}</p><a class="btn" href="/dashboard.html">← Back home</a></div>`;
+  }
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
