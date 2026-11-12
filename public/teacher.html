@@ -1181,7 +1181,7 @@ async function vGala(p) {
 }
 
 // ── Bidaya Map Study Game (BNS31, Samad, Nov 2026) ──────────
-// Anytime play, stage-by-stage (8 stages, 6/10 to pass and unlock the
+// Anytime play, stage-by-stage (8 stages, 8/10 to pass and unlock the
 // next). Game scores are SEPARATE from writing points — they never
 // touch the Points Board, clubs or certificates.
 let mgSub = "board", mgBoy = null;
@@ -1197,7 +1197,7 @@ async function vMapGame(p) {
   const subBtn = (k, label) => `<button class="btn small ${mgSub === k ? "" : "ghost"}" data-mgsub="${k}">${label}</button>`;
   let html = `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
     <h2 style="color:#fff;margin:0">🗺️ Map Study Game</h2>
-    <p style="margin:6px 0 0;color:#d4f0f5">Bidaya Map Study (BNS31) · 8 stages · 6/10 to pass and open the next stage · Easy / Medium / Hard · 🔁 Revision Game · 🏆 Round 2 (type the answer, no options)</p>
+    <p style="margin:6px 0 0;color:#d4f0f5">Bidaya Map Study (BNS31) · 8 stages · 8/10 to pass and open the next stage · Easy / Medium / Hard · 🔁 Revision Game · 🏆 Round 2 (type the answer, no options)</p>
     <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">The boy can play any time. Game scores are separate from writing points — they never touch the Points Board, clubs or certificates.</p></div>
     <div class="card"><label>Boy</label>
       <select id="mg-boy" style="padding:8px;max-width:100%">${pls.map(x => `<option value="${x.id}" ${x.id === mgBoy ? "selected" : ""}>${esc(x.display_name)} (Ad ${esc(x.ad_no)})</option>`).join("") || `<option value="">No players yet</option>`}</select>
@@ -1233,7 +1233,7 @@ async function vMapGame(p) {
       ${hist.length ? `<div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
       <tr><th>When</th><th>Round</th><th>Stage</th><th>Level</th><th>Score</th><th></th></tr>
       ${hist.map(a => `<tr><td>${fmtDateTime(a.created_at)}</td><td>${a.round === 2 ? "🏆 2" : "1"}</td><td>Stage ${a.stage}</td><td>${a.round === 2 ? "typed (no options)" : esc(a.level)}</td>
-        <td><b>${a.score}/${a.total}</b>${a.score >= 6 ? " ✅" : ""}</td>
+        <td><b>${a.score}/${a.total}</b>${a.score >= 8 ? " ✅" : ""}</td>
         <td>${a.round === 1 && a.score < a.total ? `<button class="btn small ghost" data-mg-wrong="${a.id}">Wrong answers</button>` : ""}</td></tr>`).join("")}
       </table></div>` : `<p class="muted">No games yet.</p>`}
       <p><a class="btn" href="/api/teacher/map-game/summary/${me.id}/wrong-answers.pdf" target="_blank">📄 Wrong-answers PDF (all games)</a></p></div>
