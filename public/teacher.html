@@ -1025,7 +1025,10 @@ async function vChallenges(p) {
 // 12 days, 12 programs, 2:30–3:30 PM, Friday off. 28 boys play + 1
 // coordinator. Challenge points are SEPARATE from writing points — they
 // never touch the Points Board, clubs or certificates.
-let galaSub = "setup", galaDay = 1;
+let galaSub = "setup", galaDay = 1, galaScoreTeam = "All";
+// Team leaders / assistants (Samad's 12 Nov 2026 setup, by Ad No) — shown
+// as badges in the separate Team Door / Team Window views.
+const GALA_LEADERS = { Door: { leaderAd: "511", asstAd: "518" }, Window: { leaderAd: "526", asstAd: "514" } };
 async function vGala(p) {
   const [setup, board] = await Promise.all([
     api("GET", "/api/teacher/gala/setup"),
@@ -1061,7 +1064,7 @@ async function vGala(p) {
     <h2 style="color:#fff;margin:0">🎉 Twelfth Gala</h2>
     <p style="margin:6px 0 0;color:#d4f0f5">12 Days • 12 Programs • 2:30–3:30 PM • Friday off • Every boy plays every day</p>
     <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">0–10 points per boy per day. Challenge points are separate from writing points — they never touch the Points Board, clubs or certificates.</p></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${subBtn("setup", "⚙️ Setup")}${subBtn("scores", "✏️ Enter Scores")}${subBtn("board", "🏆 Scoreboard")}${subBtn("programs", "📋 Programs")}</div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${subBtn("setup", "⚙️ Setup")}${subBtn("scores", "✏️ Enter Scores")}${subBtn("board", "🏆 Scoreboard")}${subBtn("door", "🚪 Team Door")}${subBtn("window", "🪟 Team Window")}${subBtn("programs", "📋 Programs")}</div>`;
 
   if (galaSub === "setup") {
     const nDoor = students.filter(s => isPlayer(s) && teamOf(s) === "Door").length;
@@ -1094,9 +1097,10 @@ async function vGala(p) {
           const done = (board.dayTotals || [])[d - 1] && board.dayTotals[d - 1].done;
           return `<button class="btn small ${galaDay === d ? "" : "ghost"}" data-gday="${d}">Day ${d}${done ? " ✓" : ""}</button>`;
         }).join("")}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">${["All", "Door", "Window"].map(t => `<button class="btn small ${galaScoreTeam === t ? "" : "ghost"}" data-gsteam="${t}">${t === "All" ? "All 28" : t === "Door" ? "🚪 Door only" : "🪟 Window only"}</button>`).join("")}</div>
         <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
         <tr><th>Boy</th><th>Team</th><th>Score (0–10)</th></tr>
-        ${players.map(b => `<tr>
+        ${players.map(b => `<tr data-gsteam-row="${b.team}"${galaScoreTeam !== "All" && b.team !== galaScoreTeam ? ' style="display:none"' : ""}>
           <td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(b.display_name, b.photo)}</span><b>${esc(b.display_name)}</b></td>
           <td>${b.team === "Door" ? "🚪 Door" : "🪟 Window"}</td>
           <td><input type="number" min="0" max="10" step="1" id="gsc-${b.id}" value="${b.days[galaDay - 1] === null ? "" : b.days[galaDay - 1]}" style="width:80px" placeholder="–"></td>
@@ -1104,6 +1108,38 @@ async function vGala(p) {
         <button class="btn" id="gala-save-scores" style="margin-top:12px">💾 Save Day ${galaDay} scores</button>
         <span id="gala-scores-msg" class="muted" style="margin-left:8px"></span>
         <p class="muted" style="font-size:.85rem;margin-top:8px">Leave a box empty to clear that boy's score for this day. Saving again overwrites the day.</p></div>`;
+    }
+  }
+
+  // ── Separate Team Door / Team Window views (Samad, 12 Nov 2026) ──
+  // Each team on its own tab: only that team's 14 boys + their performance.
+  // No rank numbers — most points first, like the other progress lists.
+  if (galaSub === "door" || galaSub === "window") {
+    const team = galaSub === "door" ? "Door" : "Window";
+    if (!players.length) {
+      html += `<div class="card"><p class="muted">No teams yet — set them up first (Setup tab).</p></div>`;
+    } else {
+      const teamBoys = [...players].filter(b => b.team === team)
+        .sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name));
+      const total = board.teamTotals[team] || 0;
+      const avg = teamBoys.length ? (total / teamBoys.length).toFixed(1) : "–";
+      const leader = teamBoys.find(b => b.ad_no === GALA_LEADERS[team].leaderAd);
+      const asst = teamBoys.find(b => b.ad_no === GALA_LEADERS[team].asstAd);
+      const roleBadge = (b) => b === leader ? ` <span style="background:#d4a017;color:#fff;font-size:.7rem;padding:2px 7px;border-radius:99px">Leader</span>`
+        : b === asst ? ` <span style="background:#0e7c8c;color:#fff;font-size:.7rem;padding:2px 7px;border-radius:99px">Assistant</span>` : "";
+      html += `<div class="card"><h3>${team === "Door" ? "🚪" : "🪟"} Team ${team} — ${board.daysDone} of 12 days done</h3>
+        ${teamBar(team, total)}
+        <p class="muted">${teamBoys.length} boys · Leader: <b>${leader ? esc(leader.display_name) : "—"}</b> · Assistant: <b>${asst ? esc(asst.display_name) : "—"}</b> · Average per boy: <b>${avg}</b></p></div>
+      <div class="card"><h3>👦 Boys — most points first</h3>
+        <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem"><tr><th>Boy</th><th>Total</th><th>Day 1–12</th><th>Days played</th><th>Average</th></tr>
+        ${teamBoys.map(b => {
+          const played = b.days.filter(v => v !== null).length;
+          const bAvg = played ? (b.total / played).toFixed(1) : "–";
+          return `<tr><td><span class="av av-sm" style="margin-right:8px;vertical-align:middle">${avatar(b.display_name, b.photo)}</span><b>${esc(b.display_name)}</b>${roleBadge(b)}</td>
+          <td><b>${b.total}</b></td><td>${b.days.map(v => v === null ? "–" : v).join(" · ")}</td>
+          <td>${played}</td><td>${bAvg}</td></tr>`;
+        }).join("")}</table></div>
+        <p class="muted" style="font-size:.85rem;margin-top:10px">Tap ✏️ Enter Scores to add a day's scores for this team — use the Door / Window filter there to see only 14 boys at a time.</p></div>`;
     }
   }
 
@@ -1136,6 +1172,7 @@ async function vGala(p) {
   p.innerHTML = html;
   p.querySelectorAll("[data-gsub]").forEach(b => b.onclick = () => { galaSub = b.dataset.gsub; render(); });
   p.querySelectorAll("[data-gday]").forEach(b => b.onclick = () => { galaDay = +b.dataset.gday; render(); });
+  p.querySelectorAll("[data-gsteam]").forEach(b => b.onclick = () => { galaScoreTeam = b.dataset.gsteam; render(); });
 
   const updCount = () => {
     const nPlay = students.filter(s => document.getElementById("gplay-" + s.id).checked).length;
