@@ -617,12 +617,17 @@ function seedParentUsers() {
 seedParentUsers();
 // Map Study game: Faaz (Ad 494, BNS31) is the only player for now.
 // Other boys are added later by the teacher (Teacher Panel → Map Study Game).
-(function seedMapGamePlayers() {
+// Named (not an IIFE) so the restore handler below can call it too: a
+// wipe-restore replaces map_game_players from the backup, and a backup
+// taken before Faaz was ticked would drop him — re-seeding keeps the
+// BNS31 player enrolled after every deploy, wipe and restore.
+function seedMapGamePlayers() {
   try {
     const faaz = db.prepare("SELECT id FROM users WHERE role='student' AND (ad_no='494' OR display_name LIKE '%FAAZ%')").get();
     if (faaz) db.prepare("INSERT OR IGNORE INTO map_game_players (student_id) VALUES (?)").run(faaz.id);
   } catch (e) { console.log("Map game seeding:", e.message); }
-})();
+}
+seedMapGamePlayers();
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
@@ -3091,6 +3096,7 @@ app.post("/api/teacher/restore", requireTeacher, (req, res) => {
     }
     db.exec("COMMIT");
     seedParentUsers(); // a stale backup may predate parent logins — re-create any missing ones
+    seedMapGamePlayers(); // a backup taken before Faaz was ticked has 0 players — re-enrol him (BNS31)
     const skippedObj = {};
     for (const [t, s] of Object.entries(skipped)) skippedObj[t] = [...s].join(",");
     res.json({ ok: true, skippedColumns: skippedObj });
