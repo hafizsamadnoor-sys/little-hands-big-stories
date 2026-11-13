@@ -66,6 +66,7 @@
   <button class="tile" onclick="openParentSec('board',this)"><span class="tile-circ">🏆</span><span class="tile-t">Scoreboard</span><span class="tile-n" id="tc-board">…</span></button>
   <button class="tile" onclick="openParentSec('works',this)"><span class="tile-circ">✅</span><span class="tile-t">Approved Works</span><span class="tile-n" id="tc-works">…</span></button>
   <button class="tile" onclick="openParentSec('gala',this)"><span class="tile-circ">🎉</span><span class="tile-t">Twelfth Gala</span><span class="tile-n" id="tc-gala">…</span></button>
+  <button class="tile" onclick="location.href='/gala-results.html'"><span class="tile-circ">🏆</span><span class="tile-t">Gala Results</span><span class="tile-n" id="tc-galaresults">…</span></button>
   <button class="tile" onclick="openParentSec('books',this)"><span class="tile-circ">📕</span><span class="tile-t">Books — all students</span><span class="tile-n" id="tc-books">…</span></button>
   <button class="tile" onclick="openParentSec('writings',this)"><span class="tile-circ">📖</span><span class="tile-t">Writings — all students</span><span class="tile-n" id="tc-writings">…</span></button>
 </div>
@@ -435,6 +436,7 @@ async function toggleFinance() {
   try {
     const gb = await api("GET", "/api/gala/board");
     setTc("tc-gala", gb.setup ? (gb.me ? gb.me.total + " pts · " + gb.me.team : "Door " + gb.teamTotals.Door + " — Window " + gb.teamTotals.Window) : "Coming soon");
+    setTc("tc-galaresults", gb.setup ? "Door " + gb.teamTotals.Door + " — Window " + gb.teamTotals.Window : "Coming soon");
     document.getElementById("galabody").innerHTML = window.galaBoardHtml(gb, d.student.display_name);
   } catch (e) { document.getElementById("galabody").innerHTML = ""; }
 

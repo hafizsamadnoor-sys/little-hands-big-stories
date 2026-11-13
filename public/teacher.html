@@ -1081,7 +1081,7 @@ async function vGala(p) {
     <h2 style="color:#fff;margin:0">🎉 Twelfth Gala</h2>
     <p style="margin:6px 0 0;color:#d4f0f5">12 Days • 12 Programs • 2:30–3:30 PM • Friday off • Every boy plays every day</p>
     <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">0–10 points per boy per day. Challenge points are separate from writing points — they never touch the Points Board, clubs or certificates.</p></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${subBtn("setup", "⚙️ Setup")}${subBtn("scores", "✏️ Enter Scores")}${subBtn("board", "🏆 Scoreboard")}${subBtn("door", "🚪 Team Door")}${subBtn("window", "🪟 Team Window")}${subBtn("programs", "📋 Programs")}</div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${subBtn("setup", "⚙️ Setup")}${subBtn("scores", "✏️ Enter Scores")}${subBtn("board", "🏆 Scoreboard")}${subBtn("door", "🚪 Team Door")}${subBtn("window", "🪟 Team Window")}${subBtn("programs", "📋 Programs")}<a class="btn small" href="/gala-results.html" target="_blank">🏆 View Results Page</a></div>`;
 
   if (galaSub === "setup") {
     const nDoor = students.filter(s => isPlayer(s) && teamOf(s) === "Door").length;

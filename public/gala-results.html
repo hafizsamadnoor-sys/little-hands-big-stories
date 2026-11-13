@@ -1,0 +1,526 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gala Results · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+/* Twelfth Gala Results — mirrors the approved results demo (Georgia serif
+   + Verdana UI, dark teal #0b4f63, gold #c9920e; Door teal, Window orange). */
+body{font-family:Georgia,'Times New Roman',serif;background:#f2f5f7;color:#14232e}
+.gwrap{max-width:1020px;margin:0 auto;padding:0 12px 40px}
+.gwrap h2{font-family:Verdana,sans-serif;border-bottom:3px solid #c9920e;padding-bottom:6px}
+.gwrap .card,.gwrap .gcard{font-family:Verdana,sans-serif}
+.ghead{background:linear-gradient(135deg,#0b4f63,#083a4a);color:#fff;border-radius:14px;padding:26px 20px;text-align:center;margin:14px 0;box-shadow:0 4px 16px rgba(11,79,99,.25)}
+.ghead .stars{color:#f5c542;letter-spacing:6px;font-size:.9rem}
+.ghead .inst{font-family:Verdana,sans-serif;font-size:.72rem;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#9fd8e8;margin-top:8px}
+.ghead h1{font-family:Georgia,serif;font-size:2.05rem;margin:10px 0 6px;color:#fff}
+.ghead .sub{font-family:Verdana,sans-serif;color:#d4f0f5;font-size:.9rem}
+.gpill{display:inline-block;margin-top:12px;background:#f5c542;color:#3a2b00;font-family:Verdana,sans-serif;font-size:.78rem;font-weight:800;padding:5px 14px;border-radius:999px}
+.gstats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:14px 0}
+@media(min-width:700px){.gstats{grid-template-columns:repeat(4,1fr)}}
+.gstat{background:#fff;border-radius:14px;padding:14px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.08);font-family:Verdana,sans-serif}
+.gstat b{display:block;font-size:1.35rem;color:#0b4f63}
+.gstat span{font-size:.75rem;color:#5b6b76;font-weight:700}
+.gnote{font-family:Verdana,sans-serif;font-size:.85rem;color:#5b6b76;text-align:center;margin:4px 0 14px}
+.gbattle{display:grid;gap:12px}
+@media(min-width:700px){.gbattle{grid-template-columns:1fr 1fr}}
+.gteam{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.08);border-top:5px solid #0b6a86}
+.gteam.win{border-top-color:#c05f10;background:#fdeedd}
+.gteam.door{background:#e0eff5}
+.gteam h3{font-family:Verdana,sans-serif;margin:0 0 2px;font-size:1.05rem}
+.gplace{display:inline-block;font-family:Verdana,sans-serif;font-size:.75rem;font-weight:800;padding:3px 10px;border-radius:999px;background:#f5c542;color:#3a2b00}
+.gplace.second{background:#e5e7eb;color:#374151}
+.gteam .big{font-family:Verdana,sans-serif;font-size:2rem;font-weight:800;margin:6px 0}
+.gteam.win .big{color:#c05f10}
+.gteam.door .big{color:#0b6a86}
+.gbar{margin:8px 0}
+.gbar .glab{display:flex;justify-content:space-between;font-family:Verdana,sans-serif;font-size:.78rem;font-weight:700;color:#5b6b76}
+.gbar .track{background:#e8f2f6;height:14px;border-radius:99px;overflow:hidden;margin-top:3px}
+.gbar .fill{height:100%}
+.glead{background:#fdf3d7;border:1px solid #f5c542;border-radius:12px;padding:12px 14px;font-family:Verdana,sans-serif;font-weight:700;text-align:center;margin:12px 0}
+.gcard-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.gphoto{width:96px;height:96px;border-radius:50%;border:3px solid #c9920e;object-fit:cover;flex:none;background:#e0f2f7;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:800;color:#0b3c46;overflow:hidden}
+.gphoto img{width:100%;height:100%;object-fit:cover}
+.ggrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+@media(min-width:700px){.ggrid{grid-template-columns:repeat(4,1fr)}}
+.gcell{background:#f2f5f7;border-radius:10px;padding:10px;text-align:center}
+.gcell b{display:block;font-size:1.15rem;color:#0b3c46}
+.gcell span{font-size:.72rem;color:#5b6b76;font-weight:700}
+table.gboard{width:100%;border-collapse:collapse;font-family:Verdana,sans-serif;font-size:.9rem}
+table.gboard th,table.gboard td{padding:9px 8px;border-bottom:1px solid #eef2f5;text-align:left;vertical-align:middle}
+table.gboard tr.row1{background:#fdf3d7}
+table.gboard tr[data-boy]{cursor:pointer}
+table.gboard tr[data-boy]:hover{background:#f2f9fb}
+.gboy{display:flex;align-items:center;gap:8px}
+.gboy .bav{width:40px;height:40px;border-radius:50%;background:#e0f2f7;color:#0b3c46;font-weight:800;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;flex:none}
+.gboy .bav img{width:100%;height:100%;object-fit:cover}
+.gpill-team{display:inline-block;font-size:.72rem;font-weight:800;padding:3px 10px;border-radius:999px}
+.gpill-team.door{background:#e0eff5;color:#0b6a86}
+.gpill-team.window{background:#fdeedd;color:#c05f10}
+.gfilter{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.gfilter input{flex:1;min-width:160px;padding:9px 12px;border:1px solid #d1d5db;border-radius:10px;font-family:Verdana,sans-serif;font-size:.9rem}
+.gsecrow td{background:#f1f5f9;font-weight:800;color:#5b6b76;font-size:.8rem}
+/* Winners poster (on screen) */
+.gposter{max-width:660px;margin:0 auto;background:#fff;border:3px solid #0b3c46;border-radius:12px;box-shadow:0 6px 24px rgba(11,60,70,.15);overflow:hidden;text-align:center}
+.gposter .phead{background:linear-gradient(135deg,#0b4f63,#0e7d9c);color:#fff;padding:22px 16px 18px}
+.gposter .phead .pinst{font-family:Verdana,sans-serif;font-size:.68rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#9fd8e8}
+.gposter .phead h3{font-family:Georgia,serif;font-size:1.7rem;margin:8px 0 4px;color:#fff}
+.gposter .phead .psub{font-family:Verdana,sans-serif;font-size:.82rem;color:#d4f0f5}
+.gpodium{display:grid;grid-template-columns:1fr 1.18fr 1fr;align-items:end;gap:8px;padding:26px 16px 8px}
+.gslot .pphoto{border-radius:50%;object-fit:cover;background:#e0f2f7;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#0b3c46;overflow:hidden}
+.gslot .pphoto img{width:100%;height:100%;object-fit:cover}
+.gslot.centre .pphoto{width:110px;height:110px;border:4px solid #c9920e;font-size:2rem}
+.gslot.side .pphoto{width:84px;height:84px;border:4px solid #9aa5b1;font-size:1.5rem}
+.gslot.side.bronze .pphoto{border-color:#cd7f32}
+.gslot .ppos{font-family:Verdana,sans-serif;font-weight:800;font-size:.85rem;color:#0b3c46}
+.gslot .pname{font-family:Verdana,sans-serif;font-weight:800;font-size:.92rem;margin:4px 0 2px}
+.gslot .ppts{font-family:Verdana,sans-serif;font-weight:800;color:#0e7d9c;font-size:.9rem}
+.gslot .pteam{font-family:Verdana,sans-serif;font-size:.78rem;color:#5b6b76}
+.gnext{font-family:Verdana,sans-serif;font-size:.85rem;color:#5b6b76;padding:10px 16px 4px}
+.gstand{padding:14px 20px 6px;text-align:left}
+.gstand h4{font-family:Verdana,sans-serif;text-align:center;margin:0 0 2px;color:#0b3c46}
+.gstand .ssub{font-family:Verdana,sans-serif;font-size:.78rem;color:#5b6b76;text-align:center;margin-bottom:10px}
+.gstand .srow{display:grid;grid-template-columns:118px 1fr 64px;gap:10px;align-items:center;font-family:Verdana,sans-serif;font-size:.85rem;font-weight:700;margin:8px 0}
+.gstand .strack{background:#e8f2f6;height:16px;border-radius:99px;overflow:hidden}
+.gstand .sfill{height:100%}
+.gstand .scap{font-family:Verdana,sans-serif;font-size:.8rem;color:#5b6b76;text-align:center;margin:8px 0 14px}
+.gpfoot{background:#0b4f63;color:#fff;font-family:Verdana,sans-serif;font-size:.8rem;font-weight:700;padding:12px}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:9999}
+</style>
+</head>
+<body><div id="nav"></div><div class="gwrap" id="gwrap">
+<div id="pagehead"></div>
+<div id="content"><p class="muted" style="text-align:center;padding:30px 0">Loading Gala results… 🎉</p></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch<br>Powered by NSU — Noorul Huda Students Union</div>
+</div>
+<canvas id="confetti" style="display:none"></canvas>
+<script>
+// ── Twelfth Gala Results (Samad, 13 Nov 2026) ────────────────────────
+// Public (logged-in) results: every boy's Gala points, team battle, auto
+// Top 3 poster. Reads /api/gala/results — Gala points only, never the
+// writing Points Board, clubs or certificates.
+const LEADERS = { Door: { leader: "511", asst: "518" }, Window: { leader: "526", asst: "514" } };
+const DAY1_UTC = Date.UTC(2026, 10, 12); // Day 1 = Thu 12 Nov 2026
+let DATA = null, cardBoyId = null, filterTeam = "All", searchQ = "";
+const dayDate = (n) => new Date(DAY1_UTC + (n - 1) * 86400000);
+const fmtDay = (n) => dayDate(n).toLocaleDateString("en-GB", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short" });
+const scored = (b) => b.days.some(v => v !== null);
+const ordinal = (n) => n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : n + "th";
+const medal = (r) => r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : "";
+// Competition ranking: 1 + boys with strictly more points (ties share a
+// rank, the next number is skipped: 1, 2, 2, 4).
+function rankOf(b) {
+  if (!scored(b)) return null;
+  return 1 + DATA.players.filter(x => scored(x) && x.total > b.total).length;
+}
+function roleOf(b) {
+  const L = LEADERS[b.team] || {};
+  if (b.ad_no === L.leader) return "Leader";
+  if (b.ad_no === L.asst) return "Asst. Leader";
+  return "";
+}
+function rankLabel(rank, count) {
+  if (rank === 1) return count > 1 ? "Joint 1st Place 🥇" : "1st Place 🥇";
+  if (rank === 2) return count > 1 ? "Joint 2nd Place 🥈" : "2nd Place 🥈";
+  if (rank === 3) return count > 1 ? "Joint 3rd Place 🥉" : "3rd Place 🥉";
+  return ordinal(rank) + " Place";
+}
+// Top 3 rank groups (distinct point totals, highest first), each with its
+// boys — generalises to any tie pattern.
+function podiumGroups() {
+  const groups = {};
+  DATA.players.filter(scored).forEach(b => { (groups[b.total] = groups[b.total] || []).push(b); });
+  return Object.keys(groups).map(Number).sort((a, b) => b - a).slice(0, 3).map(total => ({
+    total, rank: 1 + DATA.players.filter(x => scored(x) && x.total > total).length,
+    boys: groups[total].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+  }));
+}
+function latestDay() {
+  let d = 0;
+  DATA.players.forEach(b => b.days.forEach((v, i) => { if (v !== null && i + 1 > d) d = i + 1; }));
+  return d || 1;
+}
+function dayPoints(b, day) { return b.days[day - 1]; }
+
+function celebrate() {
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cv = document.getElementById("confetti");
+  cv.style.display = "block";
+  cv.width = innerWidth; cv.height = innerHeight;
+  const ctx = cv.getContext("2d");
+  const cols = ["#0b4f63", "#c9920e", "#f5c542", "#d97c2b", "#16a34a", "#e11d48"];
+  const ps = Array.from({ length: 70 }, () => ({
+    x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * 0.3,
+    w: 6 + Math.random() * 8, h: 8 + Math.random() * 8, c: cols[Math.floor(Math.random() * cols.length)],
+    vy: 2 + Math.random() * 3, vx: -1 + Math.random() * 2, r: Math.random() * Math.PI, vr: -0.08 + Math.random() * 0.16,
+    life: 2.2 + Math.random() * 1.8,
+  }));
+  const t0 = performance.now();
+  (function tick(t) {
+    const el = (t - t0) / 1000;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore(); });
+    if (el < 4.2) requestAnimationFrame(tick);
+    else { ctx.clearRect(0, 0, cv.width, cv.height); cv.style.display = "none"; }
+  })(t0);
+}
+
+function teamBattleHtml() {
+  const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+  const max = Math.max(tt.Door, tt.Window, 1);
+  const ld = latestDay();
+  const prog = (DATA.programs || [])[ld - 1] || {};
+  const unscoredN = DATA.players.filter(b => !scored(b)).length;
+  const order = ["Door", "Window"].sort((a, b) => tt[b] - tt[a]);
+  const cards = order.map((t, i) => {
+    const teamBoys = DATA.players.filter(b => b.team === t);
+    const scoredBoys = teamBoys.filter(scored);
+    const dayPts = teamBoys.reduce((a, b) => a + (dayPoints(b, ld) || 0), 0);
+    const L = LEADERS[t];
+    const leader = teamBoys.find(b => b.ad_no === L.leader);
+    const asst = teamBoys.find(b => b.ad_no === L.asst);
+    const col = t === "Door" ? "#0b6a86" : "#d97c2b";
+    const bar = (label, val) => `<div class="gbar"><div class="glab"><span>${esc(label)}</span><span>${val} pts</span></div>
+      <div class="track"><div class="fill" style="width:${Math.round(val / max * 100)}%;background:${col}"></div></div></div>`;
+    return `<div class="gteam ${t === "Door" ? "door" : "win"}">
+      <h3>${t === "Door" ? "🚪" : "🪟"} Team ${t}</h3>
+      <span class="gplace ${i === 0 ? "" : "second"}">${i === 0 ? "🥇 1st Place" : "🥈 2nd Place"}</span>
+      <div style="font-size:.8rem;color:#5b6b76;margin-top:6px">Leader: ${leader ? esc(leader.display_name) : "—"} · Asst: ${asst ? esc(asst.display_name) : "—"} · 14 boys</div>
+      <div class="big">${tt[t]} pts</div>
+      ${bar("Day " + ld + " · " + (prog.name || ""), dayPts)}
+      ${bar("Total", tt[t])}
+      <div style="font-size:.82rem;color:#5b6b76">Scored: ${scoredBoys.length ? scoredBoys.map(b => esc(b.display_name) + " " + b.total).join(", ") : "— yet"}</div>
+    </div>`;
+  }).join("");
+  let lead;
+  if (tt.Door === tt.Window && tt.Door === 0) lead = "⏳ No scores yet — Day 1 begins the battle!";
+  else if (tt.Door === tt.Window) lead = `🤝 Teams are tied at ${tt.Door} points${unscoredN ? ` — with ${unscoredN} boy${unscoredN === 1 ? "" : "s"} still to be scored, anything can change! 🚀` : " — what a finish!"}`;
+  else {
+    const win = tt.Window > tt.Door ? "Window" : "Door", lose = win === "Window" ? "Door" : "Window";
+    lead = `🎉 Team ${win} leads by ${Math.abs(tt.Window - tt.Door)} points (${tt[win]} – ${tt[lose]})${unscoredN ? ` — with ${unscoredN} boy${unscoredN === 1 ? "" : "s"} still to be scored, anything can change! 🚀` : ""}`;
+  }
+  return `<h2>⚔️ Team Battle — Door vs Window</h2><div class="gbattle">${cards}</div><div class="glead">${lead}</div>`;
+}
+
+function scoreCardHtml(b) {
+  if (!b) return `<div class="card"><h3>⭐ Score Card</h3><p class="muted">No scores yet — the first results will appear here after Day 1. 🎉</p></div>`;
+  const r = rankOf(b);
+  const ld = latestDay();
+  const prog = (DATA.programs || [])[ld - 1] || {};
+  const role = roleOf(b);
+  const doneDays = (DATA.dayTotals || []).filter(d => d.done);
+  const rows = doneDays.map(d => `<tr><td>Day ${d.day}</td><td>${esc(d.program)}</td><td><b>${b.days[d.day - 1] === null ? "–" : b.days[d.day - 1]}</b></td></tr>`).join("");
+  return `<div class="card"><h3>⭐ Score Card</h3>
+    <div class="gcard-row"><span class="gphoto">${avatar(b.display_name, b.photo)}</span>
+    <div><div style="font-size:1.25rem;font-weight:800">${esc(b.display_name)} ${medal(r || 0)}</div>
+    <div class="muted">${b.team === "Door" ? "🚪 Team Door" : "🪟 Team Window"} · Ad No ${esc(b.ad_no)}${role ? " · " + role : ""}</div></div></div>
+    <div class="ggrid">
+      <div class="gcell"><b>${r === null ? "—" : "#" + r}</b><span>Rank</span></div>
+      <div class="gcell"><b>${b.days[ld - 1] === null ? "⏳" : b.days[ld - 1] + " / 10"}</b><span>Day ${ld} · ${esc(prog.name || "")}</span></div>
+      <div class="gcell"><b>${scored(b) ? b.total : "—"}</b><span>Total Points</span></div>
+      <div class="gcell"><b>${scored(b) ? "Scored ✅" : "Not scored yet"}</b><span>Status</span></div>
+    </div>
+    <div style="overflow-x:auto;margin-top:12px"><table style="width:100%;font-size:.88rem"><tr><th>Day</th><th>Program</th><th>Points</th></tr>${rows || `<tr><td colspan="3" class="muted">No scores yet.</td></tr>`}<tr><td colspan="2"><b>Total</b></td><td><b>${scored(b) ? b.total : "—"}</b></td></tr></table></div>
+    <p class="muted" style="font-size:.82rem;margin:8px 0 0">Tap any boy in the scoreboard below to see his card. 👇</p></div>`;
+}
+
+function boardHtml() {
+  const ld = latestDay();
+  const prog = (DATA.programs || [])[ld - 1] || {};
+  const scoredBoys = DATA.players.filter(scored).sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name));
+  const unscoredBoys = DATA.players.filter(b => !scored(b)).sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const q = searchQ.trim().toLowerCase();
+  const match = (b) => (filterTeam === "All" || b.team === filterTeam) && (!q || b.display_name.toLowerCase().includes(q));
+  const row = (b) => {
+    const r = rankOf(b);
+    return `<tr data-boy="${b.id}" class="${r === 1 ? "row1" : ""}" onclick="showCard(${b.id})">
+      <td>${r === null ? "–" : (r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : r)}</td>
+      <td><span class="gboy"><span class="bav">${avatar(b.display_name, b.photo)}</span><span><b>${esc(b.display_name)}</b>${medal(r || 0)}${roleOf(b) ? ` <span class="muted" style="font-size:.78rem">(${roleOf(b)})</span>` : ""}</span></span></td>
+      <td><span class="gpill-team ${b.team.toLowerCase()}">${b.team === "Door" ? "🚪 Door" : "🪟 Window"}</span></td>
+      <td class="daycol">${scored(b) ? `<b>${b.days[ld - 1] === null ? "–" : b.days[ld - 1]}</b>` : `<i class="muted">Not scored yet</i>`}</td>
+      <td><b>${scored(b) ? b.total : "—"}</b></td></tr>`;
+  };
+  const sb = scoredBoys.filter(match), ub = unscoredBoys.filter(match);
+  let rows = sb.map(row).join("");
+  if (ub.length) rows += `<tr class="gsecrow"><td colspan="5">⏳ NOT SCORED YET — Day ${ld} (${ub.length} boy${ub.length === 1 ? "" : "s"})</td></tr>` + ub.map(row).join("");
+  if (!rows) rows = `<tr><td colspan="5" class="muted">No boy matches that search.</td></tr>`;
+  return `<div class="card"><h3 style="margin-top:0">📊 Individual Scoreboard — All 28 Boys</h3>
+    <div class="gfilter"><input id="gsearch" type="search" placeholder="🔍 Search a boy…" value="${esc(searchQ)}" oninput="searchQ=this.value;renderBoard()">
+    ${["All", "Door", "Window"].map(t => `<button class="btn small ${filterTeam === t ? "" : "ghost"}" onclick="filterTeam='${t}';renderBoard()">${t === "All" ? "All 28" : t === "Door" ? "🚪 Door" : "🪟 Window"}</button>`).join("")}</div>
+    <div style="overflow-x:auto"><table class="gboard"><thead><tr><th>#</th><th>Boy</th><th>Team</th><th class="daycol">Day ${ld} · ${esc(prog.name || "")}</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="font-size:.82rem;margin:10px 0 0">Tap any boy to see his score card. Boys not scored yet are never shown as 0. Gala points are separate from writing points.</p></div>`;
+}
+
+function posterHtml() {
+  const ld = latestDay();
+  const prog = (DATA.programs || [])[ld - 1] || {};
+  const groups = podiumGroups();
+  const unscoredN = DATA.players.filter(b => !scored(b)).length;
+  const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+  const max = Math.max(tt.Door, tt.Window, 1);
+  if (!groups.length) {
+    return `<div class="gposter"><div class="phead"><div class="pinst">Noorul Huda Centre for Excellence, Madannoor</div>
+      <h3>🏆 TWELFTH GALA 🏆</h3><div class="psub">⭐ Top Scorers — Day ${ld} • Twelfth Batch S1 ⭐</div></div>
+      <p style="padding:30px 16px;font-family:Verdana,sans-serif;color:#5b6b76">No scores yet — the winners poster will appear here after Day 1. 🎉</p>
+      <div class="gpfoot">Powered by NSU — Noorul Huda Students Union</div></div>`;
+  }
+  const slot = (g, cls) => {
+    if (!g) return `<div class="gslot ${cls}"></div>`;
+    const ring = g.rank === 1 ? "" : g.rank === 3 ? " bronze" : "";
+    return `<div class="gslot ${cls}${ring}">${g.boys.map(b => `
+      <div><span class="pphoto">${avatar(b.display_name, b.photo)}</span>
+      <div class="pname">${esc(b.display_name)}</div>
+      <div class="ppts">⭐ ${b.total} points</div>
+      <div class="pteam">Team ${b.team}</div></div>`).join("")}
+      <div class="ppos" style="margin-top:8px">${rankLabel(g.rank, g.boys.length)}</div></div>`;
+  };
+  // Next rank group after the podium (if any).
+  const allGroups = (() => {
+    const gr = {};
+    DATA.players.filter(scored).forEach(b => { (gr[b.total] = gr[b.total] || []).push(b); });
+    return Object.keys(gr).map(Number).sort((a, b) => b - a);
+  })();
+  const nextTotal = allGroups[3];
+  const nextBoys = nextTotal !== undefined ? DATA.players.filter(b => scored(b) && b.total === nextTotal).sort((a, b) => a.display_name.localeCompare(b.display_name)) : [];
+  const nextLine = nextBoys.length
+    ? `Next in line: ${nextBoys.map(b => esc(b.display_name) + " (Team " + b.team + ")").join(", ")} — ${nextTotal} points${unscoredN ? ` • ${unscoredN} boy${unscoredN === 1 ? "" : "s"} still to be scored — the podium can still change! 🎯` : ""}`
+    : (unscoredN ? `${unscoredN} boy${unscoredN === 1 ? "" : "s"} still to be scored — the podium can still change! 🎯` : "All 28 boys scored — the final podium! 🎉");
+  const srow = (t, rank) => `<div class="srow"><span>${t === "Door" ? "🚪" : "🪟"} ${t} ${rank === 1 ? "🥇 1st" : "🥈 2nd"}</span>
+    <span class="strack"><span class="sfill" style="display:block;width:${Math.round(tt[t] / max * 100)}%;background:${t === "Door" ? "#0b6a86" : "#d97c2b"}"></span></span>
+    <span>${tt[t]} pts</span></div>`;
+  const order = ["Door", "Window"].sort((a, b) => tt[b] - tt[a]);
+  return `<div class="gposter" id="gposter"><div class="phead"><div class="pinst">Noorul Huda Centre for Excellence, Madannoor</div>
+    <h3>🏆 TWELFTH GALA 🏆</h3><div class="psub">⭐ Top Scorers — Day ${ld} (${esc(prog.name || "")}) • Twelfth Batch S1 ⭐</div></div>
+    <div class="gpodium">${slot(groups[1], "side")}${slot(groups[0], "centre")}${slot(groups[2], "side")}</div>
+    <div class="gnext">${nextLine}</div>
+    <div style="border-top:2px solid #c9920e;margin:10px 20px 0"></div>
+    <div class="gstand"><h4>🏁 TEAM STANDINGS</h4><div class="ssub">Total points of each team — which team is 1st, which is 2nd</div>
+      ${srow(order[0], 1)}${srow(order[1], 2)}
+      <div class="scap">${tt.Door === tt.Window ? "Teams are tied at " + tt.Door + " points" : (tt.Window > tt.Door ? "Window" : "Door") + " leads by " + Math.abs(tt.Window - tt.Door) + " points"} • Day ${ld} scoring ${DATA.daysDone >= 12 ? "complete" : "still in progress (" + DATA.players.filter(scored).length + " of 28 boys scored)"}</div></div>
+    <div class="gpfoot">Powered by NSU — Noorul Huda Students Union</div></div>`;
+}
+
+function renderBoard() {
+  const el = document.getElementById("boardwrap");
+  if (el) el.innerHTML = boardHtml();
+  const inp = document.getElementById("gsearch");
+  if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+window.showCard = function (id) {
+  cardBoyId = id;
+  const b = DATA.players.find(x => x.id === id);
+  document.getElementById("cardwrap").innerHTML = scoreCardHtml(b);
+  document.getElementById("cardwrap").scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
+window.renderBoard = renderBoard;
+
+function render() {
+  const ld = latestDay();
+  const prog = (DATA.programs || [])[ld - 1] || {};
+  const next = (DATA.dayTotals || []).find(d => !d.done);
+  const nextProg = next ? (DATA.programs || [])[next.day - 1] : null;
+  const scoredN = DATA.players.filter(scored).length;
+  const totalPts = DATA.players.reduce((a, b) => a + b.total, 0);
+  const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+  const leadTeam = tt.Window > tt.Door ? "🪟 Window" : tt.Door > tt.Window ? "🚪 Door" : "Tied 🤝";
+  const coord = DATA.coordinator;
+  document.getElementById("content").innerHTML = `
+    <div class="ghead"><div class="stars">✦ ✦ ✦ ✦ ✦</div>
+      <div class="inst">Noorul Huda Centre for Excellence, Madannoor</div>
+      <h1>🏆 Twelfth Gala — Results 🎉</h1>
+      <div class="sub">Little Hands, Big Stories • Twelfth Batch • S1 • Team Door vs Team Window</div>
+      <span class="gpill">${DATA.daysDone >= 12 ? "ALL 12 DAYS DONE 🎉" : "Day " + ld + " scoring still in progress · " + scoredN + " of 28 boys scored"}</span></div>
+    <div class="gstats">
+      <div class="gstat"><b>Day ${ld} / 12</b><span>${DATA.daysDone >= 12 ? "Complete" : "In Progress"}</span></div>
+      <div class="gstat"><b>${scoredN} / 28</b><span>Boys Scored So Far</span></div>
+      <div class="gstat"><b>${totalPts}</b><span>Total Points So Far</span></div>
+      <div class="gstat"><b>${leadTeam}</b><span>Leading Team</span></div>
+    </div>
+    <p class="gnote">Day ${ld} (${fmtDay(ld)}): ${esc(prog.name || "")} — scoring continues.${nextProg ? ` • Day ${next.day} (${fmtDay(next.day)}, 2:30 PM): ${esc(nextProg.name)} — next.` : ""} • Each boy: 0–10 points per day. Coordinator: ${coord ? esc(coord.display_name) : "—"}.</p>
+    ${teamBattleHtml()}
+    <div id="cardwrap" style="margin-top:16px"></div>
+    <div id="boardwrap" style="margin-top:16px"></div>
+    <h2>🖼️ Winners Poster — Auto-Generated 🎊</h2>
+    ${posterHtml()}
+    <div style="text-align:center;margin:16px 0"><button class="btn" id="dl-poster">⬇️ Download Poster (PNG)</button>
+    <button class="btn ghost" onclick="celebrate()">🎉 Celebrate!</button></div>
+    <p class="gnote">The poster updates itself every time the teacher enters scores — no designing needed. Scores are entered in Teacher Panel → Twelfth Gala.</p>`;
+  // Default card: the topper (highest total, then name A–Z).
+  const topper = [...DATA.players].filter(scored).sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name))[0] || null;
+  cardBoyId = topper ? topper.id : null;
+  document.getElementById("cardwrap").innerHTML = scoreCardHtml(topper);
+  renderBoard();
+  document.getElementById("dl-poster").onclick = downloadPoster;
+  setTimeout(celebrate, 400);
+}
+
+// ── PNG download: redraw the poster fresh on a 1240×1640 canvas ──────
+function loadImg(src) {
+  return new Promise(res => {
+    if (!src) return res(null);
+    const im = new Image();
+    im.onload = () => res(im); im.onerror = () => res(null); im.src = src;
+  });
+}
+function fitFont(ctx, text, maxW, font, minPx) {
+  const m = font.match(/^(.*?)\s*(\d+)px\s+(.*)$/);
+  const pre = m ? m[1].trim() : "";
+  let px = m ? parseInt(m[2], 10) : 16;
+  const fam = m ? m[3] : "Verdana";
+  const mk = (p) => (pre ? pre + " " : "") + p + "px " + fam;
+  ctx.font = mk(px);
+  while (px > minPx && ctx.measureText(text).width > maxW) { px -= 2; ctx.font = mk(px); }
+  return ctx.font;
+}
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function drawPhotoCircle(ctx, img, name, cx, cy, r, ring) {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+  if (img) ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+  else { ctx.fillStyle = "#e0f2f7"; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.fillStyle = "#0b3c46"; ctx.font = "bold " + Math.round(r * 0.9) + "px Verdana"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText((name || "?").trim()[0] || "?", cx, cy + 2); }
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.lineWidth = 7; ctx.strokeStyle = ring; ctx.stroke();
+}
+async function downloadPoster() {
+  const btn = document.getElementById("dl-poster");
+  btn.textContent = "⏳ Making your poster…"; btn.disabled = true;
+  try {
+    const W = 1240, H = 1640;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const ld = latestDay();
+    const prog = (DATA.programs || [])[ld - 1] || {};
+    const groups = podiumGroups();
+    const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+    const max = Math.max(tt.Door, tt.Window, 1);
+    const unscoredN = DATA.players.filter(b => !scored(b)).length;
+    // Background + border
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "#0b4f63"; ctx.lineWidth = 10; ctx.strokeRect(5, 5, W - 10, H - 10);
+    // Header
+    const grad = ctx.createLinearGradient(0, 10, 0, 320);
+    grad.addColorStop(0, "#0b4f63"); grad.addColorStop(1, "#0e7d9c");
+    ctx.fillStyle = grad; ctx.fillRect(10, 10, W - 20, 300);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#9fd8e8"; ctx.font = "bold 26px Verdana";
+    ctx.fillText("NOORUL HUDA CENTRE FOR EXCELLENCE, MADANNOOR", W / 2, 62);
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 68px Georgia";
+    ctx.fillText("🏆 TWELFTH GALA 🏆", W / 2, 150);
+    ctx.fillStyle = "#d4f0f5"; ctx.font = "30px Verdana";
+    ctx.fillText("⭐ Top Scorers — Day " + ld + " (" + (prog.name || "") + ") • Twelfth Batch S1 ⭐", W / 2, 225);
+    // Podium slots: left = rank group 2, centre = rank group 1, right = rank group 3
+    const slots = [
+      { g: groups[1], cx: 260, big: false },
+      { g: groups[0], cx: 620, big: true },
+      { g: groups[2], cx: 980, big: false },
+    ];
+    const ringFor = (rank) => rank === 1 ? "#c9920e" : rank === 2 ? "#9aa5b1" : "#cd7f32";
+    let y = 400;
+    let podiumBottom = y;
+    for (const s of slots) {
+      if (!s.g) continue;
+      const r = s.big ? 140 : 108;
+      let cy = y + r + 10;
+      for (const b of s.g.boys) {
+        const pr = s.g.boys.length > 1 ? 80 : r;
+        const img = await loadImg(b.photo);
+        drawPhotoCircle(ctx, img, b.display_name, s.cx, cy, pr, ringFor(s.g.rank));
+        cy += pr + 8;
+        ctx.fillStyle = "#14232e"; ctx.font = "bold 32px Verdana";
+        fitFont(ctx, b.display_name, 360, "bold 32px Verdana", 20);
+        ctx.fillText(b.display_name, s.cx, cy + 16);
+        cy += 52;
+        ctx.fillStyle = "#0e7d9c"; ctx.font = "bold 30px Verdana";
+        ctx.fillText("⭐ " + b.total + " points", s.cx, cy + 16);
+        cy += 48;
+        ctx.fillStyle = "#5b6b76"; ctx.font = "26px Verdana";
+        ctx.fillText("Team " + b.team, s.cx, cy + 14);
+        cy += 52;
+      }
+      ctx.fillStyle = "#0b3c46"; ctx.font = "bold 30px Verdana";
+      ctx.fillText(rankLabel(s.g.rank, s.g.boys.length), s.cx, cy + 20);
+      podiumBottom = Math.max(podiumBottom, cy + 60);
+    }
+    y = Math.max(1010, podiumBottom);
+    // Next in line
+    const allTotals = [...new Set(DATA.players.filter(scored).map(b => b.total))].sort((a, b) => b - a);
+    const nextTotal = allTotals[3];
+    const nextBoys = nextTotal !== undefined ? DATA.players.filter(b => scored(b) && b.total === nextTotal) : [];
+    ctx.fillStyle = "#5b6b76"; ctx.font = "26px Verdana";
+    const nextLine = nextBoys.length
+      ? "Next in line: " + nextBoys.map(b => b.display_name + " (Team " + b.team + ")").join(", ") + " — " + nextTotal + " points"
+      : (unscoredN ? unscoredN + " boys still to be scored — the podium can still change! 🎯" : "All 28 boys scored — the final podium! 🎉");
+    fitFont(ctx, nextLine, W - 120, "26px Verdana", 20);
+    ctx.fillText(nextLine, W / 2, y);
+    y += 60;
+    // Team standings
+    ctx.strokeStyle = "#c9920e"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(90, y); ctx.lineTo(W - 90, y); ctx.stroke();
+    y += 55;
+    ctx.fillStyle = "#0b3c46"; ctx.font = "bold 34px Verdana";
+    ctx.fillText("🏁 TEAM STANDINGS", W / 2, y);
+    y += 48;
+    ctx.fillStyle = "#5b6b76"; ctx.font = "24px Verdana";
+    ctx.fillText("Total points of each team — which team is 1st, which is 2nd", W / 2, y);
+    y += 70;
+    const order = ["Door", "Window"].sort((a, b) => tt[b] - tt[a]);
+    order.forEach((t, i) => {
+      ctx.textAlign = "left"; ctx.fillStyle = "#14232e"; ctx.font = "bold 28px Verdana";
+      ctx.fillText((t === "Door" ? "🚪 " : "🪟 ") + t + (i === 0 ? " 🥇 1st" : " 🥈 2nd"), 90, y);
+      ctx.textAlign = "right"; ctx.fillText(tt[t] + " pts", W - 90, y);
+      ctx.fillStyle = "#e8f2f6"; roundRect(ctx, 90, y + 18, W - 180, 26, 13); ctx.fill();
+      ctx.fillStyle = t === "Door" ? "#0b6a86" : "#d97c2b";
+      roundRect(ctx, 90, y + 18, Math.max(26, (W - 180) * tt[t] / max), 26, 13); ctx.fill();
+      y += 92;
+    });
+    ctx.textAlign = "center"; ctx.fillStyle = "#5b6b76"; ctx.font = "24px Verdana";
+    ctx.fillText((tt.Door === tt.Window ? "Teams are tied at " + tt.Door + " points" : (tt.Window > tt.Door ? "Window" : "Door") + " leads by " + Math.abs(tt.Window - tt.Door) + " points")
+      + " • Day " + ld + " scoring " + (DATA.daysDone >= 12 ? "complete" : "still in progress (" + DATA.players.filter(scored).length + " of 28 boys scored)"), W / 2, y + 10);
+    // Footer
+    ctx.fillStyle = "#0b4f63"; ctx.fillRect(10, H - 90, W - 20, 80);
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 28px Verdana";
+    ctx.fillText("Powered by NSU — Noorul Huda Students Union", W / 2, H - 50);
+    const a = document.createElement("a");
+    a.href = cv.toDataURL("image/png");
+    a.download = "Twelfth-Gala-Day" + ld + "-Poster.png";
+    a.click();
+  } finally {
+    btn.textContent = "⬇️ Download Poster (PNG)"; btn.disabled = false;
+  }
+}
+
+(async () => {
+  const user = await guard(["student", "parent", "teacher", "principal", "vice_principal", "section_head"]);
+  if (!user) return;
+  if (user.role === "teacher") document.getElementById("nav").innerHTML = teacherNav("gala-results.html");
+  else if (user.role === "student") document.getElementById("nav").innerHTML = studentNav("gala-results.html");
+  else {
+    const home = user.role === "parent" ? "/parent.html" : "/admin.html";
+    document.getElementById("pagehead").innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0">
+      <a class="btn ghost small" href="${home}">← Back</a><a class="btn ghost small" href="/api/logout">Logout</a></div>`;
+  }
+  try {
+    DATA = await api("GET", "/api/gala/results");
+    if (!DATA.setup) {
+      document.getElementById("content").innerHTML = `<div class="card"><h3>🎉 Twelfth Gala</h3>
+        <p class="muted">The Gala teams are not set up yet — the teacher will set up Team Door and Team Window, and the results will appear here. 🎉</p></div>`;
+      return;
+    }
+    render();
+  } catch (e) {
+    document.getElementById("content").innerHTML = `<div class="card"><p>Could not load the Gala results — please try again.</p></div>`;
+  }
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
