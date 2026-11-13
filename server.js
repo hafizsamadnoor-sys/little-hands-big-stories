@@ -1919,6 +1919,16 @@ app.get("/api/gala/board", requireLogin, (req, res) => {
     setup: data.players.length > 0,
     isCoordinator: coordRow ? coordRow.is_coordinator === 1 : false });
 });
+// Public Gala results — every boy's individual Gala points, visible to ALL
+// logged-in users (students, parents, teacher, view-only admins). Approved
+// by Samad, 13 Nov 2026: the results scoreboard is for all the children.
+// Behind login only — never a no-login page (children's photos stay private).
+// Challenge points only — this endpoint never reads or writes points_log,
+// the writing Points Board, clubs or certificates.
+app.get("/api/gala/results", requireLogin, (req, res) => {
+  const data = galaBoardData();
+  res.json({ ...data, view: req.user.role, setup: data.players.length > 0 });
+});
 // Teacher: setup form data — all 38 students + current Gala setup.
 app.get("/api/teacher/gala/setup", requireTeacher, (req, res) => {
   const students = db.prepare(`SELECT id, display_name, ad_no FROM users WHERE role='student' ORDER BY CAST(ad_no AS INTEGER)`).all();
