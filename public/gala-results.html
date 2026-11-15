@@ -89,6 +89,62 @@ table.gboard tr[data-boy]:hover{background:#f2f9fb}
 .gstand .sfill{height:100%}
 .gstand .scap{font-family:Verdana,sans-serif;font-size:.8rem;color:#5b6b76;text-align:center;margin:8px 0 14px}
 .gpfoot{background:#0b4f63;color:#fff;font-family:Verdana,sans-serif;font-size:.8rem;font-weight:700;padding:12px}
+
+/* Downloadable Gala posters — match the approved A4 designs (Samad, 15 Nov 2026) */
+.ppwrap{display:grid;gap:18px}
+@media(min-width:900px){.ppwrap{grid-template-columns:1fr 1fr}.ppwrap .pfull{grid-column:1/-1}}
+.ppwrap h3{font-family:Verdana,sans-serif;margin:4px 0 8px}
+.pchips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.pposter{background:#fff;border:1px solid #dbe4ea;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.07);font-family:Verdana,sans-serif}
+.pposter .pband{background:#0b4f63;color:#fff;text-align:center;padding:16px 12px 12px;border-bottom:4px solid #c9920e}
+.pposter .pband .fl{width:44px;height:44px;border-radius:12px}
+.pposter .pband h3{font-family:Georgia,serif;font-size:1.2rem;margin:8px 0 2px;color:#fff}
+.pposter .pband p{margin:2px 0;font-size:.78rem;color:#cfe8ef}
+.pposter .pband p b{color:#fff}
+.pposter .plogo{display:block;margin:12px auto 2px;max-width:280px;width:70%}
+.pposter .ptitle{text-align:center;font-size:1.45rem;font-weight:800;color:#0e7d9c;margin:6px 0 2px}
+.pposter .pafter{text-align:center;font-size:1.05rem;font-weight:800;color:#0b4f63;margin:2px 0}
+.pposter .pprog{text-align:center;font-size:1.2rem;font-weight:800;color:#111;margin:2px 0}
+.pposter .psub2{text-align:center;font-size:.85rem;color:#64748b;margin:2px 12px 8px}
+.ppodium{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:8px;padding:12px 12px 4px}
+.pcard{border:3px solid;border-radius:12px;padding:10px 6px;text-align:center}
+.pcard.r1{border-color:#d4a017;background:#fef3c7}
+.pcard.r2{border-color:#94a3b8;background:#f1f5f9}
+.pcard.r3{border-color:#d97706;background:#ffedd5}
+.pcard .rbadge{width:32px;height:32px;border-radius:50%;color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;margin:0 auto 4px;font-size:1rem}
+.pcard .rlabel{font-size:.68rem;font-weight:800}
+.pcard .pphoto{width:80px;height:80px;border-radius:50%;border:4px solid #16a34a;margin:8px auto 6px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;color:#0b3c46;overflow:hidden;background:#e0f2f7;flex:none}
+.pcard.centre .pphoto{width:104px;height:104px}
+.pcard .pphoto img{width:100%;height:100%;object-fit:cover}
+.pcard .pname{font-weight:800;font-size:.88rem;text-transform:uppercase}
+.pcard .pteam{font-size:.76rem;font-weight:700}
+.pcard .ppts{font-weight:800;font-size:1rem;margin-top:2px}
+.pcard .pnote{font-size:.72rem;color:#5b6b76;margin-top:2px}
+.pjoint{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.pjoint .pphoto{width:64px;height:64px}
+.pbar{display:flex;height:26px;border-radius:99px;overflow:hidden;font-weight:800;color:#fff;font-size:.8rem;margin:8px 14px 0}
+.pbar div{display:flex;align-items:center;justify-content:center;min-width:0;white-space:nowrap}
+.pcap{text-align:center;font-weight:800;margin:8px 0 2px;font-size:.92rem}
+.pt10{max-width:560px;margin:6px auto 0;padding:0 12px}
+.pt10 .trow{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;font-size:.88rem}
+.pt10 .trow:nth-child(odd){background:#f1f5f9}
+.pt10 .trk{width:24px;font-weight:800;color:#0b4f63;flex:none}
+.pt10 .tnm{flex:1;font-weight:700;min-width:0}
+.pt10 .ttm{color:#64748b;font-size:.8rem}
+.pt10 .tpt{font-weight:800;white-space:nowrap}
+.pteamcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px 4px}
+.ptcard{border-radius:14px;color:#fff;padding:20px 8px;text-align:center}
+.ptcard .tn{font-size:1rem;font-weight:800}
+.ptcard .big{font-size:2.5rem;font-weight:800;margin:8px 0 0;line-height:1}
+.ptcard .rl{font-weight:800;font-size:.88rem;margin-top:6px}
+.ptcard .ts{font-size:.78rem;margin-top:8px}
+.pfoot{text-align:center;padding:12px;border-top:1px solid #e5e7eb;margin-top:10px}
+.pfoot b{color:#0e7d9c;font-size:1rem;display:block}
+.pfoot span{color:#64748b;font-size:.8rem}
+.pstatus{margin:12px 14px;border:2px solid #cbd5e1;border-radius:14px;background:#f1f5f9;padding:30px 14px;text-align:center}
+.pstatus b{font-size:1.1rem}
+.pstatus p{color:#64748b;font-size:.85rem;margin:6px 0 0}
+.dlrow{text-align:center;margin:12px 0 4px}
 #confetti{position:fixed;inset:0;pointer-events:none;z-index:9999}
 </style>
 </head>
@@ -100,9 +156,10 @@ table.gboard tr[data-boy]:hover{background:#f2f9fb}
 <canvas id="confetti" style="display:none"></canvas>
 <script>
 // ── Twelfth Gala Results (Samad, 13 Nov 2026) ────────────────────────
-// Public (logged-in) results: every boy's Gala points, team battle, auto
-// Top 3 poster. Reads /api/gala/results — Gala points only, never the
-// writing Points Board, clubs or certificates.
+// Public (logged-in) results: every boy's Gala points, team battle, and
+// three downloadable posters (Day / Overall / Team) drawn from live scores.
+// Reads /api/gala/results — Gala points only, never the writing Points
+// Board, clubs or certificates.
 const LEADERS = { Door: { leader: "511", asst: "518" }, Window: { leader: "526", asst: "514" } };
 const DAY1_UTC = Date.UTC(2026, 10, 12); // Day 1 = Thu 12 Nov 2026
 let DATA = null, cardBoyId = null, filterTeam = "All", searchQ = "";
@@ -134,8 +191,8 @@ function rankLabel(rank, count) {
 function podiumGroups() {
   const groups = {};
   DATA.players.filter(scored).forEach(b => { (groups[b.total] = groups[b.total] || []).push(b); });
-  return Object.keys(groups).map(Number).sort((a, b) => b - a).slice(0, 3).map(total => ({
-    total, rank: 1 + DATA.players.filter(x => scored(x) && x.total > total).length,
+  return Object.keys(groups).map(Number).sort((a, b) => b - a).slice(0, 3).map((total, i) => ({
+    total, rank: i + 1,
     boys: groups[total].sort((a, b) => a.display_name.localeCompare(b.display_name)),
   }));
 }
@@ -256,54 +313,163 @@ function boardHtml() {
     <p class="muted" style="font-size:.82rem;margin:10px 0 0">Tap any boy to see his score card. Boys not scored yet are never shown as 0. Gala points are separate from writing points.</p></div>`;
 }
 
-function posterHtml() {
-  const ld = latestDay();
-  const prog = (DATA.programs || [])[ld - 1] || {};
-  const groups = podiumGroups();
-  const unscoredN = DATA.players.filter(b => !scored(b)).length;
-  const tt = DATA.teamTotals || { Door: 0, Window: 0 };
-  const max = Math.max(tt.Door, tt.Window, 1);
-  if (!groups.length) {
-    return `<div class="gposter"><div class="phead"><div class="pinst">Noorul Huda Centre for Excellence, Madannoor</div>
-      <h3>🏆 TWELFTH GALA 🏆</h3><div class="psub">⭐ Top Scorers — Day ${ld} • Twelfth Batch S1 ⭐</div></div>
-      <p style="padding:30px 16px;font-family:Verdana,sans-serif;color:#5b6b76">No scores yet — the winners poster will appear here after Day 1. 🎉</p>
-      <div class="gpfoot">Powered by NSU — Noorul Huda Students Union</div></div>`;
-  }
-  const slot = (g, cls) => {
-    if (!g) return `<div class="gslot ${cls}"></div>`;
-    const ring = g.rank === 1 ? "" : g.rank === 3 ? " bronze" : "";
-    return `<div class="gslot ${cls}${ring}">${g.boys.map(b => `
-      <div><span class="pphoto">${avatar(b.display_name, b.photo)}</span>
-      <div class="pname">${esc(b.display_name)}</div>
-      <div class="ppts">⭐ ${b.total} points</div>
-      <div class="pteam">Team ${b.team}</div></div>`).join("")}
-      <div class="ppos" style="margin-top:8px">${rankLabel(g.rank, g.boys.length)}</div></div>`;
-  };
-  // Next rank group after the podium (if any).
-  const allGroups = (() => {
-    const gr = {};
-    DATA.players.filter(scored).forEach(b => { (gr[b.total] = gr[b.total] || []).push(b); });
-    return Object.keys(gr).map(Number).sort((a, b) => b - a);
-  })();
-  const nextTotal = allGroups[3];
-  const nextBoys = nextTotal !== undefined ? DATA.players.filter(b => scored(b) && b.total === nextTotal).sort((a, b) => a.display_name.localeCompare(b.display_name)) : [];
-  const nextLine = nextBoys.length
-    ? `Next in line: ${nextBoys.map(b => esc(b.display_name) + " (Team " + b.team + ")").join(", ")} — ${nextTotal} points${unscoredN ? ` • ${unscoredN} boy${unscoredN === 1 ? "" : "s"} still to be scored — the podium can still change! 🎯` : ""}`
-    : (unscoredN ? `${unscoredN} boy${unscoredN === 1 ? "" : "s"} still to be scored — the podium can still change! 🎯` : "All 28 boys scored — the final podium! 🎉");
-  const srow = (t, rank) => `<div class="srow"><span>${t === "Door" ? "🚪" : "🪟"} ${t} ${rank === 1 ? "🥇 1st" : "🥈 2nd"}</span>
-    <span class="strack"><span class="sfill" style="display:block;width:${Math.round(tt[t] / max * 100)}%;background:${t === "Door" ? "#0b6a86" : "#d97c2b"}"></span></span>
-    <span>${tt[t]} pts</span></div>`;
-  const order = ["Door", "Window"].sort((a, b) => tt[b] - tt[a]);
-  return `<div class="gposter" id="gposter"><div class="phead"><div class="pinst">Noorul Huda Centre for Excellence, Madannoor</div>
-    <h3>🏆 TWELFTH GALA 🏆</h3><div class="psub">⭐ Top Scorers — Day ${ld} (${esc(prog.name || "")}) • Twelfth Batch S1 ⭐</div></div>
-    <div class="gpodium">${slot(groups[1], "side")}${slot(groups[0], "centre")}${slot(groups[2], "side")}</div>
-    <div class="gnext">${nextLine}</div>
-    <div style="border-top:2px solid #c9920e;margin:10px 20px 0"></div>
-    <div class="gstand"><h4>🏁 TEAM STANDINGS</h4><div class="ssub">Total points of each team — which team is 1st, which is 2nd</div>
-      ${srow(order[0], 1)}${srow(order[1], 2)}
-      <div class="scap">${tt.Door === tt.Window ? "Teams are tied at " + tt.Door + " points" : (tt.Window > tt.Door ? "Window" : "Door") + " leads by " + Math.abs(tt.Window - tt.Door) + " points"} • Day ${ld} scoring ${DATA.daysDone >= 12 ? "complete" : "still in progress (" + DATA.players.filter(scored).length + " of 28 boys scored)"}</div></div>
-    <div class="gpfoot">Powered by NSU — Noorul Huda Students Union</div></div>`;
+
+// ── Downloadable Gala posters (Samad, 15 Nov 2026) ──────────────────
+// Three poster types, matching the approved A4 designs, always drawn
+// from the LIVE scores: Day posters (Top 3 of that day), Overall
+// Scoreboard (Top 3 overall + Top 10), Team Scoreboard (both teams).
+let posterDay = null; // selected day for the Day poster
+const TEAM_GREEN = "#16a34a", TEAM_BLUE = "#2563eb";
+const RANK_BD = { 1: "#d4a017", 2: "#94a3b8", 3: "#d97706" };
+const RANK_TX = { 1: "#92400e", 2: "#475569", 3: "#9a3412" };
+
+// Tie-aware groups for ONE day: [{ total (that day's points), rank, boys }]
+function dayGroups(day) {
+  const groups = {};
+  DATA.players.filter(b => b.days[day - 1] !== null).forEach(b => { (groups[b.days[day - 1]] = groups[b.days[day - 1]] || []).push(b); });
+  return Object.keys(groups).map(Number).sort((a, b) => b - a).slice(0, 3).map((total, i) => ({
+    total, rank: i + 1,
+    boys: groups[total].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+  }));
 }
+// Top 10 overall — dense ranks like the approved poster (1, 2, 2, 3, 4, 4:
+// rank = 1 + distinct higher totals). Ties are ordered by who scored first
+// (earliest scored day), then name. Ties at the cutoff are all included.
+function top10Rows() {
+  const firstDay = (b) => { const i = b.days.findIndex(v => v !== null); return i === -1 ? 99 : i; };
+  const sb = DATA.players.filter(scored).sort((a, b) => b.total - a.total || firstDay(a) - firstDay(b) || a.display_name.localeCompare(b.display_name));
+  let rows = sb.slice(0, 10);
+  if (sb.length > 10) rows = sb.filter(b => b.total >= sb[9].total);
+  const distinctAbove = (total) => new Set(sb.filter(x => x.total > total).map(x => x.total)).size;
+  return rows.map(b => ({ rank: 1 + distinctAbove(b.total), boy: b }));
+}
+// Day status from the live data + today's date in IST.
+function istTodayIdx() {
+  const p = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).split("-").map(Number);
+  return Math.floor((Date.UTC(p[0], p[1] - 1, p[2]) - DAY1_UTC) / 86400000) + 1;
+}
+function dayStatus(day) {
+  const dt = (DATA.dayTotals || [])[day - 1];
+  if (dt && dt.done) return "done";
+  const t = istTodayIdx();
+  if (day === t) return "today";
+  if (day < t) return "not-entered";
+  return "future";
+}
+function afterLine() {
+  const n = DATA.daysDone || 0;
+  return "AFTER " + n + (n === 1 ? " PROGRAM" : " PROGRAMS");
+}
+function playedNamesLine() {
+  return (DATA.programs || []).slice(0, DATA.daysDone || 0).map((p, i) => "Day " + (i + 1) + ": " + p.name).join("  •  ");
+}
+function topScorerOf(team) {
+  return [...DATA.players].filter(b => b.team === team && scored(b)).sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name))[0] || null;
+}
+function boyTotalNote(b) {
+  return (DATA.dayTotals || []).filter(d => d.done).map(d => "Day " + d.day + ": " + (b.days[d.day - 1] === null ? "–" : b.days[d.day - 1])).join("  •  ");
+}
+function posterBandHtml() {
+  return `<div class="pband"><img class="fl" src="/icons/flower-192.png" alt="">
+    <h3>LITTLE HANDS, BIG STORIES</h3>
+    <p>Noorul Huda Centre for Excellence, Madannoor</p>
+    <p><b>Twelfth Batch &nbsp;•&nbsp; Secondary First Year &nbsp;•&nbsp; S1</b></p></div>`;
+}
+function posterFootHtml() {
+  return `<div class="pfoot"><b>Powered by NSU</b><span>Noorul Huda Students Union</span></div>`;
+}
+// Podium: 2nd card left, 1st centre, 3rd right. groups = [{ rank, boys }];
+// ptsFn gives the points to show per boy, noteFn the small line under it.
+function podiumHtml(groups, ptsFn, noteFn) {
+  const slot = (g) => {
+    if (!g) return `<div></div>`;
+    const rank = g.rank, tx = RANK_TX[rank];
+    const label = g.boys.length > 1 ? "Joint " + ordinal(rank) + " Place" : ordinal(rank) + " Place";
+    const boyHtml = (b) => `<div><span class="pphoto" style="border-color:${b.team === "Window" ? TEAM_GREEN : TEAM_BLUE}">${avatar(b.display_name, b.photo)}</span>
+      <div class="pname">${esc(b.display_name)}</div>
+      <div class="pteam" style="color:${b.team === "Window" ? TEAM_GREEN : TEAM_BLUE}">Team ${b.team}</div>
+      <div class="ppts" style="color:${tx}">${ptsFn(b)} pts</div>
+      <div class="pnote">${esc(noteFn(b))}</div></div>`;
+    const inner = g.boys.length > 1 ? `<div class="pjoint">${g.boys.map(boyHtml).join("")}</div>` : boyHtml(g.boys[0]);
+    return `<div class="pcard r${rank}${rank === 1 ? " centre" : ""}"><div class="rbadge" style="background:${RANK_BD[rank]}">${rank}</div>
+      <div class="rlabel" style="color:${tx}">${label.toUpperCase()}</div>${inner}</div>`;
+  };
+  return `<div class="ppodium">${slot(groups[1])}${slot(groups[0])}${slot(groups[2])}</div>`;
+}
+function battleCaption(wPts, dPts) {
+  const win = wPts > dPts ? "Window" : dPts > wPts ? "Door" : null;
+  const c = (t) => t + " " + (t === "Window" ? wPts : dPts) + " pts • " + (win === null ? "Tied" : win === t ? "1st" : "2nd");
+  return c("Window") + "      " + c("Door");
+}
+function battleBarHtml(wPts, dPts) {
+  return `<div class="pbar"><div style="flex:${wPts};background:${TEAM_GREEN}">Window ${wPts}</div><div style="flex:${dPts};background:${TEAM_BLUE}">Door ${dPts}</div></div>
+    <div class="pcap">${battleCaption(wPts, dPts)}</div>`;
+}
+function dayPosterHtml(day) {
+  const prog = (DATA.programs || [])[day - 1] || {};
+  const st = dayStatus(day);
+  const dt = (DATA.dayTotals || [])[day - 1] || { Door: 0, Window: 0 };
+  const scoredN = DATA.players.filter(b => b.days[day - 1] !== null).length;
+  let body = "";
+  if (st === "done") {
+    body = podiumHtml(dayGroups(day), b => b.days[day - 1], b => "Day " + day + ": " + b.days[day - 1] + " pts")
+      + `<div style="padding:0 4px">${battleBarHtml(dt.Window, dt.Door)}</div>
+      <p class="psub2">${scoredN} boys scored today • ${28 - scoredN} not scored yet</p>`;
+  } else {
+    const msg = st === "today"
+      ? ["Playing today — 2:30 PM", (prog.name || "") + " is on now — Top 3 will appear here after scores are entered."]
+      : st === "not-entered"
+      ? ["Scores not entered yet", "Day " + day + " played — Top 3 will appear here once scores are entered."]
+      : ["Upcoming", "Top 3 will appear here after the day is played and scores are entered."];
+    body = `<div class="pstatus"><b>${esc(msg[0])}</b><p>${esc(msg[1])}</p></div>`;
+  }
+  return `<div class="pposter">${posterBandHtml()}<img class="plogo" src="/gala-logo.jpg" alt="Twelfth Gala logo">
+    <div class="ptitle">DAY ${day}</div>
+    <div class="pprog">${esc(prog.name || "")}</div>
+    <p class="psub2">Day ${day} • ${fmtDay(day)} • Twelfth Gala</p>${body}${posterFootHtml()}</div>`;
+}
+function overallPosterHtml() {
+  const groups = podiumGroups();
+  const rows = top10Rows();
+  const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+  const scoredN = DATA.players.filter(scored).length;
+  const trows = rows.map(r => `<div class="trow"><span class="trk">${r.rank}</span><span class="tnm">${esc(r.boy.display_name)}</span><span class="ttm">Team ${r.boy.team}</span><span class="tpt">${r.boy.total} pts</span></div>`).join("");
+  const body = groups.length
+    ? podiumHtml(groups, b => b.total, boyTotalNote) + `<div style="padding:0 4px">${battleBarHtml(tt.Window, tt.Door)}</div>`
+    : `<div class="pstatus"><b>No scores yet</b><p>The Top 10 will appear here after Day 1 scores are entered.</p></div>`;
+  return `<div class="pposter">${posterBandHtml()}
+    <div class="ptitle">OVERALL SCOREBOARD</div>
+    <div class="pafter">${afterLine()}</div>${body}
+    <h4 style="text-align:center;margin:12px 0 2px;font-family:Verdana,sans-serif">TOP 10</h4>
+    <p class="psub2">${scoredN} of 28 boys have scored — the list grows to 10 as scores come in</p>
+    <div class="pt10">${trows || `<p class="psub2">No scores yet.</p>`}</div>
+    <div style="height:10px"></div>${posterFootHtml()}</div>`;
+}
+function teamPosterHtml() {
+  const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+  const card = (t) => {
+    const top = topScorerOf(t);
+    const col = t === "Window" ? TEAM_GREEN : TEAM_BLUE;
+    const rank = tt.Window === tt.Door ? "Tied" : (t === "Window" ? (tt.Window > tt.Door ? "1st place" : "2nd place") : (tt.Door > tt.Window ? "1st place" : "2nd place"));
+    return `<div class="ptcard" style="background:${col}"><div class="tn">TEAM ${t.toUpperCase()}</div>
+      <div class="big">${tt[t]}</div><div class="rl">points • ${rank}</div>
+      <div class="ts">Top scorer: ${top ? esc(top.display_name) + " — " + top.total + " pts" : "—"}</div></div>`;
+  };
+  return `<div class="pposter">${posterBandHtml()}<img class="plogo" src="/gala-logo.jpg" alt="Twelfth Gala logo">
+    <div class="ptitle">TEAM SCOREBOARD</div>
+    <div class="pafter">${afterLine()}</div>
+    <p class="psub2">${esc(playedNamesLine()) || "No program played yet"}</p>
+    <div class="pteamcards">${card("Window")}${card("Door")}</div>
+    <div style="padding:0 4px 10px">${battleBarHtml(tt.Window, tt.Door)}</div>${posterFootHtml()}</div>`;
+}
+window.setPosterDay = function (n) {
+  posterDay = n;
+  const w = document.getElementById("dayPosterWrap");
+  if (w) w.innerHTML = dayPosterHtml(n);
+  const btn = document.getElementById("dl-day");
+  if (btn) btn.textContent = "⬇️ Download Day " + n + " Poster (PNG)";
+  document.querySelectorAll("#dayChips button").forEach(b => b.classList.toggle("ghost", +b.dataset.day !== n));
+};
 
 function renderBoard() {
   const el = document.getElementById("boardwrap");
@@ -321,6 +487,7 @@ window.renderBoard = renderBoard;
 
 function render() {
   const ld = latestDay();
+  posterDay = ld;
   const prog = (DATA.programs || [])[ld - 1] || {};
   const next = (DATA.dayTotals || []).find(d => !d.done);
   const nextProg = next ? (DATA.programs || [])[next.day - 1] : null;
@@ -345,17 +512,36 @@ function render() {
     ${teamBattleHtml()}
     <div id="cardwrap" style="margin-top:16px"></div>
     <div id="boardwrap" style="margin-top:16px"></div>
-    <h2>🖼️ Winners Poster — Auto-Generated 🎊</h2>
-    ${posterHtml()}
-    <div style="text-align:center;margin:16px 0"><button class="btn" id="dl-poster">⬇️ Download Poster (PNG)</button>
-    <button class="btn ghost" onclick="celebrate()">🎉 Celebrate!</button></div>
-    <p class="gnote">The poster updates itself every time the teacher enters scores — no designing needed. Scores are entered in Teacher Panel → Twelfth Gala.</p>`;
+    <h2>🖼️ Gala Posters — Download as Image 📥</h2>
+    <p class="gnote">Day posters, Overall Scoreboard and Team Scoreboard — the same designs as the printed posters, always up to date with the latest scores. Tap a button to download a poster as an image. 📥</p>
+    <div class="ppwrap">
+      <div>
+        <h3>📅 Day Poster</h3>
+        <div class="pchips" id="dayChips">${[1,2,3,4,5,6,7,8,9,10,11,12].map(n => `<button class="btn small ${posterDay === n ? "" : "ghost"}" data-day="${n}" onclick="setPosterDay(${n})">Day ${n}</button>`).join("")}</div>
+        <div id="dayPosterWrap">${dayPosterHtml(posterDay)}</div>
+        <div class="dlrow"><button class="btn" id="dl-day">⬇️ Download Day ${posterDay} Poster (PNG)</button></div>
+      </div>
+      <div>
+        <h3>🏆 Overall Scoreboard</h3>
+        <div id="overallPosterWrap">${overallPosterHtml()}</div>
+        <div class="dlrow"><button class="btn" id="dl-overall">⬇️ Download Overall Poster (PNG)</button></div>
+      </div>
+      <div class="pfull">
+        <h3>⚔️ Team Scoreboard</h3>
+        <div id="teamPosterWrap">${teamPosterHtml()}</div>
+        <div class="dlrow"><button class="btn" id="dl-team">⬇️ Download Team Poster (PNG)</button></div>
+      </div>
+    </div>
+    <div style="text-align:center;margin:16px 0"><button class="btn ghost" onclick="celebrate()">🎉 Celebrate!</button></div>
+    <p class="gnote">The posters update themselves every time the teacher enters scores — no designing needed. Scores are entered in Teacher Panel → Twelfth Gala.</p>`;
   // Default card: the topper (highest total, then name A–Z).
   const topper = [...DATA.players].filter(scored).sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name))[0] || null;
   cardBoyId = topper ? topper.id : null;
   document.getElementById("cardwrap").innerHTML = scoreCardHtml(topper);
   renderBoard();
-  document.getElementById("dl-poster").onclick = downloadPoster;
+  document.getElementById("dl-day").onclick = () => downloadDayPoster(posterDay);
+  document.getElementById("dl-overall").onclick = downloadOverallPoster;
+  document.getElementById("dl-team").onclick = downloadTeamPoster;
   setTimeout(celebrate, 400);
 }
 
@@ -385,119 +571,309 @@ function roundRect(ctx, x, y, w, h, r) {
 function drawPhotoCircle(ctx, img, name, cx, cy, r, ring) {
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
-  if (img) ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
-  else { ctx.fillStyle = "#e0f2f7"; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  if (img) {
+    const sq = Math.min(img.width, img.height);
+    ctx.drawImage(img, (img.width - sq) / 2, (img.height - sq) / 2, sq, sq, cx - r, cy - r, r * 2, r * 2);
+  } else {
+    ctx.fillStyle = "#e0f2f7"; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     ctx.fillStyle = "#0b3c46"; ctx.font = "bold " + Math.round(r * 0.9) + "px Verdana"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText((name || "?").trim()[0] || "?", cx, cy + 2); }
+    ctx.fillText((name || "?").trim()[0] || "?", cx, cy + 2);
+  }
   ctx.restore();
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.lineWidth = 7; ctx.strokeStyle = ring; ctx.stroke();
 }
-async function downloadPoster() {
-  const btn = document.getElementById("dl-poster");
-  btn.textContent = "⏳ Making your poster…"; btn.disabled = true;
-  try {
-    const W = 1240, H = 1640;
-    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    const ctx = cv.getContext("2d");
-    const ld = latestDay();
-    const prog = (DATA.programs || [])[ld - 1] || {};
-    const groups = podiumGroups();
-    const tt = DATA.teamTotals || { Door: 0, Window: 0 };
-    const max = Math.max(tt.Door, tt.Window, 1);
-    const unscoredN = DATA.players.filter(b => !scored(b)).length;
-    // Background + border
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
-    ctx.strokeStyle = "#0b4f63"; ctx.lineWidth = 10; ctx.strokeRect(5, 5, W - 10, H - 10);
-    // Header
-    const grad = ctx.createLinearGradient(0, 10, 0, 320);
-    grad.addColorStop(0, "#0b4f63"); grad.addColorStop(1, "#0e7d9c");
-    ctx.fillStyle = grad; ctx.fillRect(10, 10, W - 20, 300);
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = "#9fd8e8"; ctx.font = "bold 26px Verdana";
-    ctx.fillText("NOORUL HUDA CENTRE FOR EXCELLENCE, MADANNOOR", W / 2, 62);
-    ctx.fillStyle = "#ffffff"; ctx.font = "bold 68px Georgia";
-    ctx.fillText("🏆 TWELFTH GALA 🏆", W / 2, 150);
-    ctx.fillStyle = "#d4f0f5"; ctx.font = "30px Verdana";
-    ctx.fillText("⭐ Top Scorers — Day " + ld + " (" + (prog.name || "") + ") • Twelfth Batch S1 ⭐", W / 2, 225);
-    // Podium slots: left = rank group 2, centre = rank group 1, right = rank group 3
-    const slots = [
-      { g: groups[1], cx: 260, big: false },
-      { g: groups[0], cx: 620, big: true },
-      { g: groups[2], cx: 980, big: false },
-    ];
-    const ringFor = (rank) => rank === 1 ? "#c9920e" : rank === 2 ? "#9aa5b1" : "#cd7f32";
-    let y = 400;
-    let podiumBottom = y;
-    for (const s of slots) {
-      if (!s.g) continue;
-      const r = s.big ? 140 : 108;
-      let cy = y + r + 10;
-      for (const b of s.g.boys) {
-        const pr = s.g.boys.length > 1 ? 80 : r;
-        const img = await loadImg(b.photo);
-        drawPhotoCircle(ctx, img, b.display_name, s.cx, cy, pr, ringFor(s.g.rank));
-        cy += pr + 8;
-        ctx.fillStyle = "#14232e"; ctx.font = "bold 32px Verdana";
-        fitFont(ctx, b.display_name, 360, "bold 32px Verdana", 20);
-        ctx.fillText(b.display_name, s.cx, cy + 16);
-        cy += 52;
-        ctx.fillStyle = "#0e7d9c"; ctx.font = "bold 30px Verdana";
-        ctx.fillText("⭐ " + b.total + " points", s.cx, cy + 16);
-        cy += 48;
-        ctx.fillStyle = "#5b6b76"; ctx.font = "26px Verdana";
-        ctx.fillText("Team " + b.team, s.cx, cy + 14);
-        cy += 52;
-      }
-      ctx.fillStyle = "#0b3c46"; ctx.font = "bold 30px Verdana";
-      ctx.fillText(rankLabel(s.g.rank, s.g.boys.length), s.cx, cy + 20);
-      podiumBottom = Math.max(podiumBottom, cy + 60);
+
+// ── PNG downloads: redraw each poster fresh on a 1240×1754 (A4) canvas ─
+function canvasPoster() {
+  const cv = document.createElement("canvas");
+  cv.width = 1240; cv.height = 1754;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 1240, 1754);
+  return [cv, ctx];
+}
+function setDlBusy(btn, busy, label) {
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.textContent = busy ? "⏳ Making your poster…" : label;
+}
+function saveCanvasPng(cv, filename) {
+  const a = document.createElement("a");
+  a.href = cv.toDataURL("image/png");
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+// Teal band header (flower tile + institution + batch line + gold rule).
+async function drawBand(ctx) {
+  ctx.fillStyle = "#0b4f63"; ctx.fillRect(0, 0, 1240, 300);
+  ctx.fillStyle = "#d4a017"; ctx.fillRect(0, 300, 1240, 6);
+  const fl = await loadImg("/icons/flower-192.png");
+  ctx.save();
+  roundRect(ctx, 592, 52, 56, 56, 16); ctx.clip();
+  if (fl) ctx.drawImage(fl, 592, 52, 56, 56);
+  else { ctx.fillStyle = "#bfe8ef"; ctx.fillRect(592, 52, 56, 56); }
+  ctx.restore();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 40px Verdana";
+  ctx.fillText("LITTLE HANDS, BIG STORIES", 620, 122);
+  ctx.fillStyle = "#cfe8ec"; ctx.font = "30px Verdana";
+  ctx.fillText("Noorul Huda Centre for Excellence, Madannoor", 620, 174);
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 30px Verdana";
+  ctx.fillText("Twelfth Batch  •  Secondary First Year  •  S1", 620, 214);
+}
+async function drawLogo(ctx, y) {
+  const lg = await loadImg("/gala-logo.jpg");
+  if (!lg) return y;
+  const lw = 520, lh = Math.round(lw * lg.height / lg.width);
+  ctx.drawImage(lg, (1240 - lw) / 2, y, lw, lh);
+  return y + lh;
+}
+function drawFoot(ctx) {
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#0e7d9c"; ctx.font = "bold 38px Verdana";
+  ctx.fillText("Powered by NSU", 620, 1600);
+  ctx.fillStyle = "#475569"; ctx.font = "29px Verdana";
+  ctx.fillText("Noorul Huda Students Union", 620, 1652);
+}
+// Green/blue split battle bar (Window left, Door right).
+function drawBattleBar(ctx, y, wPts, dPts) {
+  const x = 80, w = 1080, h = 46;
+  ctx.save();
+  roundRect(ctx, x, y, w, h, 23); ctx.clip();
+  const tot = wPts + dPts;
+  const wf = tot ? Math.round(w * wPts / tot) : Math.round(w / 2);
+  ctx.fillStyle = "#16a34a"; ctx.fillRect(x, y, wf, h);
+  ctx.fillStyle = "#2563eb"; ctx.fillRect(x + wf, y, w - wf, h);
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(x + wf - 2, y, 4, h);
+  ctx.restore();
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 24px Verdana";
+  ctx.fillText("Window " + wPts, x + wf / 2, y + h / 2);
+  ctx.fillText("Door " + dPts, x + wf + (w - wf) / 2, y + h / 2);
+  return y + h;
+}
+// One podium card (1 boy, or 2 tied boys side by side in one card).
+async function drawPodiumCard(ctx, x, y, w, h, rank, boys, fill, noteFn, ptsFn) {
+  const badge = RANK_BD[rank], txcol = RANK_TX[rank];
+  ctx.fillStyle = fill; ctx.strokeStyle = badge; ctx.lineWidth = 4;
+  roundRect(ctx, x, y, w, h, 16); ctx.fill(); ctx.stroke();
+  const cx = x + w / 2;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.beginPath(); ctx.arc(cx, y + 42, 30, 0, Math.PI * 2); ctx.fillStyle = badge; ctx.fill();
+  ctx.fillStyle = "#ffffff"; ctx.font = "bold 32px Verdana";
+  ctx.fillText(String(rank), cx, y + 44);
+  const label = boys.length > 1 ? "JOINT " + ordinal(rank).toUpperCase() + " PLACE" : ordinal(rank).toUpperCase() + " PLACE";
+  ctx.fillStyle = txcol; ctx.font = "bold 20px Verdana";
+  ctx.fillText(label, cx, y + 84);
+  const top = y + 104;
+  if (boys.length === 1) {
+    const b = boys[0];
+    const psz = Math.min(210, h - 300);
+    const img = await loadImg(b.photo);
+    drawPhotoCircle(ctx, img, b.display_name, cx, top + psz / 2 + 5, psz / 2, b.team === "Window" ? TEAM_GREEN : TEAM_BLUE);
+    let ny = top + psz + 12;
+    ctx.fillStyle = "#111111";
+    ctx.font = fitFont(ctx, b.display_name.toUpperCase(), w - 30, "bold 34px Verdana", 18);
+    ctx.fillText(b.display_name.toUpperCase(), cx, ny + 17);
+    ny += 40;
+    ctx.fillStyle = b.team === "Window" ? TEAM_GREEN : TEAM_BLUE; ctx.font = "bold 23px Verdana";
+    ctx.fillText("Team " + b.team, cx, ny + 12);
+    ny += 34;
+    ctx.fillStyle = txcol; ctx.font = "bold 52px Verdana";
+    ctx.fillText(ptsFn(b) + " pts", cx, ny + 26);
+    ny += 54;
+    ctx.fillStyle = "#475569"; ctx.font = "21px Verdana";
+    ctx.fillText(noteFn(b), cx, ny + 11);
+  } else {
+    const bw = w / 2;
+    for (let i = 0; i < boys.length; i++) {
+      const b = boys[i];
+      const ccx = x + bw * i + bw / 2;
+      const img = await loadImg(b.photo);
+      drawPhotoCircle(ctx, img, b.display_name, ccx, top + 60, 55, b.team === "Window" ? TEAM_GREEN : TEAM_BLUE);
+      let ny = top + 122;
+      ctx.fillStyle = "#111111";
+      ctx.font = fitFont(ctx, b.display_name.toUpperCase(), bw - 16, "bold 26px Verdana", 16);
+      ctx.fillText(b.display_name.toUpperCase(), ccx, ny + 13);
+      ny += 34;
+      ctx.fillStyle = b.team === "Window" ? TEAM_GREEN : TEAM_BLUE; ctx.font = "bold 20px Verdana";
+      ctx.fillText("Team " + b.team, ccx, ny + 10);
+      ny += 28;
+      ctx.fillStyle = txcol; ctx.font = "bold 38px Verdana";
+      ctx.fillText(ptsFn(b) + " pts", ccx, ny + 19);
+      ny += 40;
+      ctx.fillStyle = "#475569"; ctx.font = "18px Verdana";
+      ctx.fillText(noteFn(b), ccx, ny + 9);
     }
-    y = Math.max(1010, podiumBottom);
-    // Next in line
-    const allTotals = [...new Set(DATA.players.filter(scored).map(b => b.total))].sort((a, b) => b - a);
-    const nextTotal = allTotals[3];
-    const nextBoys = nextTotal !== undefined ? DATA.players.filter(b => scored(b) && b.total === nextTotal) : [];
-    ctx.fillStyle = "#5b6b76"; ctx.font = "26px Verdana";
-    const nextLine = nextBoys.length
-      ? "Next in line: " + nextBoys.map(b => b.display_name + " (Team " + b.team + ")").join(", ") + " — " + nextTotal + " points"
-      : (unscoredN ? unscoredN + " boys still to be scored — the podium can still change! 🎯" : "All 28 boys scored — the final podium! 🎉");
-    fitFont(ctx, nextLine, W - 120, "26px Verdana", 20);
-    ctx.fillText(nextLine, W / 2, y);
-    y += 60;
-    // Team standings
-    ctx.strokeStyle = "#c9920e"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(90, y); ctx.lineTo(W - 90, y); ctx.stroke();
-    y += 55;
-    ctx.fillStyle = "#0b3c46"; ctx.font = "bold 34px Verdana";
-    ctx.fillText("🏁 TEAM STANDINGS", W / 2, y);
-    y += 48;
-    ctx.fillStyle = "#5b6b76"; ctx.font = "24px Verdana";
-    ctx.fillText("Total points of each team — which team is 1st, which is 2nd", W / 2, y);
-    y += 70;
-    const order = ["Door", "Window"].sort((a, b) => tt[b] - tt[a]);
-    order.forEach((t, i) => {
-      ctx.textAlign = "left"; ctx.fillStyle = "#14232e"; ctx.font = "bold 28px Verdana";
-      ctx.fillText((t === "Door" ? "🚪 " : "🪟 ") + t + (i === 0 ? " 🥇 1st" : " 🥈 2nd"), 90, y);
-      ctx.textAlign = "right"; ctx.fillText(tt[t] + " pts", W - 90, y);
-      ctx.fillStyle = "#e8f2f6"; roundRect(ctx, 90, y + 18, W - 180, 26, 13); ctx.fill();
-      ctx.fillStyle = t === "Door" ? "#0b6a86" : "#d97c2b";
-      roundRect(ctx, 90, y + 18, Math.max(26, (W - 180) * tt[t] / max), 26, 13); ctx.fill();
-      y += 92;
-    });
-    ctx.textAlign = "center"; ctx.fillStyle = "#5b6b76"; ctx.font = "24px Verdana";
-    ctx.fillText((tt.Door === tt.Window ? "Teams are tied at " + tt.Door + " points" : (tt.Window > tt.Door ? "Window" : "Door") + " leads by " + Math.abs(tt.Window - tt.Door) + " points")
-      + " • Day " + ld + " scoring " + (DATA.daysDone >= 12 ? "complete" : "still in progress (" + DATA.players.filter(scored).length + " of 28 boys scored)"), W / 2, y + 10);
-    // Footer
-    ctx.fillStyle = "#0b4f63"; ctx.fillRect(10, H - 90, W - 20, 80);
-    ctx.fillStyle = "#ffffff"; ctx.font = "bold 28px Verdana";
-    ctx.fillText("Powered by NSU — Noorul Huda Students Union", W / 2, H - 50);
-    const a = document.createElement("a");
-    a.href = cv.toDataURL("image/png");
-    a.download = "Twelfth-Gala-Day" + ld + "-Poster.png";
-    a.click();
-  } finally {
-    btn.textContent = "⬇️ Download Poster (PNG)"; btn.disabled = false;
   }
+}
+// Podium: 2nd left, 1st centre (taller), 3rd right. Returns bottom y.
+async function drawPodium(ctx, groups, y, noteFn, ptsFn, centreH) {
+  const h = centreH || 550, sh = h - 80;
+  const cw = 360, gap = 20;
+  const x0 = (1240 - (3 * cw + 2 * gap)) / 2;
+  const base = y + 80;
+  if (groups[1]) await drawPodiumCard(ctx, x0, base, cw, sh, groups[1].rank, groups[1].boys, "#f1f5f9", noteFn, ptsFn);
+  if (groups[0]) await drawPodiumCard(ctx, x0 + cw + gap, y, cw, h, groups[0].rank, groups[0].boys, "#fef3c7", noteFn, ptsFn);
+  if (groups[2]) await drawPodiumCard(ctx, x0 + 2 * (cw + gap), base, cw, sh, groups[2].rank, groups[2].boys, "#ffedd5", noteFn, ptsFn);
+  return y + h;
+}
+// Top 10 list (single column; rows shrink so 10 rows still fit above the footer).
+function drawTop10(ctx, rows, y, maxY) {
+  const avail = maxY - y;
+  const ROW_H = rows.length ? Math.min(52, Math.floor(avail / rows.length)) : 52;
+  const fs = ROW_H >= 46 ? 22 : 19;
+  const colX = 210, colW = 820;
+  rows.forEach((r, i) => {
+    const yy = y + i * ROW_H;
+    if (i % 2 === 0) { ctx.fillStyle = "#f1f5f9"; roundRect(ctx, colX, yy, colW, ROW_H - 4, 10); ctx.fill(); }
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left"; ctx.fillStyle = "#0b4f63"; ctx.font = "bold " + fs + "px Verdana";
+    ctx.fillText(String(r.rank), colX + 16, yy + ROW_H / 2);
+    ctx.fillStyle = "#111111";
+    ctx.font = fitFont(ctx, r.boy.display_name, colW - 240, "bold " + fs + "px Verdana", 15);
+    ctx.fillText(r.boy.display_name, colX + 64, yy + ROW_H / 2);
+    ctx.textAlign = "right"; ctx.fillStyle = "#64748b"; ctx.font = (fs - 3) + "px Verdana";
+    ctx.fillText("Team " + r.boy.team, colX + colW - 110, yy + ROW_H / 2);
+    ctx.fillStyle = "#111111"; ctx.font = "bold " + fs + "px Verdana";
+    ctx.fillText(r.boy.total + " pts", colX + colW - 16, yy + ROW_H / 2);
+  });
+  return y + rows.length * ROW_H;
+}
+// "Day 1: X • Day 2: Y" line, wrapped to fit the page width.
+function drawPlayedNames(ctx, y) {
+  const parts = (DATA.programs || []).slice(0, DATA.daysDone || 0).map((p, i) => "Day " + (i + 1) + ": " + p.name);
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillStyle = "#475569"; ctx.font = "27px Verdana";
+  if (!parts.length) { ctx.fillText("No program played yet", 620, y + 14); return y + 52; }
+  const lines = [];
+  let cur = "";
+  for (const p of parts) {
+    const next = cur ? cur + "  •  " + p : p;
+    if (ctx.measureText(next).width <= 1120) cur = next;
+    else { lines.push(cur); cur = p; }
+  }
+  if (cur) lines.push(cur);
+  lines.forEach((ln, i) => ctx.fillText(ln, 620, y + 14 + i * 34));
+  return y + 18 + lines.length * 34;
+}
+async function downloadDayPoster(day) {
+  const btn = document.getElementById("dl-day");
+  setDlBusy(btn, true);
+  try {
+    const [cv, ctx] = canvasPoster();
+    const prog = (DATA.programs || [])[day - 1] || {};
+    await drawBand(ctx);
+    let y = await drawLogo(ctx, 330); y += 26;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#0e7d9c"; ctx.font = "bold 40px Verdana";
+    ctx.fillText("DAY " + day, 620, y + 20); y += 52;
+    ctx.fillStyle = "#111111";
+    ctx.font = fitFont(ctx, prog.name || "", 1120, "bold 54px Verdana", 28);
+    ctx.fillText(prog.name || "", 620, y + 27); y += 66;
+    ctx.fillStyle = "#475569"; ctx.font = "28px Verdana";
+    ctx.fillText("Day " + day + "  •  " + fmtDay(day) + "  •  Twelfth Gala", 620, y + 14); y += 56;
+    const st = dayStatus(day);
+    if (st === "done") {
+      const groups = dayGroups(day);
+      const dt = (DATA.dayTotals || [])[day - 1] || { Door: 0, Window: 0 };
+      const scoredN = DATA.players.filter(b => b.days[day - 1] !== null).length;
+      y = await drawPodium(ctx, groups, y, b => "Day " + day + ": " + b.days[day - 1] + " pts", b => b.days[day - 1]);
+      y += 34;
+      y = drawBattleBar(ctx, y, dt.Window, dt.Door);
+      y += 18;
+      ctx.fillStyle = "#111111"; ctx.font = "bold 26px Verdana";
+      ctx.fillText(battleCaption(dt.Window, dt.Door), 620, y + 13);
+      y += 44;
+      ctx.fillStyle = "#475569"; ctx.font = "24px Verdana";
+      ctx.fillText(scoredN + " boys scored today  •  " + (28 - scoredN) + " not scored yet", 620, y + 12);
+    } else {
+      const msg = st === "today"
+        ? ["Playing today — 2:30 PM", (prog.name || "") + " is on now — Top 3 will appear here after scores are entered."]
+        : st === "not-entered"
+        ? ["Scores not entered yet", "Day " + day + " played — Top 3 will appear here once scores are entered."]
+        : ["Upcoming", "Top 3 will appear here after the day is played and scores are entered."];
+      ctx.fillStyle = "#f1f5f9"; ctx.strokeStyle = "#475569"; ctx.lineWidth = 3;
+      roundRect(ctx, 80, y, 1080, 1420 - y, 18); ctx.fill(); ctx.stroke();
+      const cy = y + (1420 - y) / 2;
+      ctx.fillStyle = "#111111"; ctx.font = "bold 44px Verdana";
+      ctx.fillText(msg[0], 620, cy - 40);
+      ctx.fillStyle = "#475569"; ctx.font = "26px Verdana";
+      ctx.fillText(msg[1], 620, cy + 30);
+    }
+    drawFoot(ctx);
+    saveCanvasPng(cv, "Twelfth-Gala-Day-" + String(day).padStart(2, "0") + "-Poster.png");
+  } finally { setDlBusy(btn, false, "⬇️ Download Day " + day + " Poster (PNG)"); }
+}
+async function downloadOverallPoster() {
+  const btn = document.getElementById("dl-overall");
+  setDlBusy(btn, true);
+  try {
+    const [cv, ctx] = canvasPoster();
+    await drawBand(ctx);
+    let y = 330;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#0e7d9c"; ctx.font = "bold 52px Verdana";
+    ctx.fillText("OVERALL SCOREBOARD", 620, y + 26); y += 62;
+    ctx.fillStyle = "#0b4f63"; ctx.font = "bold 38px Verdana";
+    ctx.fillText(afterLine(), 620, y + 19); y += 46;
+    const groups = podiumGroups();
+    const rows = top10Rows();
+    const compact = rows.length > 6;
+    if (groups.length) {
+      y = await drawPodium(ctx, groups, y, boyTotalNote, b => b.total, compact ? 500 : 550);
+      y += compact ? 24 : 34;
+      const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+      y = drawBattleBar(ctx, y, tt.Window, tt.Door);
+      y += 14;
+      ctx.fillStyle = "#111111"; ctx.font = "bold 26px Verdana";
+      ctx.fillText(battleCaption(tt.Window, tt.Door), 620, y + 13);
+      y += compact ? 36 : 44;
+    }
+    ctx.fillStyle = "#111111"; ctx.font = "bold 30px Verdana";
+    ctx.fillText("TOP 10", 620, y + 15); y += compact ? 36 : 44;
+    const scoredN = DATA.players.filter(scored).length;
+    ctx.fillStyle = "#475569"; ctx.font = "22px Verdana";
+    ctx.fillText(scoredN + " of 28 boys have scored — the list grows to 10 as scores come in", 620, y + 11); y += compact ? 36 : 44;
+    y = drawTop10(ctx, rows, y, 1560);
+    drawFoot(ctx);
+    saveCanvasPng(cv, "Twelfth-Gala-Overall-Scoreboard-Poster.png");
+  } finally { setDlBusy(btn, false, "⬇️ Download Overall Poster (PNG)"); }
+}
+async function downloadTeamPoster() {
+  const btn = document.getElementById("dl-team");
+  setDlBusy(btn, true);
+  try {
+    const [cv, ctx] = canvasPoster();
+    await drawBand(ctx);
+    let y = await drawLogo(ctx, 330); y += 26;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = "#0e7d9c"; ctx.font = "bold 54px Verdana";
+    ctx.fillText("TEAM SCOREBOARD", 620, y + 27); y += 64;
+    ctx.fillStyle = "#0b4f63"; ctx.font = "bold 38px Verdana";
+    ctx.fillText(afterLine(), 620, y + 19); y += 50;
+    y = drawPlayedNames(ctx, y);
+    const tt = DATA.teamTotals || { Door: 0, Window: 0 };
+    const bw = 530, gap = 20, x0 = (1240 - (2 * bw + gap)) / 2, cardH = 460;
+    [["Window", TEAM_GREEN], ["Door", TEAM_BLUE]].forEach(([t, col], i) => {
+      const x = x0 + i * (bw + gap);
+      ctx.fillStyle = col; roundRect(ctx, x, y, bw, cardH, 18); ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 30px Verdana";
+      ctx.fillText("TEAM " + t.toUpperCase(), x + bw / 2, y + 59);
+      ctx.font = "bold 110px Verdana";
+      ctx.fillText(String(tt[t]), x + bw / 2, y + 195);
+      ctx.font = "bold 26px Verdana";
+      const rank = tt.Window === tt.Door ? "Tied" : (t === "Window" ? (tt.Window > tt.Door ? "1st place" : "2nd place") : (tt.Door > tt.Window ? "1st place" : "2nd place"));
+      ctx.fillText("points  •  " + rank, x + bw / 2, y + 285);
+      ctx.font = "22px Verdana";
+      const top = topScorerOf(t);
+      ctx.fillText("Top scorer: " + (top ? top.display_name + " — " + top.total + " pts" : "—"), x + bw / 2, y + 333);
+    });
+    y += cardH + 30;
+    y = drawBattleBar(ctx, y, tt.Window, tt.Door);
+    drawFoot(ctx);
+    saveCanvasPng(cv, "Twelfth-Gala-Team-Scoreboard-Poster.png");
+  } finally { setDlBusy(btn, false, "⬇️ Download Team Poster (PNG)"); }
 }
 
 (async () => {
