@@ -367,7 +367,7 @@ function topScorerOf(team) {
   return [...DATA.players].filter(b => b.team === team && scored(b)).sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name))[0] || null;
 }
 function boyTotalNote(b) {
-  return (DATA.dayTotals || []).filter(d => d.done).map(d => "Day " + d.day + ": " + (b.days[d.day - 1] === null ? "–" : b.days[d.day - 1])).join("  •  ");
+  return (DATA.dayTotals || []).filter(d => d.done && b.days[d.day - 1] !== null).map(d => "Day " + d.day + ": " + b.days[d.day - 1]).join("  •  ");
 }
 function posterBandHtml() {
   return `<div class="pband"><img class="fl" src="/icons/flower-192.png" alt="">
