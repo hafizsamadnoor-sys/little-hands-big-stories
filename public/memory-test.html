@@ -1,0 +1,233 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Memory Test · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+.mt-word{display:inline-block;background:#f1f5f9;border-radius:10px;padding:10px 14px;margin:5px;font-size:1.15rem;font-weight:700}
+.mt-num{display:inline-block;background:#f1f5f9;border-radius:10px;padding:10px 14px;margin:5px;font-size:1.15rem;font-weight:700;min-width:64px;text-align:center}
+.mt-item{padding:8px 4px;border-bottom:1px solid #e2e8f0;font-size:1.05rem}
+.timer{font-size:26px;font-weight:800;color:#dc2626}
+.timer.calm{color:#0b6e5d}
+input[type=text],input[type=number],input[type=password]{width:100%;padding:13px;font-size:17px;border:2px solid #cbd5e1;border-radius:12px}
+input[type=text]:focus,input[type=number]:focus{border-color:#0e7c8c;outline:none}
+.lvl{border:2px solid #cbd5e1;border-radius:14px;padding:14px;margin:10px 0;background:#fff}
+.lvl.locked{opacity:.55}
+.lvl.passed{border-color:#16a34a}
+.lvl.next{border-color:#0e7c8c;background:#ecfeff}
+.good{background:#dcfce7;border-radius:10px;padding:10px;font-size:14px;line-height:1.5}
+.bad{background:#fee2e2;border-radius:10px;padding:10px;font-size:14px;line-height:1.5}
+.storybox{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;font-size:1.12rem;line-height:1.8}
+.pinbox{font-size:26px;text-align:center;letter-spacing:10px}
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="game"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
+</div>
+<script>
+let ME = null;        // { id, name } when logged in as Afeef
+let LEVELS = null;    // levels data from /api/mt-game/levels
+let PASS = 36, TOTAL = 45, ROUNDS = [];
+let PLAY = null;      // current level play state
+let timerInt = null;
+
+function clearTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
+function fmtTime(sec) { const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + String(s).padStart(2, "0"); }
+function startTimer(sec, onTimeout) {
+  clearTimer();
+  const el = document.getElementById("mttimer");
+  let t = sec;
+  const tick = () => { if (el) { el.textContent = fmtTime(t); el.classList.toggle("calm", t > 30); } };
+  tick();
+  timerInt = setInterval(() => {
+    t--;
+    tick();
+    if (t <= 0) { clearTimer(); onTimeout(); }
+  }, 1000);
+}
+function headHtml() {
+  return `<header class="top"><div class="top-in">
+    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:0;object-fit:cover;display:block"></div>
+    <div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Memory Test · SIBAQ 26 (BNO14)</small></div>
+    <div style="flex:1"></div>
+    ${ME ? `<button class="btn small ghost" id="mtlogout" style="margin:0">Logout</button>` : ""}
+  </div></header>`;
+}
+async function boot() {
+  document.getElementById("nav").innerHTML = headHtml();
+  try { const d = await api("GET", "/api/mt-game/me"); ME = d.player; } catch (e) { ME = null; }
+  if (ME) { await loadLevels(); return; }
+  // Not logged in as Afeef — show the PIN login (and a teacher shortcut if the teacher is signed in).
+  let isTeacher = false;
+  try { const u = await currentUser(); isTeacher = !!(u && u.role === "teacher"); } catch (e) {}
+  document.getElementById("nav").innerHTML = headHtml();
+  const box = document.getElementById("game");
+  box.innerHTML = `<h1>🧠 Memory Test</h1>
+    <p class="muted">SIBAQ 26 · Memory Test (BNO14) · Off-stage · 30 minutes · 45 marks. Memorise and reproduce the read, shown or heard things within a given time. <b>For Muhammad Afeef only.</b></p>
+    <div class="card"><h3>Enter your PIN</h3>
+      <p class="muted">Afeef — type your 4-digit Memory Test PIN to play.</p>
+      <input type="password" id="mtpin" class="pinbox" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="••••">
+      <div style="margin-top:12px"><button class="btn" id="mtgo">▶ Play Memory Test</button></div>
+      <p id="mterr" style="color:#dc2626;font-weight:700"></p>
+    </div>
+    ${isTeacher ? `<div class="card"><h3>🧑‍🏫 Teacher</h3><p class="muted">You are signed in as the teacher. Open the game as Afeef to play it with him.</p><button class="btn" id="mtteacher">▶ Open the game as Afeef</button></div>` : ""}
+    <p><a class="btn ghost" href="/index.html">← Back to the home page</a></p>`;
+  const pinEl = document.getElementById("mtpin");
+  pinEl.focus();
+  const go = async () => {
+    const pin = pinEl.value.trim();
+    if (!/^\d{4}$/.test(pin)) { document.getElementById("mterr").textContent = "Enter the 4-digit PIN."; return; }
+    try {
+      const r = await api("POST", "/api/mt-game/login", { pin });
+      ME = r.player; await loadLevels();
+    } catch (e) { document.getElementById("mterr").textContent = e.message; }
+  };
+  document.getElementById("mtgo").onclick = go;
+  pinEl.onkeydown = (e) => { if (e.key === "Enter") go(); };
+  const tb = document.getElementById("mtteacher");
+  if (tb) tb.onclick = async () => {
+    try { await api("POST", "/api/teacher/mt-game/session", {}); const d = await api("GET", "/api/mt-game/me"); ME = d.player; await loadLevels(); }
+    catch (e) { document.getElementById("mterr").textContent = e.message; }
+  };
+  const lo = document.getElementById("mtlogout");
+  if (lo) lo.onclick = async () => { try { await api("POST", "/api/mt-game/logout", {}); } catch (e) {} ME = null; boot(); };
+}
+async function loadLevels() {
+  const d = await api("GET", "/api/mt-game/levels");
+  LEVELS = d.levels; PASS = d.passMark; TOTAL = d.total; ROUNDS = d.rounds;
+  document.getElementById("nav").innerHTML = headHtml();
+  const lo = document.getElementById("mtlogout");
+  if (lo) lo.onclick = async () => { try { await api("POST", "/api/mt-game/logout", {}); } catch (e) {} ME = null; boot(); };
+  renderLevels();
+}
+function renderLevels() {
+  const box = document.getElementById("game");
+  const next = LEVELS.find(l => l.unlocked && !l.passed) || null;
+  box.innerHTML = `<h1>🧠 Memory Test</h1>
+    <p class="muted">SIBAQ 26 · Memory Test (BNO14) · 10 levels · each level is one full test of 4 rounds, 45 marks. Pass a level at <b>${PASS}/${TOTAL}</b> to open the next level. No multiple choice — you type what you remember. Playing as <b>${esc(ME.name)}</b>.</p>
+    <div class="card" style="background:#f8fafc"><b>Official concept:</b> “To memorize and reproduce the read, shown or heard things within a given time.”</div>
+    ${LEVELS.map(l => `<div class="lvl ${l.passed ? "passed" : ""} ${!l.unlocked ? "locked" : ""} ${next && l.n === next.n ? "next" : ""}">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+        <div><b>Level ${l.n} — ${esc(l.title.replace(/^Level \d+ — /, ""))}</b><br><span class="muted" style="font-size:.9rem">${esc(l.desc)}</span></div>
+        <div style="text-align:right"><b>${l.best === null ? "—" : l.best + "/" + TOTAL}</b>${l.passed ? " ✅ Passed" : ""}${l.attempts ? `<br><span class="muted" style="font-size:.85rem">Played ${l.attempts} time${l.attempts === 1 ? "" : "s"}</span>` : ""}</div>
+      </div>
+      <div style="margin-top:10px">${l.unlocked
+        ? `<button class="btn" data-play="${l.n}">${l.passed ? "▶ Play again" : "▶ Play Level " + l.n}</button>`
+        : `<span class="muted">🔒 Finish Level ${l.n - 1} first (36/45) to open this level.</span>`}</div>
+    </div>`).join("")}`;
+  box.querySelectorAll("[data-play]").forEach(b => b.onclick = () => startLevel(+b.dataset.play));
+}
+async function startLevel(n) {
+  const level = LEVELS.find(l => l.n === n);
+  PLAY = { n, answers: { r1: [], r2: [], r3: [], r4: [] }, round: 1, phase: "study" };
+  await showRoundStudy(1);
+}
+function roundMeta(r) { return ROUNDS.find(x => x.n === r) || { title: "Round " + r, studySec: 120, writeSec: 180, marks: 10 }; }
+async function showRoundStudy(r) {
+  PLAY.round = r; PLAY.phase = "study";
+  const box = document.getElementById("game");
+  const meta = roundMeta(r);
+  box.innerHTML = `<div class="card"><p class="muted">Level ${PLAY.n} · Round ${r} of 4 — ${esc(meta.title)} · ${meta.marks} marks</p>
+    <h2>👀 Study — ${esc(meta.title)}</h2><p class="muted">Study it well. You cannot write anything down. When the time ends, the page is taken away.</p>
+    <div class="timer" id="mttimer"></div><div id="mtstudy"><p class="muted">Loading…</p></div>
+    <p><button class="btn" id="mtready">✅ I have studied it — take it away</button></p></div>`;
+  document.getElementById("mtready").onclick = () => showRoundWrite(r);
+  try {
+    const d = await api("GET", `/api/mt-game/level/${PLAY.n}/round/${r}/study`);
+    const el = document.getElementById("mtstudy");
+    if (!el) return;
+    if (r === 1) el.innerHTML = `<p class="muted">Remember these 15 words — any order:</p><div>${d.words.map(w => `<span class="mt-word">${esc(w)}</span>`).join("")}</div>`;
+    if (r === 2) el.innerHTML = `<p class="muted">Remember these 10 numbers <b>in this order</b>:</p><div>${d.numbers.map((x, i) => `<span class="mt-num">${i + 1}. ${x}</span>`).join("")}</div>`;
+    if (r === 3) el.innerHTML = `<p class="muted">Look at this <b>${esc(d.scene)}</b> scene. Remember the 10 things in it — and their colours:</p>
+      <img src="${esc(d.image)}" alt="Memory Test scene" style="width:100%;border-radius:12px;border:1px solid #cbd5e1">
+      ${d.items.map((it, i) => `<div class="mt-item"><b>${i + 1}.</b> ${esc(it)}</div>`).join("")}`;
+    if (r === 4) el.innerHTML = `<p class="muted">Read this story carefully — you will answer 10 questions on it afterwards:</p><div class="storybox">${esc(d.story)}</div>`;
+    startTimer(d.studySec, () => showRoundWrite(r));
+  } catch (e) {
+    box.innerHTML = `<div class="card"><h1>🧠 Memory Test</h1><p>${esc(e.message)}</p><button class="btn" id="back">← Back to levels</button></div>`;
+    document.getElementById("back").onclick = renderLevels;
+  }
+}
+async function showRoundWrite(r) {
+  clearTimer();
+  PLAY.round = r; PLAY.phase = "write";
+  const box = document.getElementById("game");
+  const meta = roundMeta(r);
+  const done = () => {
+    // collect answers, then move on
+    if (r === 1) PLAY.answers.r1 = Array.from(document.querySelectorAll("[data-r1]")).map(i => i.value.trim());
+    if (r === 2) PLAY.answers.r2 = Array.from(document.querySelectorAll("[data-r2]")).map(i => i.value.trim());
+    if (r === 3) PLAY.answers.r3 = Array.from(document.querySelectorAll("[data-r3]")).map(i => i.value.trim());
+    if (r === 4) PLAY.answers.r4 = Array.from(document.querySelectorAll("[data-r4]")).map(i => i.value.trim());
+    if (r < 4) showRoundStudy(r + 1); else submitLevel();
+  };
+  let inner = "";
+  if (r === 1) inner = `<p class="muted">Write all the words you remember — any order. 1 mark each.</p>` +
+    Array.from({ length: 15 }, (_, i) => `<p><input type="text" data-r1 placeholder="Word ${i + 1}" autocomplete="off"></p>`).join("");
+  if (r === 2) inner = `<p class="muted">Write the 10 numbers <b>in the same order</b>. 1 mark each — only in the correct place.</p>` +
+    Array.from({ length: 10 }, (_, i) => `<p><input type="text" data-r2 inputmode="numeric" placeholder="Number ${i + 1}" autocomplete="off"></p>`).join("");
+  if (r === 3) inner = `<p class="muted">Write the 10 things you remember from the scene — each with its colour (e.g. “red kettle”). 1 mark each.</p>` +
+    Array.from({ length: 10 }, (_, i) => `<p><input type="text" data-r3 placeholder="Thing ${i + 1} + its colour" autocomplete="off"></p>`).join("");
+  if (r === 4) {
+    box.innerHTML = `<div class="card"><p class="muted">Level ${PLAY.n} · Round 4 of 4 — Story · 10 marks</p>
+      <h2>✍️ Answer — Story questions</h2><p class="muted">Answer from memory. Do not look back at the story. 1 mark each.</p>
+      <div class="timer" id="mttimer"></div><div id="mtwrite"><p class="muted">Loading questions…</p></div>
+      <p><button class="btn" id="mtdone">✅ Submit the whole level</button></p></div>`;
+    document.getElementById("mtdone").onclick = done;
+    try {
+      const d = await api("GET", `/api/mt-game/level/${PLAY.n}/round/4/questions`);
+      const el = document.getElementById("mtwrite");
+      if (!el) return;
+      el.innerHTML = d.questions.map((q, i) => `<p><b>Q${i + 1}.</b> ${esc(q)}<br><input type="text" data-r4 placeholder="Your answer" autocomplete="off"></p>`).join("");
+      startTimer(d.writeSec, done);
+    } catch (e) {
+      box.innerHTML = `<div class="card"><h1>🧠 Memory Test</h1><p>${esc(e.message)}</p><button class="btn" id="back">← Back to levels</button></div>`;
+      document.getElementById("back").onclick = renderLevels;
+    }
+    return;
+  }
+  box.innerHTML = `<div class="card"><p class="muted">Level ${PLAY.n} · Round ${r} of 4 — ${esc(meta.title)} · ${meta.marks} marks</p>
+    <h2>✍️ Write — ${esc(meta.title)}</h2>
+    <div class="timer" id="mttimer"></div>${inner}
+    <p><button class="btn" id="mtdone">${r < 4 ? "✅ Done — next round" : "✅ Submit the whole level"}</button></p></div>`;
+  document.getElementById("mtdone").onclick = done;
+  startTimer(meta.writeSec, done);
+}
+async function submitLevel() {
+  clearTimer();
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Checking your level…</p></div>`;
+  try {
+    const r = await api("POST", `/api/mt-game/level/${PLAY.n}/attempt`, { answers: PLAY.answers });
+    LEVELS = r.perLevel;
+    const rnd = (n, got, tot) => `<p><b>Round ${n}:</b> ${got} / ${tot}</p>`;
+    box.innerHTML = `<div class="card"><h1>${r.passed ? "🎉 Level passed!" : "💪 Keep practising!"}</h1>
+      <p style="font-size:1.3rem"><b>${r.score} / ${r.total}</b> ${r.passed ? `— Level ${PLAY.n + 1 <= 10 ? PLAY.n + 1 : ""} ${PLAY.n < 10 ? "is now open!" : "— all 10 levels done! 🌟"}` : `— you need ${PASS}/${TOTAL} to open the next level.`}</p>
+      ${rnd(1, r.r1, 15)}${rnd(2, r.r2, 10)}${rnd(3, r.r3, 10)}${rnd(4, r.r4, 10)}
+      <h3>Your answers</h3>
+      ${[1, 2, 3, 4].map(rn => {
+        const rows = r.detail.filter(d => d.round === rn);
+        return `<h4>Round ${rn}</h4>` + rows.map(d => `<p>${d.ok ? "✅" : "❌"} ${esc(d.question)}<br>
+          <span class="muted">You: ${esc(d.given || "(no answer)")}</span><br>
+          ${d.ok ? "" : `<b>Correct: ${esc(d.correct || "—")}</b>`}</p>`).join("");
+      }).join("")}
+      <p><button class="btn" id="back">← Back to levels</button>
+      ${r.passed && PLAY.n < 10 ? `<button class="btn" id="next" style="margin-left:8px">▶ Play Level ${PLAY.n + 1}</button>` : ""}
+      <button class="btn ghost" id="retry" style="margin-left:8px">🔁 Try Level ${PLAY.n} again</button></p></div>`;
+    document.getElementById("back").onclick = renderLevels;
+    const nx = document.getElementById("next");
+    if (nx) nx.onclick = () => startLevel(PLAY.n + 1);
+    document.getElementById("retry").onclick = () => startLevel(PLAY.n);
+  } catch (e) {
+    box.innerHTML = `<div class="card"><h1>🧠 Memory Test</h1><p>${esc(e.message)}</p><button class="btn" id="back">← Back to levels</button></div>`;
+    document.getElementById("back").onclick = renderLevels;
+  }
+}
+(async () => { await boot(); })();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
