@@ -14,6 +14,7 @@ const STUDENTS = require("./students");
 const MAP_GAME = require("./map-game-data");
 const GK_GAME = require("./gk-game-data");
 const WF_GAME = require("./wf-game-data");
+const MT_GAME = require("./memory-test-data");
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -680,6 +681,59 @@ CREATE TABLE IF NOT EXISTS wf_game_revision_answers (
   session_id TEXT NOT NULL DEFAULT '',
   created_at TEXT DEFAULT (datetime('now'))
 );
+-- Memory Test game (BNO14, Nov 2026 — Samad): game scores live ONLY
+-- here, never in points_log / Points Board / clubs / certificates.
+-- Afeef (N1306) is NOT one of the 38 S1 boys, so he has no student
+-- account — mt_game_players is a game-only player list (name + PIN hash),
+-- not users rows. mt_game_attempts: one row per finished level play
+-- (45 marks, 36 to pass). mt_game_answers: one row per round item
+-- answered (Q + given + correct). mt_game_progress: per-player cache —
+-- highest level unlocked, totals. mt_game_sessions: short-lived login
+-- tokens for the game page (NOT backed up — a restore logs Afeef out).
+CREATE TABLE IF NOT EXISTS mt_game_players (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  pin_hash TEXT NOT NULL,
+  added_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS mt_game_sessions (
+  token TEXT PRIMARY KEY,
+  player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS mt_game_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
+  level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 10),
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL DEFAULT 45,
+  r1 INTEGER NOT NULL DEFAULT 0,
+  r2 INTEGER NOT NULL DEFAULT 0,
+  r3 INTEGER NOT NULL DEFAULT 0,
+  r4 INTEGER NOT NULL DEFAULT 0,
+  passed INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS mt_game_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES mt_game_attempts(id) ON DELETE CASCADE,
+  player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
+  level INTEGER NOT NULL,
+  round INTEGER NOT NULL CHECK(round BETWEEN 1 AND 4),
+  question_key TEXT NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS mt_game_progress (
+  player_id INTEGER PRIMARY KEY REFERENCES mt_game_players(id) ON DELETE CASCADE,
+  highest_unlocked INTEGER NOT NULL DEFAULT 1,
+  total_attempts INTEGER NOT NULL DEFAULT 0,
+  best_total INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now'))
+);
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
 // Word Fight answers: which player made the turn ('you' or an AI name) —
@@ -809,6 +863,22 @@ function seedWFGamePlayers() {
   } catch (e) { console.log("Word Fight game seeding:", e.message); }
 }
 seedWFGamePlayers();
+// Memory Test game: Muhammad Afeef (N1306, BNO14) is the only player for
+// now — the only Bidaya candidate for Memory Test. He is NOT one of the
+// 38 S1 boys, so he has no student account: he plays with a game-only
+// PIN (default 1234 — the teacher can change it in the Teacher Panel).
+// Named (not an IIFE) so the restore handler below can call it too: a
+// wipe-restore replaces mt_game_players from the backup, and a backup
+// taken before the game existed would drop him — re-seeding keeps the
+// BNO14 player enrolled after every deploy, wipe and restore.
+const MT_GAME_DEFAULT_PIN = "1234";
+function seedMtGamePlayers() {
+  try {
+    const row = db.prepare("SELECT id FROM mt_game_players WHERE id=1").get();
+    if (!row) db.prepare("INSERT INTO mt_game_players (id, name, pin_hash) VALUES (1,'MUHAMMAD AFEEF',?)").run(hashPassword(MT_GAME_DEFAULT_PIN));
+  } catch (e) { console.log("Memory Test game seeding:", e.message); }
+}
+seedMtGamePlayers();
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
@@ -3601,6 +3671,304 @@ app.get("/api/teacher/wf-game/summary/:id/wrong-answers.pdf", requireTeacher, (r
   doc.end();
 });
 
+// ── Memory Test game (BNO14, Nov 2026 — Samad) ─────────────────
+// Afeef only (N1306). 10 levels, each a full 4-round test (45 marks),
+// pass at 36/45 (80%) to unlock the next level. NO multiple choice —
+// the boy types what he remembers. Game scores are separate from
+// writing points — nothing here touches points_log, awardPoints,
+// the Points Board, clubs or certificates.
+// Afeef has no student account (he is not one of the 38 S1 boys), so
+// the game has its own PIN login (mt_game_sessions cookie) — see
+// requireMtPlayer. The teacher can also open the game as Afeef from
+// the Teacher Panel (POST /api/teacher/mt-game/session).
+const MT_COOKIE = "lhbs_mt_session";
+const mtLevel = (n) => MT_GAME.MT_GAME_LEVELS.find(l => l.n === n) || null;
+function mtPlayer(req) {
+  const cookie = req.headers.cookie || "";
+  const m = cookie.match(/(?:^|;\s*)lhbs_mt_session=([^;]+)/);
+  if (!m) return null;
+  const s = db.prepare("SELECT player_id FROM mt_game_sessions WHERE token=?").get(m[1]);
+  if (!s) return null;
+  return db.prepare("SELECT id, name FROM mt_game_players WHERE id=?").get(s.player_id) || null;
+}
+const requireMtPlayer = (req, res, next) => {
+  const p = mtPlayer(req);
+  if (!p) return res.status(401).json({ error: "Please enter the Memory Test PIN." });
+  req.mtPlayer = p; next();
+};
+function mtSetSession(res, pid) {
+  const token = crypto.randomBytes(32).toString("hex");
+  db.prepare("INSERT INTO mt_game_sessions (token, player_id) VALUES (?,?)").run(token, pid);
+  res.setHeader("Set-Cookie", `${MT_COOKIE}=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${30 * 86400}`);
+  return token;
+}
+// ── Marking (server-side only; the client never scores) ───────
+function mtNorm(s) {
+  return String(s || "").toLowerCase().replace(/[,']/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+function mtLevenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+// Whole-word match, with a 1-letter slip allowed for words of 5+ letters.
+function mtHasWord(normed, word) {
+  const words = normed.split(" ").filter(Boolean);
+  if (words.includes(word)) return true;
+  if (word.length < 5) return false;
+  return words.some(w => mtLevenshtein(w, word) <= 1);
+}
+// Every word of the phrase must be present (whole-word, 1-letter tolerance on 5+ letter words).
+function mtHasPhrase(normed, phrase) {
+  return phrase.split(" ").filter(Boolean).every(w => mtHasWord(normed, w));
+}
+// Round 1 — Words (any order). Exact first, then 1-letter slip (5+ letters only).
+function mtMarkWords(level, given) {
+  const targets = level.words.map(w => w.toLowerCase());
+  const typed = (given || []).map(g => mtNorm(g)).filter(Boolean);
+  const targetGiven = new Array(targets.length).fill(null);
+  const usedTyped = new Set();
+  typed.forEach((g, k) => {
+    const i = targets.findIndex((t, j) => targetGiven[j] === null && t === g);
+    if (i >= 0) { targetGiven[i] = k; usedTyped.add(k); }
+  });
+  typed.forEach((g, k) => {
+    if (usedTyped.has(k)) return;
+    const i = targets.findIndex((t, j) => targetGiven[j] === null && t.length >= 5 && mtLevenshtein(g, t) <= 1);
+    if (i >= 0) { targetGiven[i] = k; usedTyped.add(k); }
+  });
+  let score = 0;
+  const rows = targets.map((t, i) => {
+    const ok = targetGiven[i] !== null;
+    if (ok) score++;
+    return { key: "r1-w" + (i + 1), question: "Word " + (i + 1), given: ok ? typed[targetGiven[i]] : "", correct: t, ok: ok ? 1 : 0 };
+  });
+  typed.forEach((g, k) => {
+    if (!usedTyped.has(k)) rows.push({ key: "r1-x" + (k + 1), question: "Extra word (not in the list)", given: g, correct: "", ok: 0 });
+  });
+  return { score, rows };
+}
+// Round 2 — Numbers, 1 mark per number ONLY in the correct position.
+function mtMarkNumbers(level, given) {
+  const rows = [];
+  let score = 0;
+  level.numbers.forEach((num, i) => {
+    const g = String((given || [])[i] ?? "").trim();
+    const ok = g !== "" && (Number(g) === num || g === String(num));
+    if (ok) score++;
+    rows.push({ key: "r2-n" + (i + 1), question: "Number " + (i + 1) + " (in order)", given: g, correct: String(num), ok: ok ? 1 : 0 });
+  });
+  return { score, rows };
+}
+// Round 3 — Picture: thing + colour keywords (both must be present).
+function mtColourOk(normed, item) {
+  const words = item.colour.toLowerCase().split(" ").filter(w => w && w !== "and");
+  const aliases = (item.colourAliases || []).map(a => a.toLowerCase());
+  return words.some(w => mtHasWord(normed, w)) || aliases.some(a => mtHasWord(normed, a));
+}
+function mtMarkPicture(level, given) {
+  const items = level.scene.items;
+  const typed = (given || []).map(g => mtNorm(g)).filter(Boolean);
+  const itemGiven = new Array(items.length).fill(null);
+  const usedTyped = new Set();
+  typed.forEach((g, k) => {
+    const idx = items.findIndex((it, j) => itemGiven[j] === null && mtHasPhrase(g, it.thing.toLowerCase()) && mtColourOk(g, it));
+    if (idx >= 0) { itemGiven[idx] = k; usedTyped.add(k); }
+  });
+  let score = 0;
+  const rows = items.map((it, j) => {
+    const ok = itemGiven[j] !== null;
+    if (ok) score++;
+    return { key: "r3-i" + (j + 1), question: it.display, given: ok ? typed[itemGiven[j]] : "", correct: it.display, ok: ok ? 1 : 0 };
+  });
+  typed.forEach((g, k) => {
+    if (!usedTyped.has(k)) rows.push({ key: "r3-x" + (k + 1), question: "Extra thing (not in the scene)", given: g, correct: "", ok: 0 });
+  });
+  return { score, rows };
+}
+// Round 4 — Story: keyword-based marking per question.
+function mtMarkStory(level, given) {
+  let score = 0;
+  const rows = level.questions.map((q, i) => {
+    const g = mtNorm((given || [])[i] || "");
+    const ok = (q.keywords || []).some(kw => mtHasPhrase(g, mtNorm(kw)));
+    if (ok) score++;
+    return { key: "r4-q" + (i + 1), question: q.q, given: String((given || [])[i] || "").trim(), correct: (q.keywords || []).join(" / "), ok: ok ? 1 : 0 };
+  });
+  return { score, rows };
+}
+function mtUnlocked(pid) {
+  const row = db.prepare("SELECT MAX(level) AS m FROM mt_game_attempts WHERE player_id=? AND passed=1").get(pid);
+  return Math.min(10, (row && row.m ? row.m : 0) + 1);
+}
+function mtRefreshProgress(pid) {
+  const unlocked = mtUnlocked(pid);
+  const tot = db.prepare("SELECT COUNT(*) c FROM mt_game_attempts WHERE player_id=?").get(pid).c;
+  const best = db.prepare("SELECT MAX(score) m FROM mt_game_attempts WHERE player_id=?").get(pid).m;
+  db.prepare(`INSERT INTO mt_game_progress (player_id, highest_unlocked, total_attempts, best_total, updated_at)
+    VALUES (?,?,?,?,datetime('now'))
+    ON CONFLICT(player_id) DO UPDATE SET highest_unlocked=excluded.highest_unlocked, total_attempts=excluded.total_attempts, best_total=excluded.best_total, updated_at=datetime('now')`).run(pid, unlocked, tot, best || 0);
+}
+function mtPerLevel(pid) {
+  const unlocked = mtUnlocked(pid);
+  return MT_GAME.MT_GAME_LEVELS.map(l => {
+    const best = db.prepare("SELECT MAX(score) m FROM mt_game_attempts WHERE player_id=? AND level=?").get(pid, l.n).m;
+    const att = db.prepare("SELECT COUNT(*) c FROM mt_game_attempts WHERE player_id=? AND level=?").get(pid, l.n).c;
+    const latest = db.prepare("SELECT score, created_at FROM mt_game_attempts WHERE player_id=? AND level=? ORDER BY id DESC LIMIT 1").get(pid, l.n);
+    return { n: l.n, title: l.title, desc: l.desc, unlocked: l.n <= unlocked,
+      passed: best !== null && best >= MT_GAME.MT_GAME_PASS_MARK, best, attempts: att, latest: latest || null };
+  });
+}
+function mtSummary(pid) {
+  const player = db.prepare("SELECT id, name FROM mt_game_players WHERE id=?").get(pid);
+  if (!player) return null;
+  const attempts = db.prepare("SELECT * FROM mt_game_attempts WHERE player_id=? ORDER BY id DESC").all(pid);
+  const totals = { attempts: attempts.length,
+    best: attempts.length ? Math.max(...attempts.map(a => a.score)) : null,
+    passed: attempts.filter(a => a.passed).length,
+    levelsPassed: new Set(attempts.filter(a => a.passed).map(a => a.level)).size };
+  const wrongAnswers = db.prepare(`SELECT a.*, att.level AS att_level FROM mt_game_answers a
+    JOIN mt_game_attempts att ON att.id=a.attempt_id
+    WHERE a.player_id=? AND a.is_correct=0 ORDER BY a.attempt_id DESC, a.level, a.round, a.id`).all(pid);
+  return { player, perLevel: mtPerLevel(pid), totals, attempts, wrongAnswers,
+    lastPlayedAt: attempts.length ? attempts[0].created_at : null };
+}
+// ── Player endpoints ───────────────────────────────────────────
+// Player: PIN login (game-only — Afeef has no student account).
+app.post("/api/mt-game/login", (req, res) => {
+  const pin = String((req.body || {}).pin || "").trim();
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: "Enter the 4-digit PIN." });
+  const p = db.prepare("SELECT * FROM mt_game_players WHERE id=1").get();
+  if (!p || !verifyPassword(pin, p.pin_hash)) return res.status(401).json({ error: "Wrong PIN." });
+  mtSetSession(res, p.id);
+  res.json({ ok: true, player: { id: p.id, name: p.name } });
+});
+app.post("/api/mt-game/logout", (req, res) => {
+  const cookie = req.headers.cookie || "";
+  const m = cookie.match(/(?:^|;\s*)lhbs_mt_session=([^;]+)/);
+  if (m) db.prepare("DELETE FROM mt_game_sessions WHERE token=?").run(m[1]);
+  res.setHeader("Set-Cookie", `${MT_COOKIE}=; HttpOnly; Path=/; Max-Age=0`);
+  res.json({ ok: true });
+});
+app.get("/api/mt-game/me", (req, res) => {
+  const p = mtPlayer(req);
+  res.json({ player: p || null });
+});
+app.get("/api/mt-game/levels", requireMtPlayer, (req, res) => {
+  res.json({ player: req.mtPlayer, levels: mtPerLevel(req.mtPlayer.id),
+    passMark: MT_GAME.MT_GAME_PASS_MARK, total: MT_GAME.MT_GAME_TOTAL,
+    rounds: MT_GAME.MT_GAME_ROUNDS });
+});
+// Player: study material for one round only — later rounds stay hidden until their turn.
+app.get("/api/mt-game/level/:n/round/:r/study", requireMtPlayer, (req, res) => {
+  const n = Number(req.params.n), r = Number(req.params.r);
+  const level = mtLevel(n);
+  if (!level) return res.status(404).json({ error: "No such level." });
+  const unlocked = mtUnlocked(req.mtPlayer.id);
+  if (n > unlocked) return res.status(403).json({ error: `Finish Level ${unlocked} first — then Level ${n} opens.` });
+  if (r === 1) return res.json({ level: n, round: 1, words: level.words, ...MT_GAME.MT_GAME_ROUNDS[0] });
+  if (r === 2) return res.json({ level: n, round: 2, numbers: level.numbers, ...MT_GAME.MT_GAME_ROUNDS[1] });
+  if (r === 3) return res.json({ level: n, round: 3, scene: level.scene.name, image: `/mt-scenes/level-${n}.png`,
+    items: level.scene.items.map(it => it.display), ...MT_GAME.MT_GAME_ROUNDS[2] });
+  if (r === 4) return res.json({ level: n, round: 4, story: level.story, ...MT_GAME.MT_GAME_ROUNDS[3] });
+  return res.status(404).json({ error: "No such round." });
+});
+// Player: the 10 story questions (sent only when the Round 4 write phase starts — never with the story).
+app.get("/api/mt-game/level/:n/round/4/questions", requireMtPlayer, (req, res) => {
+  const n = Number(req.params.n);
+  const level = mtLevel(n);
+  if (!level) return res.status(404).json({ error: "No such level." });
+  const unlocked = mtUnlocked(req.mtPlayer.id);
+  if (n > unlocked) return res.status(403).json({ error: `Finish Level ${unlocked} first — then Level ${n} opens.` });
+  res.json({ level: n, round: 4, questions: level.questions.map(q => q.q), writeSec: MT_GAME.MT_GAME_ROUNDS[3].writeSec });
+});
+// Player: submit one finished level play (all 4 rounds).
+// Body: { answers: { r1: [15 strings], r2: [10 strings], r3: [10 strings], r4: [10 strings] } }.
+// Server re-marks everything — the client never scores. Game points are
+// stored here only — never in points_log.
+app.post("/api/mt-game/level/:n/attempt", requireMtPlayer, (req, res) => {
+  const n = Number(req.params.n);
+  const level = mtLevel(n);
+  if (!level) return res.status(404).json({ error: "No such level." });
+  const unlocked = mtUnlocked(req.mtPlayer.id);
+  if (n > unlocked) return res.status(403).json({ error: `Finish Level ${unlocked} first — then Level ${n} opens.` });
+  const a = (req.body && req.body.answers) || {};
+  const r1 = Array.isArray(a.r1) ? a.r1 : [];
+  const r2 = Array.isArray(a.r2) ? a.r2 : [];
+  const r3 = Array.isArray(a.r3) ? a.r3 : [];
+  const r4 = Array.isArray(a.r4) ? a.r4 : [];
+  if (r1.length !== 15 || r2.length !== 10 || r3.length !== 10 || r4.length !== 10)
+    return res.status(400).json({ error: "Answer every round before submitting." });
+  const m1 = mtMarkWords(level, r1);
+  const m2 = mtMarkNumbers(level, r2);
+  const m3 = mtMarkPicture(level, r3);
+  const m4 = mtMarkStory(level, r4);
+  const score = m1.score + m2.score + m3.score + m4.score;
+  const passed = score >= MT_GAME.MT_GAME_PASS_MARK ? 1 : 0;
+  const allRows = [
+    ...m1.rows.map(r => ({ ...r, round: 1 })),
+    ...m2.rows.map(r => ({ ...r, round: 2 })),
+    ...m3.rows.map(r => ({ ...r, round: 3 })),
+    ...m4.rows.map(r => ({ ...r, round: 4 })),
+  ];
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO mt_game_attempts (player_id, level, score, total, r1, r2, r3, r4, passed) VALUES (?,?,?,?,?,?,?,?,?)")
+      .run(req.mtPlayer.id, n, score, MT_GAME.MT_GAME_TOTAL, m1.score, m2.score, m3.score, m4.score, passed);
+    const ins = db.prepare(`INSERT INTO mt_game_answers
+      (attempt_id, player_id, level, round, question_key, question, given_answer, correct_answer, is_correct)
+      VALUES (?,?,?,?,?,?,?,?,?)`);
+    for (const r of allRows) ins.run(att.lastInsertRowid, req.mtPlayer.id, n, r.round, r.key, r.question, r.given, r.correct, r.ok);
+    mtRefreshProgress(req.mtPlayer.id);
+    db.exec("COMMIT");
+    res.json({ ok: true, attempt_id: att.lastInsertRowid, score, total: MT_GAME.MT_GAME_TOTAL,
+      r1: m1.score, r2: m2.score, r3: m3.score, r4: m4.score, passed: !!passed,
+      unlocked: mtUnlocked(req.mtPlayer.id), perLevel: mtPerLevel(req.mtPlayer.id),
+      detail: allRows });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your game." }); }
+});
+// ── Teacher endpoints ──────────────────────────────────────────
+// Teacher: monitoring overview — the one player, per-level %, attempts.
+app.get("/api/teacher/mt-game/overview", requireTeacher, (req, res) => {
+  const p = db.prepare("SELECT id, name FROM mt_game_players ORDER BY id LIMIT 1").get();
+  if (!p) return res.json({ player: null });
+  const s = mtSummary(p.id);
+  res.json({ player: { id: s.player.id, name: s.player.name }, perLevel: s.perLevel,
+    totals: s.totals, lastPlayedAt: s.lastPlayedAt });
+});
+// Teacher: total summary for the player, with every attempt + wrong answers.
+app.get("/api/teacher/mt-game/summary/:id", requireTeacher, (req, res) => {
+  const s = mtSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such player." });
+  res.json(s);
+});
+// Teacher: one attempt in full (retry view — every answer, right and wrong).
+app.get("/api/teacher/mt-game/attempt/:id", requireTeacher, (req, res) => {
+  const att = db.prepare("SELECT * FROM mt_game_attempts WHERE id=?").get(Number(req.params.id));
+  if (!att) return res.status(404).json({ error: "No such attempt." });
+  const answers = db.prepare("SELECT * FROM mt_game_answers WHERE attempt_id=? ORDER BY round, id").all(att.id);
+  res.json({ attempt: att, answers });
+});
+// Teacher: change Afeef's game PIN (4 digits).
+app.post("/api/teacher/mt-game/pin", requireTeacher, (req, res) => {
+  const pin = String((req.body || {}).pin || "").trim();
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: "PIN must be 4 digits." });
+  db.prepare("UPDATE mt_game_players SET pin_hash=? WHERE id=1").run(hashPassword(pin));
+  logActivity(req.user.id, "teacher", "mt_game_pin", "Memory Test PIN changed for MUHAMMAD AFEEF");
+  res.json({ ok: true });
+});
+// Teacher: open the game as Afeef (one tap — sets the game cookie, then the panel links to the game page).
+app.post("/api/teacher/mt-game/session", requireTeacher, (req, res) => {
+  mtSetSession(res, 1);
+  res.json({ ok: true });
+});
+
 // ── Points board, authors, writer of week, badges ─────────────
 app.get("/api/points-board", requireLogin, (req, res) => {
   const period = req.query.period === "month" ? "month" : "all";
@@ -4188,7 +4556,8 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "map_game_players","map_game_attempts","map_game_answers","map_game_progress","map_game_revisions",
   "map_game_key_status","map_game_round2_attempts","map_game_round2_answers","map_game_revision_answers",
   "gk_game_players","gk_game_attempts","gk_game_answers","gk_game_progress","gk_game_key_status","gk_game_revision_answers",
-  "wf_game_players","wf_game_matches","wf_game_attempts","wf_game_answers","wf_game_progress","wf_game_key_status","wf_game_revision_answers"];
+  "wf_game_players","wf_game_matches","wf_game_attempts","wf_game_answers","wf_game_progress","wf_game_key_status","wf_game_revision_answers",
+  "mt_game_players","mt_game_attempts","mt_game_answers","mt_game_progress"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -4224,6 +4593,7 @@ app.post("/api/teacher/restore", requireTeacher, (req, res) => {
     seedMapGamePlayers(); // a backup taken before Faaz was ticked has 0 players — re-enrol him (BNS31)
     seedGKGamePlayers(); // same for the GK Kids player
     seedWFGamePlayers(); // same for the Word Fight player (Thalha, BNS35)
+    seedMtGamePlayers(); // same for the Memory Test player (Afeef, BNO14)
     const skippedObj = {};
     for (const [t, s] of Object.entries(skipped)) skippedObj[t] = [...s].join(",");
     res.json({ ok: true, skippedColumns: skippedObj });
