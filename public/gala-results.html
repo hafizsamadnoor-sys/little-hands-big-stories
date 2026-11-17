@@ -231,7 +231,7 @@ function teamBattleHtml() {
   const tt = DATA.teamTotals || { Door: 0, Window: 0 };
   const max = Math.max(tt.Door, tt.Window, 1);
   const ld = latestDay();
-  const prog = (DATA.programs || [])[ld - 1] || {};
+  const prog = dayProg(ld);
   const unscoredN = DATA.players.filter(b => !scored(b)).length;
   const order = ["Door", "Window"].sort((a, b) => tt[b] - tt[a]);
   const cards = order.map((t, i) => {
@@ -268,7 +268,7 @@ function scoreCardHtml(b) {
   if (!b) return `<div class="card"><h3>⭐ Score Card</h3><p class="muted">No scores yet — the first results will appear here after Day 1. 🎉</p></div>`;
   const r = rankOf(b);
   const ld = latestDay();
-  const prog = (DATA.programs || [])[ld - 1] || {};
+  const prog = dayProg(ld);
   const role = roleOf(b);
   const doneDays = (DATA.dayTotals || []).filter(d => d.done);
   const rows = doneDays.map(d => `<tr><td>Day ${d.day}</td><td>${esc(d.program)}</td><td><b>${b.days[d.day - 1] === null ? "–" : b.days[d.day - 1]}</b></td></tr>`).join("");
@@ -288,7 +288,7 @@ function scoreCardHtml(b) {
 
 function boardHtml() {
   const ld = latestDay();
-  const prog = (DATA.programs || [])[ld - 1] || {};
+  const prog = dayProg(ld);
   const scoredBoys = DATA.players.filter(scored).sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name));
   const unscoredBoys = DATA.players.filter(b => !scored(b)).sort((a, b) => a.display_name.localeCompare(b.display_name));
   const q = searchQ.trim().toLowerCase();
@@ -360,8 +360,13 @@ function afterLine() {
   const n = DATA.daysDone || 0;
   return "AFTER " + n + (n === 1 ? " PROGRAM" : " PROGRAMS");
 }
+// Program that ran on a day (teacher-chosen in Enter Scores; falls back to
+// the planned program when the server has no dayPrograms yet).
+function dayProg(day) {
+  return ((DATA.dayPrograms || DATA.programs || [])[day - 1]) || {};
+}
 function playedNamesLine() {
-  return (DATA.programs || []).slice(0, DATA.daysDone || 0).map((p, i) => "Day " + (i + 1) + ": " + p.name).join("  •  ");
+  return (DATA.dayTotals || []).filter(d => d.done).map(d => "Day " + d.day + ": " + d.program).join("  •  ");
 }
 function topScorerOf(team) {
   return [...DATA.players].filter(b => b.team === team && scored(b)).sort((a, b) => b.total - a.total || a.display_name.localeCompare(b.display_name))[0] || null;
@@ -406,7 +411,7 @@ function battleBarHtml(wPts, dPts) {
     <div class="pcap">${battleCaption(wPts, dPts)}</div>`;
 }
 function dayPosterHtml(day) {
-  const prog = (DATA.programs || [])[day - 1] || {};
+  const prog = dayProg(day);
   const st = dayStatus(day);
   const dt = (DATA.dayTotals || [])[day - 1] || { Door: 0, Window: 0 };
   const scoredN = DATA.players.filter(b => b.days[day - 1] !== null).length;
@@ -488,9 +493,9 @@ window.renderBoard = renderBoard;
 function render() {
   const ld = latestDay();
   posterDay = ld;
-  const prog = (DATA.programs || [])[ld - 1] || {};
+  const prog = dayProg(ld);
   const next = (DATA.dayTotals || []).find(d => !d.done);
-  const nextProg = next ? (DATA.programs || [])[next.day - 1] : null;
+  const nextProg = next ? dayProg(next.day) : null;
   const scoredN = DATA.players.filter(scored).length;
   const totalPts = DATA.players.reduce((a, b) => a + b.total, 0);
   const tt = DATA.teamTotals || { Door: 0, Window: 0 };
@@ -741,7 +746,7 @@ function drawTop10(ctx, rows, y, maxY) {
 }
 // "Day 1: X • Day 2: Y" line, wrapped to fit the page width.
 function drawPlayedNames(ctx, y) {
-  const parts = (DATA.programs || []).slice(0, DATA.daysDone || 0).map((p, i) => "Day " + (i + 1) + ": " + p.name);
+  const parts = (DATA.dayTotals || []).filter(d => d.done).map(d => "Day " + d.day + ": " + d.program);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillStyle = "#475569"; ctx.font = "27px Verdana";
   if (!parts.length) { ctx.fillText("No program played yet", 620, y + 14); return y + 52; }
@@ -761,7 +766,7 @@ async function downloadDayPoster(day) {
   setDlBusy(btn, true);
   try {
     const [cv, ctx] = canvasPoster();
-    const prog = (DATA.programs || [])[day - 1] || {};
+    const prog = dayProg(day);
     await drawBand(ctx);
     let y = await drawLogo(ctx, 330); y += 26;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";

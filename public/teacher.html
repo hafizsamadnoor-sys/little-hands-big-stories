@@ -1051,6 +1051,7 @@ async function vChallenges(p) {
 // coordinator. Challenge points are SEPARATE from writing points — they
 // never touch the Points Board, clubs or certificates.
 let galaSub = "setup", galaDay = 1, galaScoreTeam = "All";
+let galaProgSel = {}; // pending program choice per day (index into programs), until saved
 // Team leaders / assistants (Samad's 12 Nov 2026 setup, by Ad No) — shown
 // as badges in the separate Team Door / Team Window views.
 const GALA_LEADERS = { Door: { leaderAd: "511", asstAd: "518" }, Window: { leaderAd: "526", asstAd: "514" } };
@@ -1115,9 +1116,15 @@ async function vGala(p) {
     if (!players.length) {
       html += `<div class="card"><p class="muted">Set up the 28 players first (Setup tab), then enter scores here.</p></div>`;
     } else {
-      const prog = (board.programs || [])[galaDay - 1] || {};
-      html += `<div class="card"><h3>✏️ Enter Scores — Day ${galaDay}: ${esc(prog.name || "")}</h3>
-        <p class="muted">${esc(prog.concept || "")}</p>
+      const master = board.programs || [];
+      const savedIdx = (() => { const dp = (board.dayPrograms || [])[galaDay - 1]; return dp ? (dp.day - 1) : (galaDay - 1); })();
+      const selIdx = galaProgSel[galaDay] ?? savedIdx;
+      const prog = master[selIdx] || {};
+      html += `<div class="card"><h3>✏️ Enter Scores — Day ${galaDay}: <span id="gala-prog-name">${esc(prog.name || "")}</span></h3>
+        <p class="muted" id="gala-prog-concept">${esc(prog.concept || "")}</p>
+        <label for="gala-prog-sel" style="font-size:.9rem"><b>📋 Program for Day ${galaDay}:</b></label>
+        <select id="gala-prog-sel" style="width:100%;padding:10px;border:2px solid #0b4f63;border-radius:10px;font-size:1rem;background:#f0fdfa;margin:6px 0 2px">${master.map((p, i) => `<option value="${i}"${i === selIdx ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+        <p class="muted" style="font-size:.82rem">Programs don't always run in order — pick the program that actually ran on this day. Saving scores saves this program for Day ${galaDay}.</p>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">${Array.from({ length: 12 }, (_, i) => i + 1).map(d => {
           const done = (board.dayTotals || [])[d - 1] && board.dayTotals[d - 1].done;
           return `<button class="btn small ${galaDay === d ? "" : "ghost"}" data-gday="${d}">Day ${d}${done ? " ✓" : ""}</button>`;
@@ -1130,7 +1137,7 @@ async function vGala(p) {
           <td>${b.team === "Door" ? "🚪 Door" : "🪟 Window"}</td>
           <td><input type="number" min="0" max="10" step="1" id="gsc-${b.id}" value="${b.days[galaDay - 1] === null ? "" : b.days[galaDay - 1]}" style="width:80px" placeholder="–"></td>
         </tr>`).join("")}</table></div>
-        <button class="btn" id="gala-save-scores" style="margin-top:12px">💾 Save Day ${galaDay} scores</button>
+        <button class="btn" id="gala-save-scores" style="margin-top:12px">💾 Save Day ${galaDay} scores${prog.name ? " (" + esc(prog.name) + ")" : ""}</button>
         <span id="gala-scores-msg" class="muted" style="margin-left:8px"></span>
         <p class="muted" style="font-size:.85rem;margin-top:8px">Leave a box empty to clear that boy's score for this day. Saving again overwrites the day.</p></div>`;
     }
@@ -1187,17 +1194,28 @@ async function vGala(p) {
   }
 
   if (galaSub === "programs") {
+    const assignedDays = (pr) => (board.dayPrograms || []).map((dp, i) => dp.day === pr.day ? i + 1 : null).filter(x => x !== null);
     html += `<div class="card"><h3>📋 The 12 Programs</h3>
-      ${(board.programs || []).map(pr => `<div style="padding:10px 0;border-bottom:1px solid #e2e8f0">
+      ${(board.programs || []).map(pr => { const ad = assignedDays(pr);
+        return `<div style="padding:10px 0;border-bottom:1px solid #e2e8f0">
         <b>Day ${pr.day} — ${esc(pr.name)}</b> <span class="tag">${esc(pr.tag)}</span>
-        <div class="muted" style="font-size:.9rem">${esc(pr.concept)}</div></div>`).join("")}
-      <p class="muted" style="font-size:.85rem;margin-top:10px">All whole-group: all 28 play every day, 60 minutes each, 0–10 points per boy per day. Friday off.</p></div>`;
+        <div class="muted" style="font-size:.9rem">${esc(pr.concept)}</div>
+        <div style="font-size:.85rem;margin-top:2px">${ad.length ? `✅ Runs on: <b>Day ${ad.join(", Day ")}</b>` : "— Not run yet"}</div></div>`; }).join("")}
+      <p class="muted" style="font-size:.85rem;margin-top:10px">All whole-group: all 28 play every day, 60 minutes each, 0–10 points per boy per day. Programs don't always run in planned order — to change which program a day was, pick it in ✏️ Enter Scores.</p></div>`;
   }
 
   p.innerHTML = html;
   p.querySelectorAll("[data-gsub]").forEach(b => b.onclick = () => { galaSub = b.dataset.gsub; render(); });
   p.querySelectorAll("[data-gday]").forEach(b => b.onclick = () => { galaDay = +b.dataset.gday; render(); });
   p.querySelectorAll("[data-gsteam]").forEach(b => b.onclick = () => { galaScoreTeam = b.dataset.gsteam; render(); });
+  const progSel = p.querySelector("#gala-prog-sel");
+  if (progSel) progSel.onchange = () => {
+    galaProgSel[galaDay] = +progSel.value;
+    const pr = (board.programs || [])[+progSel.value] || {};
+    const nm = document.getElementById("gala-prog-name"); if (nm) nm.textContent = pr.name || "";
+    const cp = document.getElementById("gala-prog-concept"); if (cp) cp.textContent = pr.concept || "";
+    const sb = document.getElementById("gala-save-scores"); if (sb) sb.textContent = `💾 Save Day ${galaDay} scores${pr.name ? " (" + pr.name + ")" : ""}`;
+  };
 
   const updCount = () => {
     const nPlay = students.filter(s => document.getElementById("gplay-" + s.id).checked).length;
@@ -1235,8 +1253,12 @@ async function vGala(p) {
       return { student_id: b.id, points: v === "" ? null : +v };
     });
     try {
-      const r = await api("POST", "/api/teacher/gala/scores", { day: galaDay, scores });
-      toast(`Day ${galaDay} scores saved — ${r.saved} boys! ✅`);
+      const ps = document.getElementById("gala-prog-sel");
+      const progIdx = ps ? +ps.value : null;
+      const r = await api("POST", "/api/teacher/gala/scores", { day: galaDay, program: progIdx, scores });
+      delete galaProgSel[galaDay];
+      const savedProg = (r.board.dayPrograms || [])[galaDay - 1] || {};
+      toast(`Day ${galaDay}${savedProg.name ? " (" + savedProg.name + ")" : ""} scores saved — ${r.saved} boys! ✅`);
       galaSub = "board"; render();
     } catch (e) { toast(e.message, false); }
   };
