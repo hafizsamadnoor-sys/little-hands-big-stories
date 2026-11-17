@@ -419,6 +419,14 @@ CREATE TABLE IF NOT EXISTS gala_scores (
   updated_at TEXT DEFAULT (datetime('now')),
   UNIQUE(student_id, day)
 );
+-- Which program ran on each day (Samad, Nov 2026): programs don't always
+-- run in planned order, so the teacher picks the program when entering
+-- scores for a day. program = index into GALA_PROGRAMS (0-11); a day
+-- with no row here uses its planned program (day N = program N-1).
+CREATE TABLE IF NOT EXISTS gala_day_programs (
+  day INTEGER PRIMARY KEY CHECK(day BETWEEN 1 AND 12),
+  program INTEGER NOT NULL CHECK(program BETWEEN 0 AND 11)
+);
 -- Bidaya Map Study game (BNS31, Nov 2026 — Samad): game scores live ONLY
 -- here, never in points_log / Points Board / clubs / certificates.
 -- map_game_players: which boys may play (Faaz first; add more later).
@@ -1936,6 +1944,13 @@ function galaSetup() {
 // per-boy rows the viewer is allowed to see (see /api/gala/board).
 function galaBoardData() {
   const { players, coordinator } = galaSetup();
+  // Which program ran on each day (teacher-chosen in Enter Scores; a day
+  // with no row uses its planned program, day N = program N-1).
+  const progRows = db.prepare("SELECT day, program FROM gala_day_programs").all();
+  const dayProgIdx = {};
+  for (const r of progRows) dayProgIdx[r.day] = r.program;
+  const dayPrograms = [];
+  for (let d = 1; d <= 12; d++) dayPrograms.push(GALA_PROGRAMS[dayProgIdx[d] ?? (d - 1)]);
   const ids = players.map(p => p.id);
   const scoresByBoy = {};
   if (ids.length) {
@@ -1959,13 +1974,13 @@ function galaBoardData() {
   for (let d = 1; d <= 12; d++) {
     const done = boyRows.some(b => b.days[d - 1] !== null);
     if (done) daysDone++;
-    dayTotals.push({ day: d, program: GALA_PROGRAMS[d - 1].name,
+    dayTotals.push({ day: d, program: dayPrograms[d - 1].name,
       Door: boyRows.filter(b => b.team === "Door").reduce((a, b) => a + (b.days[d - 1] || 0), 0),
       Window: boyRows.filter(b => b.team === "Window").reduce((a, b) => a + (b.days[d - 1] || 0), 0),
       done });
   }
   return { players: boyRows, coordinator, teamTotals: { Door: teamTotal("Door"), Window: teamTotal("Window") },
-    dayTotals, daysDone, programs: GALA_PROGRAMS };
+    dayTotals, daysDone, programs: GALA_PROGRAMS, dayPrograms };
 }
 // Role-scoped board: teacher/admins see every boy; students see only
 // themselves; parents see only their own child. Team totals are public
@@ -2043,6 +2058,8 @@ app.post("/api/teacher/gala/scores", requireTeacher, (req, res) => {
   const body = req.body || {};
   const day = Number(body.day);
   if (!Number.isInteger(day) || day < 1 || day > 12) return res.status(400).json({ error: "Day must be 1–12." });
+  const prog = body.program === undefined || body.program === null || body.program === "" ? null : Number(body.program);
+  if (prog !== null && (!Number.isInteger(prog) || prog < 0 || prog > 11)) return res.status(400).json({ error: "Program must be one of the 12 programs." });
   const scores = Array.isArray(body.scores) ? body.scores : [];
   const playerIds = new Set(db.prepare("SELECT student_id FROM gala_players WHERE is_coordinator = 0").all().map(r => r.student_id));
   if (!playerIds.size) return res.status(400).json({ error: "Set up the 28 players first (Twelfth Gala → Setup)." });
@@ -2052,6 +2069,10 @@ app.post("/api/teacher/gala/scores", requireTeacher, (req, res) => {
   const clear = db.prepare("DELETE FROM gala_scores WHERE student_id=? AND day=?");
   db.exec("BEGIN");
   try {
+    if (prog !== null) {
+      db.prepare(`INSERT INTO gala_day_programs (day, program) VALUES (?,?)
+        ON CONFLICT(day) DO UPDATE SET program = excluded.program`).run(day, prog);
+    }
     let saved = 0;
     for (const s of scores) {
       const sid = Number(s.student_id);
@@ -2063,7 +2084,7 @@ app.post("/api/teacher/gala/scores", requireTeacher, (req, res) => {
       saved++;
     }
     db.exec("COMMIT");
-    logActivity(req.user.id, "teacher", "gala_scores", `Day ${day}: ${saved} scores saved`);
+    logActivity(req.user.id, "teacher", "gala_scores", `Day ${day}${prog !== null ? " (" + GALA_PROGRAMS[prog].name + ")" : ""}: ${saved} scores saved`);
     res.json({ ok: true, saved, board: galaBoardData() });
   } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} res.status(500).json({ error: "Could not save the scores." }); }
 });
@@ -4552,7 +4573,7 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "learning_tasks","learning_task_done","completion_certs","completion_exams","student_marks",
   "messages","notices","notice_reads","finance_entries","general_expenses","app_settings",
   "holiday_diary_tasks","holiday_diary_entries","holiday_checklists","letter_feedback","letter_feedback_locks",
-  "gala_players","gala_scores",
+  "gala_players","gala_scores","gala_day_programs",
   "map_game_players","map_game_attempts","map_game_answers","map_game_progress","map_game_revisions",
   "map_game_key_status","map_game_round2_attempts","map_game_round2_answers","map_game_revision_answers",
   "gk_game_players","gk_game_attempts","gk_game_answers","gk_game_progress","gk_game_key_status","gk_game_revision_answers",
