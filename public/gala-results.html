@@ -419,8 +419,7 @@ function dayPosterHtml(day) {
   let body = "";
   if (st === "done") {
     body = podiumHtml(dayGroups(day), b => b.days[day - 1], b => "Day " + day + ": " + b.days[day - 1] + " pts")
-      + `<div style="padding:0 4px">${battleBarHtml(dt.Window, dt.Door)}</div>
-      <p class="psub2">${scoredN} boys scored today • ${28 - scoredN} not scored yet</p>`;
+      + `<div style="padding:0 4px">${battleBarHtml(dt.Window, dt.Door)}</div>`;
   } else {
     const msg = st === "today"
       ? ["Playing today — 2:30 PM", (prog.name || "") + " is on now — Top 3 will appear here after scores are entered."]
@@ -447,7 +446,6 @@ function overallPosterHtml() {
     <div class="ptitle">OVERALL SCOREBOARD</div>
     <div class="pafter">${afterLine()}</div>${body}
     <h4 style="text-align:center;margin:12px 0 2px;font-family:Verdana,sans-serif">TOP 10</h4>
-    <p class="psub2">${scoredN} of 28 boys have scored — the list grows to 10 as scores come in</p>
     <div class="pt10">${trows || `<p class="psub2">No scores yet.</p>`}</div>
     <div style="height:10px"></div>${posterFootHtml()}</div>`;
 }
@@ -794,9 +792,6 @@ async function downloadDayPoster(day) {
       y += 18;
       ctx.fillStyle = "#111111"; ctx.font = "bold 26px Verdana";
       ctx.fillText(battleCaption(dt.Window, dt.Door), 620, y + 13);
-      y += 44;
-      ctx.fillStyle = "#475569"; ctx.font = "24px Verdana";
-      ctx.fillText(scoredN + " boys scored today  •  " + (28 - scoredN) + " not scored yet", 620, y + 12);
     } else {
       const msg = st === "today"
         ? ["Playing today — 2:30 PM", (prog.name || "") + " is on now — Top 3 will appear here after scores are entered."]
@@ -842,9 +837,6 @@ async function downloadOverallPoster() {
     }
     ctx.fillStyle = "#111111"; ctx.font = "bold 30px Verdana";
     ctx.fillText("TOP 10", 620, y + 15); y += compact ? 36 : 44;
-    const scoredN = DATA.players.filter(scored).length;
-    ctx.fillStyle = "#475569"; ctx.font = "22px Verdana";
-    ctx.fillText(scoredN + " of 28 boys have scored — the list grows to 10 as scores come in", 620, y + 11); y += compact ? 36 : 44;
     y = drawTop10(ctx, rows, y, 1560);
     drawFoot(ctx);
     saveCanvasPng(cv, "Twelfth-Gala-Overall-Scoreboard-Poster.png");
