@@ -103,6 +103,7 @@ table.gboard tr[data-boy]:hover{background:#f2f9fb}
 .pposter .pband p b{color:#fff}
 .pposter .plogo{display:block;margin:12px auto 2px;max-width:280px;width:70%}
 .pposter .ptitle{text-align:center;font-size:1.45rem;font-weight:800;color:#0e7d9c;margin:6px 0 2px}
+.pposter .daypill{display:inline-block;background:#d4a017;color:#fff;font-size:1.5rem;font-weight:800;padding:6px 22px;border-radius:999px;margin:6px 0 2px}
 .pposter .pafter{text-align:center;font-size:1.05rem;font-weight:800;color:#0b4f63;margin:2px 0}
 .pposter .pprog{text-align:center;font-size:1.2rem;font-weight:800;color:#111;margin:2px 0}
 .pposter .psub2{text-align:center;font-size:.85rem;color:#64748b;margin:2px 12px 8px}
@@ -429,7 +430,7 @@ function dayPosterHtml(day) {
     body = `<div class="pstatus"><b>${esc(msg[0])}</b><p>${esc(msg[1])}</p></div>`;
   }
   return `<div class="pposter">${posterBandHtml()}<img class="plogo" src="/gala-logo.jpg" alt="Twelfth Gala logo">
-    <div class="ptitle">DAY ${day}</div>
+    <div style="text-align:center"><span class="daypill">DAY ${day}</span></div>
     <div class="pprog">${esc(prog.name || "")}</div>
     <p class="psub2">Day ${day} • ${fmtDay(day)} • Twelfth Gala</p>${body}${posterFootHtml()}</div>`;
 }
@@ -770,8 +771,13 @@ async function downloadDayPoster(day) {
     await drawBand(ctx);
     let y = await drawLogo(ctx, 330); y += 26;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = "#0e7d9c"; ctx.font = "bold 40px Verdana";
-    ctx.fillText("DAY " + day, 620, y + 20); y += 52;
+    // "DAY N" highlighted: gold pill, white bold text
+    ctx.font = "bold 48px Verdana";
+    const dlw = ctx.measureText("DAY " + day).width + 56, dlh = 68;
+    ctx.fillStyle = "#d4a017";
+    roundRect(ctx, 620 - dlw / 2, y, dlw, dlh, 34); ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("DAY " + day, 620, y + dlh / 2); y += dlh + 18;
     ctx.fillStyle = "#111111";
     ctx.font = fitFont(ctx, prog.name || "", 1120, "bold 54px Verdana", 28);
     ctx.fillText(prog.name || "", 620, y + 27); y += 66;
