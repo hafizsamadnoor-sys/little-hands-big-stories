@@ -1558,6 +1558,14 @@ async function vWfGame(p) {
 // own 4-digit PIN login; the teacher opens the game as Afeef below.
 let mtSub = "board", mtAttempt = null;
 async function vMtGame(p) {
+  // Minutes used for one attempt (duration in seconds). NULL/blank = played before timing was added (Nov 2026).
+  const fmtMtMin = (sec) => {
+    if (sec === null || sec === undefined || sec === "") return "—";
+    const v = Math.round((sec / 60) * 10) / 10;
+    return (Number.isInteger(v) ? v : v.toFixed(1)) + " min";
+  };
+  const mtWithin30 = (sec) => sec !== null && sec !== undefined && sec !== "" && sec <= 30 * 60;
+  const mtTimeCell = (sec) => (sec === null || sec === undefined || sec === "") ? "—" : fmtMtMin(sec) + (mtWithin30(sec) ? " ✅" : " ⏱️");
   const ov = await api("GET", "/api/teacher/mt-game/overview");
   const me = ov.player ? (await api("GET", "/api/teacher/mt-game/summary/" + ov.player.id)) : null;
   const subBtn = (k, label) => `<button class="btn small ${mtSub === k ? "" : "ghost"}" data-mtsub="${k}">${label}</button>`;
@@ -1575,16 +1583,18 @@ async function vMtGame(p) {
     html += `<div class="card"><h3>📊 ${esc(me.player.name)} — per-level scores</h3>
       <p class="muted">${me.totals.attempts ? `Best score: <b>${me.totals.best} / 45</b> · Levels passed: <b>${me.totals.levelsPassed} / 10</b> · Attempts: ${me.totals.attempts}` : "Not played yet."}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}</p>
       <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
-      <tr><th>Level</th><th>Best</th><th>Latest</th><th>Played</th><th>Passed</th></tr>
+      <tr><th>Level</th><th>Best</th><th>Latest</th><th>Time</th><th>Played</th><th>Passed</th></tr>
       ${me.perLevel.map(l => `<tr><td>${l.n}. ${esc(l.title.replace(/^Level \d+ — /, ""))}</td>
         <td><b>${l.best === null ? "—" : l.best + " / 45"}</b></td><td>${l.latest === null ? "—" : l.latest.score + " / 45"}</td>
+        <td>${l.latest === null || l.latest.duration_seconds === null || l.latest.duration_seconds === undefined ? "—" : mtTimeCell(l.latest.duration_seconds)}</td>
         <td>${l.attempts}</td><td>${l.passed ? "✅ Yes" : l.unlocked ? "Not yet" : "🔒 Locked"}</td></tr>`).join("")}
       </table></div></div>
     <div class="card"><h3>🕒 Attempt history</h3>
       ${hist.length ? `<div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
-      <tr><th>When</th><th>Level</th><th>Score</th><th></th></tr>
+      <tr><th>When</th><th>Level</th><th>Score</th><th>Minutes</th><th></th></tr>
       ${hist.map(a => `<tr><td>${fmtDateTime(a.created_at)}</td><td>Level ${a.level}</td>
         <td><b>${a.score} / ${a.total}</b>${a.passed ? " ✅ Passed" : ""}</td>
+        <td>${mtTimeCell(a.duration_seconds)}</td>
         <td><button class="btn small ghost" data-mt-attempt="${a.id}">${a.score < a.total ? "Wrong answers" : "View answers"}</button></td></tr>`).join("")}
       </table></div>` : `<p class="muted">No games yet.</p>`}</div>
     <div class="card"><h3>🧑‍🏫 Play with Afeef</h3>
@@ -1618,6 +1628,7 @@ async function vMtGame(p) {
       ${a.is_correct ? "" : `<b>Correct: ${esc(a.correct_answer)}</b>`}</p>`).join("");
     el.innerHTML = `<h3>🔎 Attempt — Level ${d.attempt.level} · ${d.attempt.score} / ${d.attempt.total} ${d.attempt.passed ? "✅ Passed" : ""} · ${fmtDateTime(d.attempt.created_at)}</h3>
       <p class="muted">Round 1: ${d.attempt.r1}/15 · Round 2: ${d.attempt.r2}/10 · Round 3: ${d.attempt.r3}/10 · Round 4: ${d.attempt.r4}/10</p>
+      <p>Finished in <b>${fmtMtMin(d.attempt.duration_seconds)}</b>${d.attempt.duration_seconds === null || d.attempt.duration_seconds === undefined ? "" : (mtWithin30(d.attempt.duration_seconds) ? " · ✅ within 30 minutes" : " · ⏱️ over 30 minutes")}</p>
       ${rnd(1)}${rnd(2)}${rnd(3)}${rnd(4)}
       <p><button class="btn ghost" id="mt-detail-close">Close this attempt</button></p>`;
     document.getElementById("mt-detail-close").onclick = () => { mtAttempt = null; render(); };
