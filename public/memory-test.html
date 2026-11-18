@@ -38,6 +38,32 @@ let timerInt = null;
 
 function clearTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
 function fmtTime(sec) { const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + String(s).padStart(2, "0"); }
+// Elapsed time for this level, MM:SS counting up from 00:00 (display only — never ends the attempt).
+function fmtElapsed(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+let elapsedInt = null;
+function startElapsedTimer() {
+  stopElapsedTimer();
+  const tick = () => {
+    const el = document.getElementById("mtelapsed");
+    if (el && PLAY && PLAY.startedAt) {
+      const s = Math.max(0, Math.floor((Date.now() - PLAY.startedAt) / 1000));
+      el.textContent = fmtElapsed(s) + " / 30:00";
+    }
+  };
+  tick();
+  elapsedInt = setInterval(tick, 1000);
+}
+function stopElapsedTimer() { if (elapsedInt) { clearInterval(elapsedInt); elapsedInt = null; } }
+// Minutes used for one attempt (duration in seconds). NULL/blank = played before timing was added.
+function fmtMinutes(sec) {
+  if (sec === null || sec === undefined || sec === "") return "—";
+  const v = Math.round((sec / 60) * 10) / 10;
+  return (Number.isInteger(v) ? v : v.toFixed(1)) + " min";
+}
+function mtWithin30(sec) { return sec !== null && sec !== undefined && sec !== "" && sec <= 30 * 60; }
 function startTimer(sec, onTimeout) {
   clearTimer();
   const el = document.getElementById("mttimer");
@@ -106,6 +132,7 @@ async function loadLevels() {
   renderLevels();
 }
 function renderLevels() {
+  stopElapsedTimer();
   const box = document.getElementById("game");
   const next = LEVELS.find(l => l.unlocked && !l.passed) || null;
   box.innerHTML = `<h1>🧠 Memory Test</h1>
@@ -114,7 +141,7 @@ function renderLevels() {
     ${LEVELS.map(l => `<div class="lvl ${l.passed ? "passed" : ""} ${!l.unlocked ? "locked" : ""} ${next && l.n === next.n ? "next" : ""}">
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
         <div><b>Level ${l.n} — ${esc(l.title.replace(/^Level \d+ — /, ""))}</b><br><span class="muted" style="font-size:.9rem">${esc(l.desc)}</span></div>
-        <div style="text-align:right"><b>${l.best === null ? "—" : l.best + "/" + TOTAL}</b>${l.passed ? " ✅ Passed" : ""}${l.attempts ? `<br><span class="muted" style="font-size:.85rem">Played ${l.attempts} time${l.attempts === 1 ? "" : "s"}</span>` : ""}</div>
+        <div style="text-align:right"><b>${l.best === null ? "—" : l.best + "/" + TOTAL}</b>${l.passed ? " ✅ Passed" : ""}${l.attempts ? `<br><span class="muted" style="font-size:.85rem">Played ${l.attempts} time${l.attempts === 1 ? "" : "s"}</span>` : ""}${l.latest && l.latest.duration_seconds !== null && l.latest.duration_seconds !== undefined ? `<br><span class="muted" style="font-size:.85rem">Last time: ${fmtMinutes(l.latest.duration_seconds)}</span>` : ""}</div>
       </div>
       <div style="margin-top:10px">${l.unlocked
         ? `<button class="btn" data-play="${l.n}">${l.passed ? "▶ Play again" : "▶ Play Level " + l.n}</button>`
@@ -124,7 +151,8 @@ function renderLevels() {
 }
 async function startLevel(n) {
   const level = LEVELS.find(l => l.n === n);
-  PLAY = { n, answers: { r1: [], r2: [], r3: [], r4: [] }, round: 1, phase: "study" };
+  PLAY = { n, answers: { r1: [], r2: [], r3: [], r4: [] }, round: 1, phase: "study", startedAt: Date.now() };
+  startElapsedTimer();
   await showRoundStudy(1);
 }
 function roundMeta(r) { return ROUNDS.find(x => x.n === r) || { title: "Round " + r, studySec: 120, writeSec: 180, marks: 10 }; }
@@ -134,7 +162,7 @@ async function showRoundStudy(r) {
   const meta = roundMeta(r);
   box.innerHTML = `<div class="card"><p class="muted">Level ${PLAY.n} · Round ${r} of 4 — ${esc(meta.title)} · ${meta.marks} marks</p>
     <h2>👀 Study — ${esc(meta.title)}</h2><p class="muted">Study it well. You cannot write anything down. When the time ends, the page is taken away.</p>
-    <div class="timer" id="mttimer"></div><div id="mtstudy"><p class="muted">Loading…</p></div>
+    <div class="timer" id="mttimer"></div><div style="font-size:1.05rem;font-weight:700;color:#0b6e5d;margin:4px 0">⏱️ Time used: <span id="mtelapsed">00:00 / 30:00</span></div><div id="mtstudy"><p class="muted">Loading…</p></div>
     <p><button class="btn" id="mtready">✅ I have studied it — take it away</button></p></div>`;
   document.getElementById("mtready").onclick = () => showRoundWrite(r);
   try {
@@ -176,7 +204,7 @@ async function showRoundWrite(r) {
   if (r === 4) {
     box.innerHTML = `<div class="card"><p class="muted">Level ${PLAY.n} · Round 4 of 4 — Story · 10 marks</p>
       <h2>✍️ Answer — Story questions</h2><p class="muted">Answer from memory. Do not look back at the story. 1 mark each.</p>
-      <div class="timer" id="mttimer"></div><div id="mtwrite"><p class="muted">Loading questions…</p></div>
+      <div class="timer" id="mttimer"></div><div style="font-size:1.05rem;font-weight:700;color:#0b6e5d;margin:4px 0">⏱️ Time used: <span id="mtelapsed">00:00 / 30:00</span></div><div id="mtwrite"><p class="muted">Loading questions…</p></div>
       <p><button class="btn" id="mtdone">✅ Submit the whole level</button></p></div>`;
     document.getElementById("mtdone").onclick = done;
     try {
@@ -193,21 +221,26 @@ async function showRoundWrite(r) {
   }
   box.innerHTML = `<div class="card"><p class="muted">Level ${PLAY.n} · Round ${r} of 4 — ${esc(meta.title)} · ${meta.marks} marks</p>
     <h2>✍️ Write — ${esc(meta.title)}</h2>
-    <div class="timer" id="mttimer"></div>${inner}
+    <div class="timer" id="mttimer"></div><div style="font-size:1.05rem;font-weight:700;color:#0b6e5d;margin:4px 0">⏱️ Time used: <span id="mtelapsed">00:00 / 30:00</span></div>${inner}
     <p><button class="btn" id="mtdone">${r < 4 ? "✅ Done — next round" : "✅ Submit the whole level"}</button></p></div>`;
   document.getElementById("mtdone").onclick = done;
   startTimer(meta.writeSec, done);
 }
 async function submitLevel() {
   clearTimer();
+  stopElapsedTimer();
   const box = document.getElementById("game");
   box.innerHTML = `<div class="card"><p class="muted">Checking your level…</p></div>`;
+  // Minutes used, from the moment this level was shown until now.
+  const durationSeconds = PLAY.startedAt ? Math.max(0, Math.round((Date.now() - PLAY.startedAt) / 1000)) : null;
   try {
-    const r = await api("POST", `/api/mt-game/level/${PLAY.n}/attempt`, { answers: PLAY.answers });
+    const r = await api("POST", `/api/mt-game/level/${PLAY.n}/attempt`, { answers: PLAY.answers, duration_seconds: durationSeconds });
     LEVELS = r.perLevel;
     const rnd = (n, got, tot) => `<p><b>Round ${n}:</b> ${got} / ${tot}</p>`;
+    const dur = (r.duration_seconds === null || r.duration_seconds === undefined) ? null : r.duration_seconds;
     box.innerHTML = `<div class="card"><h1>${r.passed ? "🎉 Level passed!" : "💪 Keep practising!"}</h1>
       <p style="font-size:1.3rem"><b>${r.score} / ${r.total}</b> ${r.passed ? `— Level ${PLAY.n + 1 <= 10 ? PLAY.n + 1 : ""} ${PLAY.n < 10 ? "is now open!" : "— all 10 levels done! 🌟"}` : `— you need ${PASS}/${TOTAL} to open the next level.`}</p>
+      <p>You finished in <b>${fmtMinutes(dur)}</b>${dur === null ? "" : (mtWithin30(dur) ? ` · ✅ within 30 minutes` : ` · ⏱️ over 30 minutes`)}</p>
       ${rnd(1, r.r1, 15)}${rnd(2, r.r2, 10)}${rnd(3, r.r3, 10)}${rnd(4, r.r4, 10)}
       <h3>Your answers</h3>
       ${[1, 2, 3, 4].map(rn => {
