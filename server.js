@@ -720,6 +720,7 @@ CREATE TABLE IF NOT EXISTS mt_game_attempts (
   r3 INTEGER NOT NULL DEFAULT 0,
   r4 INTEGER NOT NULL DEFAULT 0,
   passed INTEGER NOT NULL DEFAULT 0,
+  duration_seconds INTEGER, -- minutes Afeef used, in seconds (NULL = played before timing was added, Nov 2026)
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS mt_game_answers (
@@ -755,6 +756,9 @@ try { db.exec("ALTER TABLE sessions ADD COLUMN impersonated_from TEXT"); } catch
 try { db.exec("ALTER TABLE writer_of_week ADD COLUMN work_id INTEGER"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE writer_of_week ADD COLUMN published_at TEXT"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE holiday_checklists ADD COLUMN points_awarded INTEGER NOT NULL DEFAULT 0"); } catch (e) { /* already there */ }
+// Memory Test timing (Nov 2026): minutes Afeef used per attempt, in seconds.
+// Older DBs (attempts played before timing) get the column here; their rows stay NULL.
+try { db.exec("ALTER TABLE mt_game_attempts ADD COLUMN duration_seconds INTEGER"); } catch (e) { /* already there */ }
 // Diary/checklist manual lock-open (2026-11-08): older DBs get the columns here.
 try { db.exec("ALTER TABLE holiday_diary_tasks ADD COLUMN diary_state TEXT NOT NULL DEFAULT 'auto'"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE holiday_diary_tasks ADD COLUMN checklist_state TEXT NOT NULL DEFAULT 'auto'"); } catch (e) { /* already there */ }
@@ -3841,7 +3845,7 @@ function mtPerLevel(pid) {
   return MT_GAME.MT_GAME_LEVELS.map(l => {
     const best = db.prepare("SELECT MAX(score) m FROM mt_game_attempts WHERE player_id=? AND level=?").get(pid, l.n).m;
     const att = db.prepare("SELECT COUNT(*) c FROM mt_game_attempts WHERE player_id=? AND level=?").get(pid, l.n).c;
-    const latest = db.prepare("SELECT score, created_at FROM mt_game_attempts WHERE player_id=? AND level=? ORDER BY id DESC LIMIT 1").get(pid, l.n);
+    const latest = db.prepare("SELECT score, duration_seconds, created_at FROM mt_game_attempts WHERE player_id=? AND level=? ORDER BY id DESC LIMIT 1").get(pid, l.n);
     return { n: l.n, title: l.title, desc: l.desc, unlocked: l.n <= unlocked,
       passed: best !== null && best >= MT_GAME.MT_GAME_PASS_MARK, best, attempts: att, latest: latest || null };
   });
@@ -3926,6 +3930,12 @@ app.post("/api/mt-game/level/:n/attempt", requireMtPlayer, (req, res) => {
   const r4 = Array.isArray(a.r4) ? a.r4 : [];
   if (r1.length !== 15 || r2.length !== 10 || r3.length !== 10 || r4.length !== 10)
     return res.status(400).json({ error: "Answer every round before submitting." });
+  // Minutes used, in seconds (client times from level start to submit).
+  // Must be a sane number — anything else is stored as NULL, never rejected.
+  let durationSeconds = null;
+  const ds = req.body ? req.body.duration_seconds : null;
+  const dsNum = (typeof ds === "number" && Number.isFinite(ds)) ? Math.round(ds) : null;
+  if (dsNum !== null && dsNum >= 0 && dsNum <= 86400) durationSeconds = dsNum;
   const m1 = mtMarkWords(level, r1);
   const m2 = mtMarkNumbers(level, r2);
   const m3 = mtMarkPicture(level, r3);
@@ -3940,8 +3950,8 @@ app.post("/api/mt-game/level/:n/attempt", requireMtPlayer, (req, res) => {
   ];
   db.exec("BEGIN");
   try {
-    const att = db.prepare("INSERT INTO mt_game_attempts (player_id, level, score, total, r1, r2, r3, r4, passed) VALUES (?,?,?,?,?,?,?,?,?)")
-      .run(req.mtPlayer.id, n, score, MT_GAME.MT_GAME_TOTAL, m1.score, m2.score, m3.score, m4.score, passed);
+    const att = db.prepare("INSERT INTO mt_game_attempts (player_id, level, score, total, r1, r2, r3, r4, passed, duration_seconds) VALUES (?,?,?,?,?,?,?,?,?,?)")
+      .run(req.mtPlayer.id, n, score, MT_GAME.MT_GAME_TOTAL, m1.score, m2.score, m3.score, m4.score, passed, durationSeconds);
     const ins = db.prepare(`INSERT INTO mt_game_answers
       (attempt_id, player_id, level, round, question_key, question, given_answer, correct_answer, is_correct)
       VALUES (?,?,?,?,?,?,?,?,?)`);
@@ -3950,6 +3960,7 @@ app.post("/api/mt-game/level/:n/attempt", requireMtPlayer, (req, res) => {
     db.exec("COMMIT");
     res.json({ ok: true, attempt_id: att.lastInsertRowid, score, total: MT_GAME.MT_GAME_TOTAL,
       r1: m1.score, r2: m2.score, r3: m3.score, r4: m4.score, passed: !!passed,
+      duration_seconds: durationSeconds,
       unlocked: mtUnlocked(req.mtPlayer.id), perLevel: mtPerLevel(req.mtPlayer.id),
       detail: allRows });
   } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your game." }); }
