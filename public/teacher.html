@@ -1742,8 +1742,8 @@ async function vVtGame(p) {
 }
 
 // ── Ula Vocabulary — UNO17, Category O (Samad, Nov 2026) ──────
-// Rehab Abbas only (own game PIN, teacher-managed). 210 words in
-// 2 categories, 42 sets of 25 (1,050 questions). Pick-only.
+// Rehab Abbas only (own game PIN, teacher-managed). 666 words in
+// 7 categories, 134 sets of 25 (3,350 questions). Pick-only.
 // Half a mark per language, 1 per word, total 25. Malayalam +
 // transliteration only in study/review. Game scores are SEPARATE
 // from writing points.
@@ -1765,7 +1765,7 @@ async function vUvGame(p) {
   let html = `<style>@font-face{font-family:"Noto Naskh Arabic";src:url("/fonts/NotoNaskhArabic-Regular.ttf") format("truetype");font-display:swap}.ar{font-family:"Noto Naskh Arabic",serif}</style>
     <div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
     <h2 style="color:#fff;margin:0">📖 Ula Vocabulary</h2>
-    <p style="margin:6px 0 0;color:#d4f0f5">UNO17 Vocabulary (Ula) · 210 words · 2 categories · 42 sets of 25 · half a mark for each language, 25 marks a set · 30 minutes</p>
+    <p style="margin:6px 0 0;color:#d4f0f5">UNO17 Vocabulary (Ula) · 666 words · 7 categories · 134 sets of 25 · half a mark for each language, 25 marks a set · 30 minutes</p>
     <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">Pick-only — Rehab taps the right meaning in the other two languages (4 options each). The given language rotates English → Arabic → Urdu. Malayalam and transliteration are shown only in the study list and the review. Game scores are separate from writing points.</p></div>
     <div class="card"><label>Boy</label>
       <p style="margin:4px 0"><b>${me ? esc(me.player.name) : "REHAB ABBAS"}</b> <span class="muted">(Ula, UNO17 — plays with his own game PIN, not a student login)</span></p>
@@ -1775,7 +1775,7 @@ async function vUvGame(p) {
   } else if (uvSub === "board") {
     const hist = (me.attempts || []).slice().sort((x, y) => (y.created_at || "").localeCompare(x.created_at || ""));
     html += `<div class="card"><h3>📊 ${esc(me.player.name)} — per-set scores</h3>
-      <p class="muted">${me.totals.attempts ? `Best set score: <b>${fmtScore(me.totals.best)} / 25</b> · Sets played: <b>${me.totals.setsPlayed} / 42</b> · Attempts: ${me.totals.attempts}` : "Not played yet."}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}</p>
+      <p class="muted">${me.totals.attempts ? `Best set score: <b>${fmtScore(me.totals.best)} / 25</b> · Sets played: <b>${me.totals.setsPlayed} / ${me.totals.totalSets || 134}</b> · Attempts: ${me.totals.attempts}` : "Not played yet."}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}</p>
       ${me.perSet.map(c => `<h4 style="margin:12px 0 4px">${esc(c.title)}</h4>
       <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
       <tr><th>Set</th><th>Best</th><th>Latest</th><th>Time</th><th>Played</th></tr>
@@ -1801,7 +1801,7 @@ async function vUvGame(p) {
       <p id="uv-pin-msg" class="muted"></p></div>`;
   } else if (uvSub === "summary") {
     html += `<div class="card"><h3>📝 Total Summary — ${esc(me.player.name)}</h3>
-      <p>${me.totals.attempts ? `Best set score: <b>${fmtScore(me.totals.best)} / 25</b>. Sets played: <b>${me.totals.setsPlayed} / 42</b> in ${me.totals.attempts} attempt${me.totals.attempts === 1 ? "" : "s"}.` : "Not played yet."}</p>
+      <p>${me.totals.attempts ? `Best set score: <b>${fmtScore(me.totals.best)} / 25</b>. Sets played: <b>${me.totals.setsPlayed} / ${me.totals.totalSets || 134}</b> in ${me.totals.attempts} attempt${me.totals.attempts === 1 ? "" : "s"}.` : "Not played yet."}</p>
       <p class="muted">Open an attempt in Monitoring to see its missed words and the full word-by-word review.</p></div>`;
   }
   if (uvAttempt) {

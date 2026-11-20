@@ -92,7 +92,7 @@ async function boot() {
   document.getElementById("nav").innerHTML = headHtml();
   const box = document.getElementById("game");
   box.innerHTML = `<h1>📖 Ula Vocabulary</h1>
-    <p class="muted">UNO17 Vocabulary (Ula) · 210 words in English, Arabic and Urdu. Pick the right meaning in the other two languages — half a mark for each language, 25 marks a set. <b>For Rehab Abbas only.</b></p>
+    <p class="muted">UNO17 Vocabulary (Ula) · 666 words in English, Arabic and Urdu. Pick the right meaning in the other two languages — half a mark for each language, 25 marks a set. <b>For Rehab Abbas only.</b></p>
     <div class="card"><h3>Enter your PIN</h3>
       <p class="muted">Rehab — type your 4-digit PIN to play.</p>
       <input type="password" id="uvpin" class="pinbox" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="••••">
@@ -133,13 +133,13 @@ function renderHome() {
     <p class="muted">UNO17 Vocabulary (Ula) · Playing as <b>${esc(ME.name)}</b>.</p>
     <div class="card">
       <h3>📖 Read the Concept</h3>
-      <p>This test checks how well you know <b>210 words</b> in three languages — <b>English, Arabic and Urdu</b> — in every direction.</p>
+      <p>This test checks how well you know <b>666 words</b> in three languages — <b>English, Arabic and Urdu</b> — in every direction.</p>
       <ul style="line-height:1.7">
         <li>A word is <b>given in one language</b>. Pick its correct meaning in the <b>other two languages</b>.</li>
         <li>Given in <b>English</b> → pick the <b>Arabic</b> and the <b>Urdu</b>. Given in <b>Arabic</b> → pick the <b>English</b> and the <b>Urdu</b>. Given in <b>Urdu</b> → pick the <b>English</b> and the <b>Arabic</b>.</li>
         <li>There are <b>4 options</b> for each language. Tap the right one — no typing.</li>
         <li><b>Marking:</b> half a mark for each correct language — <b>1 mark for a word, 25 marks for a set</b>.</li>
-        <li>There are <b>42 sets</b> in all (21 in each category) — every word comes <b>5 times</b>, in every direction. That is <b>1,050 questions</b>.</li>
+        <li>There are <b>134 sets</b> in all (21 in each of the six big categories, 8 in Proverbs) — every word comes <b>5 times</b> or more, in every direction. That is <b>3,350 questions</b>.</li>
         <li><b>Time: 30 minutes.</b> The timer on the screen shows how much time you have used.</li>
         <li>First <b>study the word lists</b>, then play the sets. After each set, read the review — the Malayalam meaning is shown there to help you learn.</li>
       </ul>
@@ -149,8 +149,8 @@ function renderHome() {
       const best = c.sets.reduce((m, s) => Math.max(m, s.best || 0), 0);
       return `<div class="lvl">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
-          <div><b>${esc(c.title)}</b><br><span class="muted" style="font-size:.9rem">105 words · 21 sets of 25</span></div>
-          <div style="text-align:right">${played ? `<b>${played}/21 sets played</b><br><span class="muted" style="font-size:.85rem">Best set score ${fmtScore(best)}/25</span>` : `<span class="muted">Not played yet</span>`}</div>
+          <div><b>${esc(c.title)}</b><br><span class="muted" style="font-size:.9rem">${c.words} words · ${c.sets.length} sets of 25</span></div>
+          <div style="text-align:right">${played ? `<b>${played}/${c.sets.length} sets played</b><br><span class="muted" style="font-size:.85rem">Best set score ${fmtScore(best)}/25</span>` : `<span class="muted">Not played yet</span>`}</div>
         </div>
         <div style="margin-top:10px"><button class="btn" data-cat="${c.n}">▶ Open ${esc(c.title)}</button></div>
       </div>`;
@@ -163,9 +163,9 @@ function renderCat(catN) {
   const c = CATS.find(x => x.n === catN);
   const box = document.getElementById("game");
   box.innerHTML = `<h1>📖 ${esc(c.title)}</h1>
-    <p class="muted">105 words · 21 sets of 25. Study the words first, then play a set. Half a mark for each language — 25 marks in all.</p>
+    <p class="muted">${c.words} words · ${c.sets.length} sets of 25. Study the words first, then play a set. Half a mark for each language — 25 marks in all.</p>
     <div class="lvl">
-      <div><b>📚 Study the words</b><br><span class="muted" style="font-size:.9rem">All 105 words — English, Arabic, Urdu, transliteration and Malayalam</span></div>
+      <div><b>📚 Study the words</b><br><span class="muted" style="font-size:.9rem">All ${c.words} words — English, Arabic, Urdu, transliteration and Malayalam</span></div>
       <div style="margin-top:10px"><button class="btn" id="gostudy">📚 Open the study list</button></div>
     </div>
     ${c.sets.map(s => `<div class="lvl">
@@ -187,7 +187,7 @@ async function renderStudy(catN) {
   try {
     const d = await api("GET", `/api/uv-game/study/${catN}`);
     box.innerHTML = `<h1>📚 ${esc(d.categoryTitle)} — Study List</h1>
-      <p class="muted">All 105 words. Read them well, then play a set.</p>
+      <p class="muted">All ${d.words.length} words. Read them well, then play a set.</p>
       <div class="card" style="padding:6px 10px;overflow-x:auto">
       <table class="study-t">
       <tr><th>#</th><th>English</th><th>Arabic</th><th>Urdu</th><th>Transliteration</th><th>Malayalam</th></tr>
