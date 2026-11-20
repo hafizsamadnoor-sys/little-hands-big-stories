@@ -779,14 +779,14 @@ CREATE TABLE IF NOT EXISTS vt_game_answers (
 );
 -- Ula Vocabulary (UNO17, Nov 2026 — Samad): game scores live ONLY
 -- here, never in points_log / Points Board / clubs / certificates.
--- Player: Rehab Abbas (mt_game_players id 2, own PIN). 210 words in
--- 2 categories, 42 sets of 25 (1,050 questions). uv_game_attempts:
+-- Player: Rehab Abbas (mt_game_players id 2, own PIN). 666 words in
+-- 7 categories, 134 sets of 25 (3,350 questions). uv_game_attempts:
 -- one row per finished set play (25 marks, half a mark per language
 -- — score is REAL). uv_game_answers: one row per word answered.
 CREATE TABLE IF NOT EXISTS uv_game_attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
-  category INTEGER NOT NULL CHECK(category BETWEEN 1 AND 2),
+  category INTEGER NOT NULL CHECK(category BETWEEN 1 AND 7),
   set_no INTEGER NOT NULL CHECK(set_no BETWEEN 1 AND 21),
   score REAL NOT NULL,
   total INTEGER NOT NULL DEFAULT 25,
@@ -799,7 +799,7 @@ CREATE TABLE IF NOT EXISTS uv_game_answers (
   player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
   category INTEGER NOT NULL,
   set_no INTEGER NOT NULL,
-  word_no INTEGER NOT NULL, -- global_no in ula-data.js (1..210)
+  word_no INTEGER NOT NULL, -- global_no in ula-data.js (1..666)
   given_lang TEXT NOT NULL,
   ans_lang_a TEXT NOT NULL,
   pick_a TEXT NOT NULL DEFAULT '',
@@ -811,6 +811,31 @@ CREATE TABLE IF NOT EXISTS uv_game_answers (
 );
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
+// Migration: widen uv_game_attempts to categories 1..7 (Ula Vocabulary
+// expanded 2026-11-20: 7 categories). Table rebuild, rows preserved.
+try {
+  var uvrow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='uv_game_attempts'").get();
+  var uvsql = uvrow && uvrow.sql ? uvrow.sql : "";
+  if (uvsql && uvsql.indexOf("BETWEEN 1 AND 2") >= 0) {
+    db.exec("PRAGMA foreign_keys=OFF;");
+    db.exec("CREATE TABLE uv_game_attempts_new (" +
+      "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+      "player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE," +
+      "category INTEGER NOT NULL CHECK(category BETWEEN 1 AND 7)," +
+      "set_no INTEGER NOT NULL CHECK(set_no BETWEEN 1 AND 21)," +
+      "score REAL NOT NULL," +
+      "total INTEGER NOT NULL DEFAULT 25," +
+      "duration_seconds INTEGER," +
+      "created_at TEXT DEFAULT (datetime('now'))" +
+      ");" +
+      "INSERT INTO uv_game_attempts_new (id, player_id, category, set_no, score, total, duration_seconds, created_at)" +
+      " SELECT id, player_id, category, set_no, score, total, duration_seconds, created_at FROM uv_game_attempts;" +
+      "DROP TABLE uv_game_attempts;" +
+      "ALTER TABLE uv_game_attempts_new RENAME TO uv_game_attempts;" +
+      "PRAGMA foreign_keys=ON;");
+    console.log("Migrated uv_game_attempts to allow 7 categories.");
+  }
+} catch (e) { console.log("uv_game_attempts migration:", e.message); try { db.exec("PRAGMA foreign_keys=ON;"); } catch(_){} }
 // Word Fight answers: which player made the turn ('you' or an AI name) —
 // AI turns must never count in the boy's totals, coverage or revision queue.
 try { db.exec("ALTER TABLE wf_game_answers ADD COLUMN player TEXT NOT NULL DEFAULT 'you'"); } catch (e) { /* already there */ }
@@ -4234,9 +4259,9 @@ app.get("/api/teacher/vt-game/attempt/:id", requireTeacher, (req, res) => {
 
 // ── Ula Vocabulary (UNO17) ─────────────────────────────────────
 // Pick-only: 4 tap options per language (1 correct + 3 distractors
-// from the same category, shuffled fresh each fetch). 210 words in
-// 2 categories; 42 sets of 25 (21 per category) = 1,050 questions —
-// each word appears 5 times, asked in every given-language
+// from the same category, shuffled fresh each fetch). 666 words in
+// 7 categories; 134 sets of 25 = 3,350 questions — each word appears
+// 5 times (Proverbs words 5–6 times), asked in every given-language
 // direction (EN / AR / UR). Marking: ½ mark per language, 1 per
 // word, total 25. Malayalam + transliteration are study aids: shown
 // in the study list and the review, NEVER during the test.
@@ -4247,12 +4272,22 @@ const uvCategory = (n) => UV_GAME.UV_CATEGORIES.find(c => c.n === n) || null;
 function uvCatWords(cat) {
   return UV_GAME.UV_WORDS.filter(w => w.cat === cat).sort((a, b) => a.no - b.no);
 }
-// One slot of a category's 525 questions (5 rounds × 105 words).
-// Given language = (word index + round) % 3, so every word is asked
-// in every direction across its 5 appearances.
+// Sets in one category: 5 rounds × words, rounded UP to whole sets of
+// 25 (a 105-word category: 525 slots = 21 sets; Proverbs, 36 words:
+// 180 slots → topped up with a 6th round to 200 slots = 8 sets).
+function uvSetsInCat(cat) {
+  const n = uvCatWords(cat).length;
+  return Math.ceil((5 * n) / 25);
+}
+function uvTotalSets() {
+  return UV_GAME.UV_CATEGORIES.reduce((sum, c) => sum + uvSetsInCat(c.n), 0);
+}
+// One slot of a category's questions (5 rounds × words; Proverbs uses
+// a 6th round to fill its last set). Given language = (word index +
+// round) % 3, so every word is asked in every direction.
 function uvSlot(cat, slot) {
   const words = uvCatWords(cat);
-  const round = Math.floor(slot / 105), i = slot % 105;
+  const round = Math.floor(slot / words.length), i = slot % words.length;
   return { word: words[i], given_lang: UV_LANGS[(i + round) % 3] };
 }
 function uvSetSlots(cat, set) {
@@ -4276,8 +4311,8 @@ function uvOptions(cat, word, lang) {
 }
 function uvPerSet(pid) {
   return UV_GAME.UV_CATEGORIES.map(c => ({
-    n: c.n, title: c.title,
-    sets: Array.from({ length: 21 }, (_, k) => k + 1).map(set => {
+    n: c.n, title: c.title, words: uvCatWords(c.n).length,
+    sets: Array.from({ length: uvSetsInCat(c.n) }, (_, k) => k + 1).map(set => {
       const best = db.prepare("SELECT MAX(score) m FROM uv_game_attempts WHERE player_id=? AND category=? AND set_no=?").get(pid, c.n, set).m;
       const att = db.prepare("SELECT COUNT(*) c FROM uv_game_attempts WHERE player_id=? AND category=? AND set_no=?").get(pid, c.n, set).c;
       const latest = db.prepare("SELECT score, duration_seconds, created_at FROM uv_game_attempts WHERE player_id=? AND category=? AND set_no=? ORDER BY id DESC LIMIT 1").get(pid, c.n, set);
@@ -4289,7 +4324,7 @@ function uvSummary(pid) {
   const player = db.prepare("SELECT id, name FROM mt_game_players WHERE id=?").get(pid);
   if (!player) return null;
   const attempts = db.prepare("SELECT * FROM uv_game_attempts WHERE player_id=? ORDER BY id DESC").all(pid);
-  const totals = { attempts: attempts.length,
+  const totals = { attempts: attempts.length, totalSets: uvTotalSets(),
     best: attempts.length ? Math.max(...attempts.map(a => a.score)) : null,
     setsPlayed: new Set(attempts.map(a => a.category + "-" + a.set_no)).size };
   return { player, perSet: uvPerSet(pid), totals, attempts,
@@ -4335,7 +4370,7 @@ app.get("/api/uv-game/me", (req, res) => {
 app.get("/api/uv-game/categories", requireUvPlayer, (req, res) => {
   res.json({ player: req.uvPlayer, categories: uvPerSet(req.uvPlayer.id) });
 });
-// Player: the study list for one category (all 105 words with
+// Player: the study list for one category (all words with
 // English, full-harakat Arabic, Urdu, transliteration, Malayalam).
 app.get("/api/uv-game/study/:cat", requireUvPlayer, (req, res) => {
   const cat = Number(req.params.cat);
@@ -4348,7 +4383,7 @@ app.get("/api/uv-game/study/:cat", requireUvPlayer, (req, res) => {
 // and Malayalam / transliteration are NEVER sent during the test.
 app.get("/api/uv-game/set/:cat/:set/questions", requireUvPlayer, (req, res) => {
   const cat = Number(req.params.cat), set = Number(req.params.set);
-  if (!uvCategory(cat) || set < 1 || set > 21) return res.status(404).json({ error: "No such set." });
+  if (!uvCategory(cat) || set < 1 || set > uvSetsInCat(cat)) return res.status(404).json({ error: "No such set." });
   res.json({ category: cat, set, categoryTitle: uvCategory(cat).title,
     words: uvSetSlots(cat, set).map(({ word: w, given_lang: givenLang }) => {
       const ansLangs = UV_LANGS.filter(l => l !== givenLang);
@@ -4361,7 +4396,7 @@ app.get("/api/uv-game/set/:cat/:set/questions", requireUvPlayer, (req, res) => {
 // Server re-marks everything — the client never scores.
 app.post("/api/uv-game/set/:cat/:set/attempt", requireUvPlayer, (req, res) => {
   const cat = Number(req.params.cat), set = Number(req.params.set);
-  if (!uvCategory(cat) || set < 1 || set > 21) return res.status(404).json({ error: "No such set." });
+  if (!uvCategory(cat) || set < 1 || set > uvSetsInCat(cat)) return res.status(404).json({ error: "No such set." });
   const slots = uvSetSlots(cat, set);
   const given = Array.isArray(req.body && req.body.answers) ? req.body.answers : [];
   const byNo = new Map(given.map(a => [Number(a.num), a]));
