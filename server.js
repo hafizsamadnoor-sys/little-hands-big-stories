@@ -16,6 +16,7 @@ const GK_GAME = require("./gk-game-data");
 const WF_GAME = require("./wf-game-data");
 const MT_GAME = require("./memory-test-data");
 const VT_GAME = require("./vocab-data");
+const UV_GAME = require("./ula-data");
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -776,6 +777,38 @@ CREATE TABLE IF NOT EXISTS vt_game_answers (
   b_ok INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
+-- Ula Vocabulary (UNO17, Nov 2026 — Samad): game scores live ONLY
+-- here, never in points_log / Points Board / clubs / certificates.
+-- Player: Rehab Abbas (mt_game_players id 2, own PIN). 210 words in
+-- 2 categories, 42 sets of 25 (1,050 questions). uv_game_attempts:
+-- one row per finished set play (25 marks, half a mark per language
+-- — score is REAL). uv_game_answers: one row per word answered.
+CREATE TABLE IF NOT EXISTS uv_game_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
+  category INTEGER NOT NULL CHECK(category BETWEEN 1 AND 2),
+  set_no INTEGER NOT NULL CHECK(set_no BETWEEN 1 AND 21),
+  score REAL NOT NULL,
+  total INTEGER NOT NULL DEFAULT 25,
+  duration_seconds INTEGER, -- minutes Rehab used, in seconds
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS uv_game_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES uv_game_attempts(id) ON DELETE CASCADE,
+  player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
+  category INTEGER NOT NULL,
+  set_no INTEGER NOT NULL,
+  word_no INTEGER NOT NULL, -- global_no in ula-data.js (1..210)
+  given_lang TEXT NOT NULL,
+  ans_lang_a TEXT NOT NULL,
+  pick_a TEXT NOT NULL DEFAULT '',
+  a_ok INTEGER NOT NULL DEFAULT 0,
+  ans_lang_b TEXT NOT NULL,
+  pick_b TEXT NOT NULL DEFAULT '',
+  b_ok INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
 // Word Fight answers: which player made the turn ('you' or an AI name) —
@@ -924,6 +957,17 @@ function seedMtGamePlayers() {
   } catch (e) { console.log("Memory Test game seeding:", e.message); }
 }
 seedMtGamePlayers();
+// Ula Vocabulary (UNO17) player: Rehab Abbas — his own game PIN, separate
+// from Afeef's. Teacher-managed (changeable in the Teacher Panel).
+const UV_GAME_DEFAULT_PIN = "1717";
+const UV_PLAYER_ID = 2;
+function seedUvGamePlayer() {
+  try {
+    const row = db.prepare("SELECT id FROM mt_game_players WHERE id=2").get();
+    if (!row) db.prepare("INSERT INTO mt_game_players (id, name, pin_hash) VALUES (2,'REHAB ABBAS',?)").run(hashPassword(UV_GAME_DEFAULT_PIN));
+  } catch (e) { console.log("Ula Vocabulary seeding:", e.message); }
+}
+seedUvGamePlayer();
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
@@ -4188,6 +4232,205 @@ app.get("/api/teacher/vt-game/attempt/:id", requireTeacher, (req, res) => {
   res.json({ attempt: att, answers, review: vtReview(att, answers) });
 });
 
+// ── Ula Vocabulary (UNO17) ─────────────────────────────────────
+// Pick-only: 4 tap options per language (1 correct + 3 distractors
+// from the same category, shuffled fresh each fetch). 210 words in
+// 2 categories; 42 sets of 25 (21 per category) = 1,050 questions —
+// each word appears 5 times, asked in every given-language
+// direction (EN / AR / UR). Marking: ½ mark per language, 1 per
+// word, total 25. Malayalam + transliteration are study aids: shown
+// in the study list and the review, NEVER during the test.
+// Player: Rehab Abbas (mt_game_players id 2, own PIN).
+// Game scores live ONLY here — never in points_log.
+const UV_LANGS = ["en", "ar", "ur"];
+const uvCategory = (n) => UV_GAME.UV_CATEGORIES.find(c => c.n === n) || null;
+function uvCatWords(cat) {
+  return UV_GAME.UV_WORDS.filter(w => w.cat === cat).sort((a, b) => a.no - b.no);
+}
+// One slot of a category's 525 questions (5 rounds × 105 words).
+// Given language = (word index + round) % 3, so every word is asked
+// in every direction across its 5 appearances.
+function uvSlot(cat, slot) {
+  const words = uvCatWords(cat);
+  const round = Math.floor(slot / 105), i = slot % 105;
+  return { word: words[i], given_lang: UV_LANGS[(i + round) % 3] };
+}
+function uvSetSlots(cat, set) {
+  const out = [];
+  for (let s = (set - 1) * 25; s < set * 25; s++) out.push(uvSlot(cat, s));
+  return out;
+}
+// 4 options for one word + target language: the correct answer + 3
+// distractors from the same category (distinct text, never the correct one).
+function uvOptions(cat, word, lang) {
+  const correct = word[lang];
+  const pool = UV_GAME.UV_WORDS.filter(w => w.cat === cat && w.global_no !== word.global_no && w[lang] !== correct);
+  const seen = new Set([correct]);
+  const distractors = [];
+  for (const w of vtShuffle(pool)) {
+    if (seen.has(w[lang])) continue;
+    seen.add(w[lang]); distractors.push(w[lang]);
+    if (distractors.length === 3) break;
+  }
+  return vtShuffle([correct, ...distractors]);
+}
+function uvPerSet(pid) {
+  return UV_GAME.UV_CATEGORIES.map(c => ({
+    n: c.n, title: c.title,
+    sets: Array.from({ length: 21 }, (_, k) => k + 1).map(set => {
+      const best = db.prepare("SELECT MAX(score) m FROM uv_game_attempts WHERE player_id=? AND category=? AND set_no=?").get(pid, c.n, set).m;
+      const att = db.prepare("SELECT COUNT(*) c FROM uv_game_attempts WHERE player_id=? AND category=? AND set_no=?").get(pid, c.n, set).c;
+      const latest = db.prepare("SELECT score, duration_seconds, created_at FROM uv_game_attempts WHERE player_id=? AND category=? AND set_no=? ORDER BY id DESC LIMIT 1").get(pid, c.n, set);
+      return { set, best, attempts: att, latest: latest || null };
+    }),
+  }));
+}
+function uvSummary(pid) {
+  const player = db.prepare("SELECT id, name FROM mt_game_players WHERE id=?").get(pid);
+  if (!player) return null;
+  const attempts = db.prepare("SELECT * FROM uv_game_attempts WHERE player_id=? ORDER BY id DESC").all(pid);
+  const totals = { attempts: attempts.length,
+    best: attempts.length ? Math.max(...attempts.map(a => a.score)) : null,
+    setsPlayed: new Set(attempts.map(a => a.category + "-" + a.set_no)).size };
+  return { player, perSet: uvPerSet(pid), totals, attempts,
+    lastPlayedAt: attempts.length ? attempts[0].created_at : null };
+}
+// Word-by-word review for one attempt (correct answers in all
+// languages + Malayalam + transliteration — shown ONLY in review).
+function uvReview(att, answers) {
+  const slots = uvSetSlots(att.category, att.set_no);
+  const byNo = new Map(answers.map(a => [a.word_no, a]));
+  return slots.map(({ word: w, given_lang: slotGiven }) => {
+    const a = byNo.get(w.global_no) || {};
+    const givenLang = a.given_lang || slotGiven;
+    const ansLangs = UV_LANGS.filter(l => l !== givenLang);
+    const picks = {}, ok = {};
+    if (a.ans_lang_a) { picks[a.ans_lang_a] = a.pick_a || ""; ok[a.ans_lang_a] = !!a.a_ok; }
+    if (a.ans_lang_b) { picks[a.ans_lang_b] = a.pick_b || ""; ok[a.ans_lang_b] = !!a.b_ok; }
+    const marks = (ok[ansLangs[0]] ? 0.5 : 0) + (ok[ansLangs[1]] ? 0.5 : 0);
+    return { num: w.global_no, given_lang: givenLang, given: w[givenLang],
+      correct: { en: w.en, ar: w.ar, ur: w.ur, ml: w.ml, translit: w.translit },
+      ans_langs: ansLangs, picks, ok, marks };
+  });
+}
+const requireUvPlayer = (req, res, next) => {
+  const p = mtPlayer(req);
+  if (!p || p.id !== UV_PLAYER_ID) return res.status(401).json({ error: "Please enter Rehab's Ula Vocabulary PIN." });
+  req.uvPlayer = p; next();
+};
+// Player: Rehab's own PIN login (game-only — Rehab has no student account).
+app.post("/api/uv-game/login", (req, res) => {
+  const pin = String((req.body || {}).pin || "").trim();
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: "Enter the 4-digit PIN." });
+  const p = db.prepare("SELECT * FROM mt_game_players WHERE id=2").get();
+  if (!p || !verifyPassword(pin, p.pin_hash)) return res.status(401).json({ error: "Wrong PIN." });
+  mtSetSession(res, p.id);
+  res.json({ ok: true, player: { id: p.id, name: p.name } });
+});
+app.get("/api/uv-game/me", (req, res) => {
+  const p = mtPlayer(req);
+  res.json({ player: (p && p.id === UV_PLAYER_ID) ? p : null });
+});
+// Player: categories + sets with progress.
+app.get("/api/uv-game/categories", requireUvPlayer, (req, res) => {
+  res.json({ player: req.uvPlayer, categories: uvPerSet(req.uvPlayer.id) });
+});
+// Player: the study list for one category (all 105 words with
+// English, full-harakat Arabic, Urdu, transliteration, Malayalam).
+app.get("/api/uv-game/study/:cat", requireUvPlayer, (req, res) => {
+  const cat = Number(req.params.cat);
+  if (!uvCategory(cat)) return res.status(404).json({ error: "No such category." });
+  res.json({ category: cat, categoryTitle: uvCategory(cat).title,
+    words: uvCatWords(cat).map(w => ({ no: w.no, en: w.en, ar: w.ar, ur: w.ur, translit: w.translit, ml: w.ml })) });
+});
+// Player: the 25 questions for one set — given word + 4 shuffled
+// options per answer language. The correct option is NEVER marked,
+// and Malayalam / transliteration are NEVER sent during the test.
+app.get("/api/uv-game/set/:cat/:set/questions", requireUvPlayer, (req, res) => {
+  const cat = Number(req.params.cat), set = Number(req.params.set);
+  if (!uvCategory(cat) || set < 1 || set > 21) return res.status(404).json({ error: "No such set." });
+  res.json({ category: cat, set, categoryTitle: uvCategory(cat).title,
+    words: uvSetSlots(cat, set).map(({ word: w, given_lang: givenLang }) => {
+      const ansLangs = UV_LANGS.filter(l => l !== givenLang);
+      return { num: w.global_no, given_lang: givenLang, given: w[givenLang],
+        answers: ansLangs.map(lang => ({ lang, options: uvOptions(cat, w, lang) })) };
+    }) });
+});
+// Player: submit one finished set play.
+// Body: { answers: [{ num, picks: { ar: "...", ur: "..." } }], duration_seconds }.
+// Server re-marks everything — the client never scores.
+app.post("/api/uv-game/set/:cat/:set/attempt", requireUvPlayer, (req, res) => {
+  const cat = Number(req.params.cat), set = Number(req.params.set);
+  if (!uvCategory(cat) || set < 1 || set > 21) return res.status(404).json({ error: "No such set." });
+  const slots = uvSetSlots(cat, set);
+  const given = Array.isArray(req.body && req.body.answers) ? req.body.answers : [];
+  const byNo = new Map(given.map(a => [Number(a.num), a]));
+  // Minutes used, in seconds (client times from set start to submit).
+  let durationSeconds = null;
+  const ds = req.body ? req.body.duration_seconds : null;
+  const dsNum = (typeof ds === "number" && Number.isFinite(ds)) ? Math.round(ds) : null;
+  if (dsNum !== null && dsNum >= 0 && dsNum <= 86400) durationSeconds = dsNum;
+  const rows = [];
+  let score = 0;
+  for (const { word: w, given_lang: givenLang } of slots) {
+    const ansLangs = UV_LANGS.filter(l => l !== givenLang);
+    const a = byNo.get(w.global_no) || {};
+    const picks = (a && a.picks) || {};
+    const pickA = String(picks[ansLangs[0]] || "");
+    const pickB = String(picks[ansLangs[1]] || "");
+    const aOk = pickA === w[ansLangs[0]] ? 1 : 0;
+    const bOk = pickB === w[ansLangs[1]] ? 1 : 0;
+    score += (aOk + bOk) * 0.5;
+    rows.push({ word_no: w.global_no, given_lang: givenLang, ans_lang_a: ansLangs[0], pick_a: pickA, a_ok: aOk, ans_lang_b: ansLangs[1], pick_b: pickB, b_ok: bOk });
+  }
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO uv_game_attempts (player_id, category, set_no, score, total, duration_seconds) VALUES (?,?,?,?,?,?)")
+      .run(req.uvPlayer.id, cat, set, score, 25, durationSeconds);
+    const ins = db.prepare(`INSERT INTO uv_game_answers
+      (attempt_id, player_id, category, set_no, word_no, given_lang, ans_lang_a, pick_a, a_ok, ans_lang_b, pick_b, b_ok)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const r of rows) ins.run(att.lastInsertRowid, req.uvPlayer.id, cat, set, r.word_no, r.given_lang, r.ans_lang_a, r.pick_a, r.a_ok, r.ans_lang_b, r.pick_b, r.b_ok);
+    db.exec("COMMIT");
+    const review = uvReview({ category: cat, set_no: set }, rows);
+    res.json({ ok: true, attempt_id: att.lastInsertRowid, score, total: 25,
+      duration_seconds: durationSeconds, review,
+      missed: review.filter(r => r.marks < 1),
+      perSet: uvPerSet(req.uvPlayer.id) });
+  } catch (e) { try { db.exec("ROLLBACK"); } catch (_) {} return res.status(500).json({ error: "Could not save your test." }); }
+});
+// Teacher: Ula Vocabulary monitoring overview — Rehab, per-set progress.
+app.get("/api/teacher/uv-game/overview", requireTeacher, (req, res) => {
+  const s = uvSummary(UV_PLAYER_ID);
+  if (!s) return res.json({ player: null });
+  res.json({ player: { id: s.player.id, name: s.player.name }, perSet: s.perSet,
+    totals: s.totals, lastPlayedAt: s.lastPlayedAt });
+});
+app.get("/api/teacher/uv-game/summary/:id", requireTeacher, (req, res) => {
+  const s = uvSummary(Number(req.params.id));
+  if (!s) return res.status(404).json({ error: "No such player." });
+  res.json(s);
+});
+app.get("/api/teacher/uv-game/attempt/:id", requireTeacher, (req, res) => {
+  const att = db.prepare("SELECT * FROM uv_game_attempts WHERE id=?").get(Number(req.params.id));
+  if (!att) return res.status(404).json({ error: "No such attempt." });
+  const answers = db.prepare("SELECT * FROM uv_game_answers WHERE attempt_id=? ORDER BY id").all(att.id);
+  res.json({ attempt: att, answers, review: uvReview(att, answers) });
+});
+// Teacher: change Rehab's Ula Vocabulary PIN (4 digits).
+app.post("/api/teacher/uv-game/pin", requireTeacher, (req, res) => {
+  const pin = String((req.body || {}).pin || "").trim();
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: "PIN must be 4 digits." });
+  db.prepare("UPDATE mt_game_players SET pin_hash=? WHERE id=2").run(hashPassword(pin));
+  logActivity(req.user.id, "teacher", "uv_game_pin", "Ula Vocabulary PIN changed for REHAB ABBAS");
+  res.json({ ok: true });
+});
+// Teacher: open the Ula test as Rehab (one tap — sets the game cookie).
+app.post("/api/teacher/uv-game/session", requireTeacher, (req, res) => {
+  mtSetSession(res, UV_PLAYER_ID);
+  res.json({ ok: true });
+});
+
 // ── Points board, authors, writer of week, badges ─────────────
 app.get("/api/points-board", requireLogin, (req, res) => {
   const period = req.query.period === "month" ? "month" : "all";
@@ -4777,7 +5020,8 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "gk_game_players","gk_game_attempts","gk_game_answers","gk_game_progress","gk_game_key_status","gk_game_revision_answers",
   "wf_game_players","wf_game_matches","wf_game_attempts","wf_game_answers","wf_game_progress","wf_game_key_status","wf_game_revision_answers",
   "mt_game_players","mt_game_attempts","mt_game_answers","mt_game_progress",
-  "vt_game_attempts","vt_game_answers"];
+  "vt_game_attempts","vt_game_answers",
+  "uv_game_attempts","uv_game_answers"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -4814,6 +5058,7 @@ app.post("/api/teacher/restore", requireTeacher, (req, res) => {
     seedGKGamePlayers(); // same for the GK Kids player
     seedWFGamePlayers(); // same for the Word Fight player (Thalha, BNS35)
     seedMtGamePlayers(); // same for the Memory Test player (Afeef, BNO14)
+    seedUvGamePlayer(); // same for the Ula Vocabulary player (Rehab Abbas, UNO17)
     const skippedObj = {};
     for (const [t, s] of Object.entries(skipped)) skippedObj[t] = [...s].join(",");
     res.json({ ok: true, skippedColumns: skippedObj });
