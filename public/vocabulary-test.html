@@ -1,0 +1,244 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vocabulary Test · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+@font-face{font-family:"Noto Naskh Arabic";src:url("/fonts/NotoNaskhArabic-Regular.ttf") format("truetype");font-weight:400;font-style:normal;font-display:swap}
+.ar{font-family:"Noto Naskh Arabic",serif}
+.vt-given{font-size:1.6rem;font-weight:800;line-height:1.5}
+.vt-given.ar{font-size:2rem;font-weight:400}
+.vt-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 12px}
+.vt-opt{border:2px solid #cbd5e1;border-radius:12px;padding:12px 10px;font-size:1.05rem;font-weight:700;background:#fff;cursor:pointer;text-align:center;min-height:52px}
+.vt-opt.ar{font-size:1.35rem;font-weight:400}
+.vt-opt.sel{border-color:#0e7c8c;background:#ecfeff;box-shadow:0 0 0 2px #0e7c8c inset}
+.vt-word{border:2px solid #cbd5e1;border-radius:14px;padding:14px;margin:12px 0;background:#fff}
+.vt-lang{font-size:.85rem;font-weight:800;color:#0b6e5d;text-transform:uppercase;letter-spacing:.04em;margin-top:8px}
+.vt-timer{position:sticky;top:0;background:#fff;padding:8px 0;z-index:5;font-size:1.1rem;font-weight:800;color:#0b6e5d}
+.lvl{border:2px solid #cbd5e1;border-radius:14px;padding:14px;margin:10px 0;background:#fff}
+.good{background:#dcfce7;border-radius:10px;padding:10px;font-size:14px;line-height:1.5}
+.bad{background:#fee2e2;border-radius:10px;padding:10px;font-size:14px;line-height:1.5}
+.pinbox{font-size:26px;text-align:center;letter-spacing:10px}
+input[type=password]{width:100%;padding:13px;font-size:17px;border:2px solid #cbd5e1;border-radius:12px}
+.rev{border-bottom:1px solid #e2e8f0;padding:10px 4px}
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="game"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
+</div>
+<script>
+let ME = null;        // { id, name } when logged in as Afeef
+let AREAS = null;     // areas + sets + progress from /api/vt-game/areas
+let PLAY = null;      // current test state { area, set, words, picks, startedAt }
+const LANG_NAMES = { en: "English", ar: "Arabic", ur: "Urdu" };
+const LANG_RTL = { ar: true, ur: true };
+
+function fmtElapsed(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+let elapsedInt = null;
+function startElapsedTimer() {
+  stopElapsedTimer();
+  const tick = () => {
+    const el = document.getElementById("vtelapsed");
+    if (el && PLAY && PLAY.startedAt) {
+      const s = Math.max(0, Math.floor((Date.now() - PLAY.startedAt) / 1000));
+      el.textContent = fmtElapsed(s);
+    }
+  };
+  tick();
+  elapsedInt = setInterval(tick, 1000);
+}
+function stopElapsedTimer() { if (elapsedInt) { clearInterval(elapsedInt); elapsedInt = null; } }
+// Minutes used for one attempt (duration in seconds). NULL/blank = not recorded.
+function fmtMinutes(sec) {
+  if (sec === null || sec === undefined || sec === "") return "—";
+  const v = Math.round((sec / 60) * 10) / 10;
+  return (Number.isInteger(v) ? v : v.toFixed(1)) + " min";
+}
+function fmtScore(s) {
+  if (s === null || s === undefined) return "—";
+  return Number.isInteger(s) ? String(s) : s.toFixed(1);
+}
+function langAttrs(lang) {
+  return LANG_RTL[lang] ? ` class="ar" dir="rtl"` : "";
+}
+function headHtml() {
+  return `<header class="top"><div class="top-in">
+    <div class="brand-logo"><img src="/icons/flower-192.png" alt="Little Hands" style="width:100%;height:100%;border-radius:0;object-fit:cover;display:block"></div>
+    <div class="brand">Little Hands, Big Stories<div class="inst">Noorul Huda Centre for Excellence</div><small>Vocabulary Test · SIBAQ 26 (BNO13)</small></div>
+    <div style="flex:1"></div>
+    ${ME ? `<button class="btn small ghost" id="vtlogout" style="margin:0">Logout</button>` : ""}
+  </div></header>`;
+}
+function wireLogout() {
+  const lo = document.getElementById("vtlogout");
+  if (lo) lo.onclick = async () => { try { await api("POST", "/api/mt-game/logout", {}); } catch (e) {} ME = null; boot(); };
+}
+async function boot() {
+  document.getElementById("nav").innerHTML = headHtml();
+  try { const d = await api("GET", "/api/mt-game/me"); ME = d.player; } catch (e) { ME = null; }
+  if (ME) { await loadAreas(); return; }
+  // Not logged in as Afeef — show the PIN login (shared with the Memory Test).
+  let isTeacher = false;
+  try { const u = await currentUser(); isTeacher = !!(u && u.role === "teacher"); } catch (e) {}
+  document.getElementById("nav").innerHTML = headHtml();
+  const box = document.getElementById("game");
+  box.innerHTML = `<h1>📖 Vocabulary Test</h1>
+    <p class="muted">SIBAQ 26 · Vocabulary (BNO13) · 600 words in 6 areas. Pick the right meaning in the other two languages — half a mark for each language, 25 marks a set. <b>For Muhammad Afeef only.</b></p>
+    <div class="card"><h3>Enter your PIN</h3>
+      <p class="muted">Afeef — type your 4-digit PIN to play (the same PIN as the Memory Test).</p>
+      <input type="password" id="vtpin" class="pinbox" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="••••">
+      <div style="margin-top:12px"><button class="btn" id="vtgo">▶ Play Vocabulary Test</button></div>
+      <p id="vterr" style="color:#dc2626;font-weight:700"></p>
+    </div>
+    ${isTeacher ? `<div class="card"><h3>🧑‍🏫 Teacher</h3><p class="muted">You are signed in as the teacher. Open the test as Afeef to play it with him.</p><button class="btn" id="vtteacher">▶ Open the test as Afeef</button></div>` : ""}
+    <p><a class="btn ghost" href="/memory-test.html">← Memory Test &amp; Vocabulary</a></p>`;
+  const pinEl = document.getElementById("vtpin");
+  pinEl.focus();
+  const go = async () => {
+    const pin = pinEl.value.trim();
+    if (!/^\d{4}$/.test(pin)) { document.getElementById("vterr").textContent = "Enter the 4-digit PIN."; return; }
+    try {
+      const r = await api("POST", "/api/mt-game/login", { pin });
+      ME = r.player; await loadAreas();
+    } catch (e) { document.getElementById("vterr").textContent = e.message; }
+  };
+  document.getElementById("vtgo").onclick = go;
+  pinEl.onkeydown = (e) => { if (e.key === "Enter") go(); };
+  const tb = document.getElementById("vtteacher");
+  if (tb) tb.onclick = async () => {
+    try { await api("POST", "/api/teacher/mt-game/session", {}); const d = await api("GET", "/api/mt-game/me"); ME = d.player; await loadAreas(); }
+    catch (e) { document.getElementById("vterr").textContent = e.message; }
+  };
+}
+async function loadAreas() {
+  const d = await api("GET", "/api/vt-game/areas");
+  AREAS = d.areas;
+  document.getElementById("nav").innerHTML = headHtml();
+  wireLogout();
+  renderAreas();
+}
+function renderAreas() {
+  stopElapsedTimer();
+  const box = document.getElementById("game");
+  box.innerHTML = `<h1>📖 Vocabulary Test</h1>
+    <p class="muted">SIBAQ 26 · Vocabulary (BNO13) · 600 words · 6 areas · 4 sets of 25 words in each area. Half a mark for each language, 25 marks a set. Playing as <b>${esc(ME.name)}</b>.</p>
+    ${AREAS.map(a => {
+      const played = a.sets.filter(s => s.attempts > 0).length;
+      const best = a.sets.reduce((m, s) => Math.max(m, s.best || 0), 0);
+      return `<div class="lvl">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+          <div><b>Area ${a.n} — ${esc(a.title)}</b><br><span class="muted" style="font-size:.9rem">100 words · 4 sets of 25</span></div>
+          <div style="text-align:right">${played ? `<b>${played}/4 sets played</b><br><span class="muted" style="font-size:.85rem">Best set score ${fmtScore(best)}/25</span>` : `<span class="muted">Not played yet</span>`}</div>
+        </div>
+        <div style="margin-top:10px"><button class="btn" data-area="${a.n}">▶ Open ${esc(a.title)}</button></div>
+      </div>`;
+    }).join("")}
+    <p><a class="btn ghost" href="/memory-test.html">← Memory Test &amp; Vocabulary</a></p>`;
+  box.querySelectorAll("[data-area]").forEach(b => b.onclick = () => renderSets(+b.dataset.area));
+}
+function renderSets(areaN) {
+  stopElapsedTimer();
+  const a = AREAS.find(x => x.n === areaN);
+  const box = document.getElementById("game");
+  box.innerHTML = `<h1>📖 ${esc(a.title)}</h1>
+    <p class="muted">Area ${a.n} · 100 words in 4 sets of 25. Pick a set to start. Half a mark for each language — 25 marks in all.</p>
+    ${a.sets.map(s => {
+      const lo = (s.set - 1) * 25 + 1, hi = s.set * 25;
+      return `<div class="lvl">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+          <div><b>Set ${s.set}</b><br><span class="muted" style="font-size:.9rem">Words ${lo}–${hi}</span></div>
+          <div style="text-align:right"><b>${s.best === null || s.best === undefined ? "—" : fmtScore(s.best) + "/25"}</b>${s.attempts ? `<br><span class="muted" style="font-size:.85rem">Played ${s.attempts} time${s.attempts === 1 ? "" : "s"}</span>` : ""}${s.latest && s.latest.duration_seconds !== null && s.latest.duration_seconds !== undefined ? `<br><span class="muted" style="font-size:.85rem">Last time: ${fmtMinutes(s.latest.duration_seconds)}</span>` : ""}</div>
+        </div>
+        <div style="margin-top:10px"><button class="btn" data-set="${s.set}">${s.attempts ? "▶ Play again" : "▶ Play Set " + s.set}</button></div>
+      </div>`;
+    }).join("")}
+    <p><button class="btn ghost" id="backareas">← Back to areas</button></p>`;
+  box.querySelectorAll("[data-set]").forEach(b => b.onclick = () => startTest(areaN, +b.dataset.set));
+  document.getElementById("backareas").onclick = renderAreas;
+}
+async function startTest(areaN, set) {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Loading your set…</p></div>`;
+  try {
+    const d = await api("GET", `/api/vt-game/set/${areaN}/${set}/questions`);
+    PLAY = { area: areaN, set, areaTitle: d.areaTitle, words: d.words, picks: {}, startedAt: Date.now() };
+    renderTest();
+    startElapsedTimer();
+  } catch (e) {
+    box.innerHTML = `<div class="card"><h1>📖 Vocabulary Test</h1><p>${esc(e.message)}</p><button class="btn" id="back">← Back to sets</button></div>`;
+    document.getElementById("back").onclick = () => renderSets(areaN);
+  }
+}
+function pickedCount() {
+  let c = 0;
+  for (const w of PLAY.words) for (const a of w.answers) if (PLAY.picks[w.num] && PLAY.picks[w.num][a.lang]) c++;
+  return c;
+}
+function renderTest() {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="vt-timer">⏱️ Time used: <span id="vtelapsed">00:00</span> · <span id="vtprog" style="color:#475569">Picked 0 of 50</span></div>
+    <h1>📖 ${esc(PLAY.areaTitle)} — Set ${PLAY.set}</h1>
+    <p class="muted">For each word, tap the right meaning in the other two languages. Half a mark for each language — 25 marks in all.</p>
+    ${PLAY.words.map((w, i) => `<div class="vt-word">
+      <p class="muted" style="margin:0">Word ${i + 1} of 25 · given in ${LANG_NAMES[w.given_lang]}</p>
+      <div class="vt-given${LANG_RTL[w.given_lang] ? " ar" : ""}"${LANG_RTL[w.given_lang] ? ` dir="rtl"` : ""}>${esc(w.given)}</div>
+      ${w.answers.map(a => `<div class="vt-lang">${LANG_NAMES[a.lang]}</div>
+        <div class="vt-opts">${a.options.map(opt => `<button class="vt-opt${LANG_RTL[a.lang] ? " ar" : ""}"${LANG_RTL[a.lang] ? ` dir="rtl"` : ""} data-num="${w.num}" data-lang="${a.lang}" data-val="${esc(opt)}">${esc(opt)}</button>`).join("")}</div>`).join("")}
+    </div>`).join("")}
+    <p><button class="btn" id="vtsubmit">✅ Submit the set</button>
+    <button class="btn ghost" id="vtquit" style="margin-left:8px">← Back to sets</button></p>`;
+  box.querySelectorAll(".vt-opt").forEach(b => b.onclick = () => {
+    const num = +b.dataset.num, lang = b.dataset.lang, val = b.dataset.val;
+    PLAY.picks[num] = PLAY.picks[num] || {};
+    PLAY.picks[num][lang] = val;
+    box.querySelectorAll(`.vt-opt[data-num="${num}"][data-lang="${lang}"]`).forEach(x => x.classList.toggle("sel", x.dataset.val === val));
+    document.getElementById("vtprog").textContent = `Picked ${pickedCount()} of 50`;
+  });
+  document.getElementById("vtsubmit").onclick = submitTest;
+  document.getElementById("vtquit").onclick = () => { stopElapsedTimer(); renderSets(PLAY.area); };
+  window.scrollTo(0, 0);
+}
+async function submitTest() {
+  stopElapsedTimer();
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card"><p class="muted">Checking your set…</p></div>`;
+  const durationSeconds = PLAY.startedAt ? Math.max(0, Math.round((Date.now() - PLAY.startedAt) / 1000)) : null;
+  const answers = PLAY.words.map(w => ({ num: w.num, picks: PLAY.picks[w.num] || {} }));
+  try {
+    const r = await api("POST", `/api/vt-game/set/${PLAY.area}/${PLAY.set}/attempt`, { answers, duration_seconds: durationSeconds });
+    AREAS = r.perSet;
+    const dur = (r.duration_seconds === null || r.duration_seconds === undefined) ? null : r.duration_seconds;
+    const reviewRow = (x) => `<div class="rev">
+      <p style="margin:0"><b>Word ${x.num}</b> · given in ${LANG_NAMES[x.given_lang]}: <span${langAttrs(x.given_lang)}>${esc(x.given)}</span> — <b>${fmtScore(x.marks)}/1</b></p>
+      ${x.ans_langs.map(lang => `<p style="margin:2px 0">${x.ok[lang] ? "✅" : "❌"} ${LANG_NAMES[lang]}: you picked <span${langAttrs(lang)}>${esc(x.picks[lang] || "(no answer)")}</span>${x.ok[lang] ? "" : ` · correct: <b><span${langAttrs(lang)}>${esc(x.correct[lang])}</span></b>`}</p>`).join("")}
+      <p class="muted" style="margin:2px 0">English: ${esc(x.correct.en)} · Arabic: <span class="ar" dir="rtl">${esc(x.correct.ar)}</span> · Urdu: <span class="ar" dir="rtl">${esc(x.correct.ur)}</span> · Malayalam: ${esc(x.correct.ml)}</p>
+    </div>`;
+    box.innerHTML = `<div class="card"><h1>${r.score >= 20 ? "🎉 Well done!" : "💪 Keep practising!"}</h1>
+      <p style="font-size:1.3rem"><b>${fmtScore(r.score)} / ${r.total}</b> — ${esc(PLAY.areaTitle)}, Set ${PLAY.set}</p>
+      <p>You finished in <b>${fmtMinutes(dur)}</b></p>
+      ${r.missed.length ? `<h3>Missed words (${r.missed.length})</h3><p class="muted">Learn these words again:</p>${r.missed.map(x => `<p style="margin:4px 0"><b>${esc(x.correct.en)}</b> · <span class="ar" dir="rtl">${esc(x.correct.ar)}</span> · <span class="ar" dir="rtl">${esc(x.correct.ur)}</span> · ${esc(x.correct.ml)}</p>`).join("")}` : `<p>🌟 Every word fully correct — no missed words!</p>`}
+      <h3>Word-by-word review</h3>
+      ${r.review.map(reviewRow).join("")}
+      <p><button class="btn" id="again">🔁 Try this set again</button>
+      <button class="btn ghost" id="backsets" style="margin-left:8px">← Back to sets</button>
+      <button class="btn ghost" id="backareas" style="margin-left:8px">← Areas</button></p></div>`;
+    document.getElementById("again").onclick = () => startTest(PLAY.area, PLAY.set);
+    document.getElementById("backsets").onclick = () => renderSets(PLAY.area);
+    document.getElementById("backareas").onclick = renderAreas;
+    window.scrollTo(0, 0);
+  } catch (e) {
+    box.innerHTML = `<div class="card"><h1>📖 Vocabulary Test</h1><p>${esc(e.message)}</p><button class="btn" id="back">← Back to sets</button></div>`;
+    document.getElementById("back").onclick = () => renderSets(PLAY.area);
+  }
+}
+(async () => { await boot(); })();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
