@@ -23,7 +23,7 @@
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["diary","🏖️ Holiday Diary"],
   ["checklist","📋 Checklist"],
   ["letterfb","💌 Letter Feedback"],
-  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["gkgame","🧠 GK Kids"],["wfgame","⚔️ Word Fight"],["mtgame","🧠 Memory Test"],["vtgame","📖 Vocabulary"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
+  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["gkgame","🧠 GK Kids"],["wfgame","⚔️ Word Fight"],["mtgame","🧠 Memory Test"],["vtgame","📖 Vocabulary"],["uvgame","📖 Ula Vocabulary"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
   ["messages","💬 Little Hands Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
@@ -192,7 +192,7 @@ async function render() {
   // not when the tab opens — see vMessages.
   document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame, gkgame: vGkGame, wfgame: vWfGame, mtgame: vMtGame, vtgame: vVtGame,
+  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame, gkgame: vGkGame, wfgame: vWfGame, mtgame: vMtGame, vtgame: vVtGame, uvgame: vUvGame,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
@@ -1738,6 +1738,112 @@ async function vVtGame(p) {
   if (openBtn) openBtn.onclick = async () => {
     try { await api("POST", "/api/teacher/mt-game/session", {}); window.open("/vocabulary-test.html", "_blank"); }
     catch (e) { toast(e.message, false); }
+  };
+}
+
+// ── Ula Vocabulary — UNO17, Category O (Samad, Nov 2026) ──────
+// Rehab Abbas only (own game PIN, teacher-managed). 210 words in
+// 2 categories, 42 sets of 25 (1,050 questions). Pick-only.
+// Half a mark per language, 1 per word, total 25. Malayalam +
+// transliteration only in study/review. Game scores are SEPARATE
+// from writing points.
+let uvSub = "board", uvAttempt = null;
+async function vUvGame(p) {
+  const fmtUvMin = (sec) => {
+    if (sec === null || sec === undefined || sec === "") return "—";
+    const v = Math.round((sec / 60) * 10) / 10;
+    return (Number.isInteger(v) ? v : v.toFixed(1)) + " min";
+  };
+  const uvWithin30 = (sec) => sec !== null && sec !== undefined && sec !== "" && sec <= 30 * 60;
+  const uvTimeCell = (sec) => (sec === null || sec === undefined || sec === "") ? "—" : fmtUvMin(sec) + (uvWithin30(sec) ? " ✅" : " ⏱️");
+  const fmtScore = (s) => (s === null || s === undefined) ? "—" : (Number.isInteger(s) ? String(s) : s.toFixed(1));
+  const LANG_NAMES = { en: "English", ar: "Arabic", ur: "Urdu" };
+  const rtl = (lang) => (lang === "ar" || lang === "ur") ? ` class="ar" dir="rtl"` : "";
+  const ov = await api("GET", "/api/teacher/uv-game/overview");
+  const me = ov.player ? (await api("GET", "/api/teacher/uv-game/summary/" + ov.player.id)) : null;
+  const subBtn = (k, label) => `<button class="btn small ${uvSub === k ? "" : "ghost"}" data-uvsub="${k}">${label}</button>`;
+  let html = `<style>@font-face{font-family:"Noto Naskh Arabic";src:url("/fonts/NotoNaskhArabic-Regular.ttf") format("truetype");font-display:swap}.ar{font-family:"Noto Naskh Arabic",serif}</style>
+    <div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h2 style="color:#fff;margin:0">📖 Ula Vocabulary</h2>
+    <p style="margin:6px 0 0;color:#d4f0f5">UNO17 Vocabulary (Ula) · 210 words · 2 categories · 42 sets of 25 · half a mark for each language, 25 marks a set · 30 minutes</p>
+    <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">Pick-only — Rehab taps the right meaning in the other two languages (4 options each). The given language rotates English → Arabic → Urdu. Malayalam and transliteration are shown only in the study list and the review. Game scores are separate from writing points.</p></div>
+    <div class="card"><label>Boy</label>
+      <p style="margin:4px 0"><b>${me ? esc(me.player.name) : "REHAB ABBAS"}</b> <span class="muted">(Ula, UNO17 — plays with his own game PIN, not a student login)</span></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0">${subBtn("board", "📊 Monitoring")}${subBtn("summary", "📝 Total Summary")}</div></div>`;
+  if (!me) {
+    html += `<div class="card"><p class="muted">No player yet — the Ula Vocabulary test was not set up. Tell Muse.</p></div>`;
+  } else if (uvSub === "board") {
+    const hist = (me.attempts || []).slice().sort((x, y) => (y.created_at || "").localeCompare(x.created_at || ""));
+    html += `<div class="card"><h3>📊 ${esc(me.player.name)} — per-set scores</h3>
+      <p class="muted">${me.totals.attempts ? `Best set score: <b>${fmtScore(me.totals.best)} / 25</b> · Sets played: <b>${me.totals.setsPlayed} / 42</b> · Attempts: ${me.totals.attempts}` : "Not played yet."}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}</p>
+      ${me.perSet.map(c => `<h4 style="margin:12px 0 4px">${esc(c.title)}</h4>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>Set</th><th>Best</th><th>Latest</th><th>Time</th><th>Played</th></tr>
+      ${c.sets.map(s => `<tr><td>Set ${s.set}</td>
+        <td><b>${s.best === null || s.best === undefined ? "—" : fmtScore(s.best) + " / 25"}</b></td><td>${s.latest === null ? "—" : fmtScore(s.latest.score) + " / 25"}</td>
+        <td>${s.latest === null ? "—" : uvTimeCell(s.latest.duration_seconds)}</td>
+        <td>${s.attempts}</td></tr>`).join("")}
+      </table></div>`).join("")}</div>
+    <div class="card"><h3>🕒 Attempt history</h3>
+      ${hist.length ? `<div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>When</th><th>Category · Set</th><th>Score</th><th>Minutes</th><th></th></tr>
+      ${hist.map(a => { const ct = me.perSet.find(x => x.n === a.category); return `<tr><td>${fmtDateTime(a.created_at)}</td><td>${esc(ct ? ct.title : "Category " + a.category)} · Set ${a.set_no}</td>
+        <td><b>${fmtScore(a.score)} / ${a.total}</b></td>
+        <td>${uvTimeCell(a.duration_seconds)}</td>
+        <td><button class="btn small ghost" data-uv-attempt="${a.id}">View review</button></td></tr>`; }).join("")}
+      </table></div>` : `<p class="muted">No tests yet.</p>`}</div>
+    <div class="card"><h3>🧑‍🏫 Play with Rehab</h3>
+      <p class="muted">Open the test as Rehab — useful when you sit with him and play together. The test opens in a new tab.</p>
+      <p><button class="btn" id="uv-open">▶ Open the test as Rehab</button></p>
+      <h3>🔑 Game PIN</h3>
+      <p class="muted">Rehab types this 4-digit PIN on the Ula Vocabulary page to play. If he forgets it, set a new one here — the old PIN stops working at once. (The first PIN, when the test was made, was 1717.)</p>
+      <p><input id="uv-pin" type="password" maxlength="4" inputmode="numeric" placeholder="New 4-digit PIN" style="max-width:200px;display:inline-block"> <button class="btn" id="uv-pin-set">Set PIN</button></p>
+      <p id="uv-pin-msg" class="muted"></p></div>`;
+  } else if (uvSub === "summary") {
+    html += `<div class="card"><h3>📝 Total Summary — ${esc(me.player.name)}</h3>
+      <p>${me.totals.attempts ? `Best set score: <b>${fmtScore(me.totals.best)} / 25</b>. Sets played: <b>${me.totals.setsPlayed} / 42</b> in ${me.totals.attempts} attempt${me.totals.attempts === 1 ? "" : "s"}.` : "Not played yet."}</p>
+      <p class="muted">Open an attempt in Monitoring to see its missed words and the full word-by-word review.</p></div>`;
+  }
+  if (uvAttempt) {
+    html += `<div class="card" id="uv-detail"><p class="muted">Loading this attempt…</p></div>`;
+  }
+  p.innerHTML = html;
+  p.querySelectorAll("[data-uvsub]").forEach(b => b.onclick = () => { uvSub = b.dataset.uvsub; uvAttempt = null; render(); });
+  p.querySelectorAll("[data-uv-attempt]").forEach(b => b.onclick = async () => {
+    uvAttempt = +b.dataset.uvAttempt;
+    const d = await api("GET", "/api/teacher/uv-game/attempt/" + uvAttempt);
+    const el = document.getElementById("uv-detail");
+    if (!el) return;
+    const ct = me.perSet.find(x => x.n === d.attempt.category);
+    const missed = d.review.filter(r => r.marks < 1);
+    el.innerHTML = `<h3>🔎 Attempt — ${esc(ct ? ct.title : "Category " + d.attempt.category)}, Set ${d.attempt.set_no} · ${fmtScore(d.attempt.score)} / ${d.attempt.total} · ${fmtDateTime(d.attempt.created_at)}</h3>
+      <p>Finished in <b>${fmtUvMin(d.attempt.duration_seconds)}</b>${d.attempt.duration_seconds === null || d.attempt.duration_seconds === undefined ? "" : (uvWithin30(d.attempt.duration_seconds) ? " · ✅ within 30 minutes" : " · ⏱️ over 30 minutes")}</p>
+      ${missed.length ? `<h4>Missed words (${missed.length})</h4>${missed.map(x => `<p style="margin:4px 0"><b>${esc(x.correct.en)}</b> · <span class="ar" dir="rtl">${esc(x.correct.ar)}</span> · <span class="ar" dir="rtl">${esc(x.correct.ur)}</span> · ${esc(x.correct.ml)}</p>`).join("")}` : `<p>🌟 Every word fully correct — no missed words!</p>`}
+      <h4>Word-by-word review</h4>
+      ${d.review.map(x => `<div style="border-bottom:1px solid #e2e8f0;padding:8px 4px">
+        <p style="margin:0"><b>Word ${x.num}</b> · given in ${LANG_NAMES[x.given_lang]}: <span${rtl(x.given_lang)}>${esc(x.given)}</span> — <b>${fmtScore(x.marks)}/1</b></p>
+        ${x.ans_langs.map(lang => `<p style="margin:2px 0">${x.ok[lang] ? "✅" : "❌"} ${LANG_NAMES[lang]}: Rehab picked <span${rtl(lang)}>${esc(x.picks[lang] || "(no answer)")}</span>${x.ok[lang] ? "" : ` · correct: <b><span${rtl(lang)}>${esc(x.correct[lang])}</span></b>`}</p>`).join("")}
+        <p class="muted" style="margin:2px 0">English: ${esc(x.correct.en)} · Arabic: <span class="ar" dir="rtl">${esc(x.correct.ar)}</span> · Urdu: <span class="ar" dir="rtl">${esc(x.correct.ur)}</span> · Transliteration: ${esc(x.correct.translit)} · Malayalam: ${esc(x.correct.ml)}</p>
+      </div>`).join("")}
+      <p><button class="btn ghost" id="uv-detail-close">Close this attempt</button></p>`;
+    document.getElementById("uv-detail-close").onclick = () => { uvAttempt = null; render(); };
+    el.scrollIntoView({ behavior: "smooth" });
+  });
+  const openBtn = document.getElementById("uv-open");
+  if (openBtn) openBtn.onclick = async () => {
+    try { await api("POST", "/api/teacher/uv-game/session", {}); window.open("/ula-vocabulary.html", "_blank"); }
+    catch (e) { toast(e.message, false); }
+  };
+  const pinBtn = document.getElementById("uv-pin-set");
+  if (pinBtn) pinBtn.onclick = async () => {
+    const pin = document.getElementById("uv-pin").value.trim();
+    const msg = document.getElementById("uv-pin-msg");
+    if (!/^\d{4}$/.test(pin)) { msg.textContent = "PIN must be 4 digits."; return; }
+    try {
+      await api("POST", "/api/teacher/uv-game/pin", { pin });
+      msg.textContent = "PIN changed — Rehab's new Ula Vocabulary PIN is " + pin + ". Tell him the new PIN.";
+      toast("Ula Vocabulary PIN changed.");
+    } catch (e) { msg.textContent = e.message; }
   };
 }
 
