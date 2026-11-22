@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// Memory Test game (BNO14) — 10 levels, 4 rounds each, 45 marks.
+// Memory Test game (BNO14) — 13 levels, 4 rounds each, 45 marks.
 // SOURCE: official BNO14 concept — "To memorize and reproduce the read,
 // shown or heard things within a given time." 4 rounds, 45 marks, 30 min.
 // The game is for Muhammad Afeef (N1306) first — the only Bidaya boy
@@ -22,7 +22,7 @@
 // short story); L9–10 expert (longest words, 3-digit numbers, most
 // detailed scene, longest story).
 // A level:
-//   n         level number 1–10
+//   n         level number 1–13
 //   title     short name
 //   desc      one line for the level card
 //   words     15 words to study (any order on recall)
@@ -343,6 +343,97 @@ const MT_GAME_LEVELS = [
       { q: "Where did Chintu drop it?", keywords: ["bowl"] },
       { q: "Who gave Nihal the prize?", keywords: ["joseph", "science teacher"] },
       { q: "What does Nihal dream of building?", keywords: ["bigger robot", "robot"] }
+    ]
+  },
+  // ── Levels 11–13: Samad's new sets (2026-11-22, questions.json) — content EXACT as given ──
+  {
+    n: 11, title: "Level 11 — The Brass Key", desc: "Words · numbers · market scene · story",
+    words: ["Mango", "River", "Mosque", "Bicycle", "Elephant", "Window", "Garden", "Teacher", "Umbrella", "Mountain", "Lantern", "Bridge", "Star", "Book", "Fish"],
+    numbers: [12, 7, 25, 3, 18, 9, 30, 5, 21, 14],
+    scene: { name: "A fruit and vegetable market stall", items: [
+      { thing: "Apple", colour: "red", colourAliases: [], display: "A red apple", draw: "apple" },
+      { thing: "Banana", colour: "yellow", colourAliases: [], display: "A yellow banana", draw: "banana" },
+      { thing: "Grapes", colour: "green", colourAliases: [], display: "Green grapes", draw: "grapes" },
+      { thing: "Carrots", colour: "orange", colourAliases: [], display: "Orange carrots", draw: "carrots" },
+      { thing: "Brinjal", colour: "purple", colourAliases: [], display: "A purple brinjal", draw: "brinjal" },
+      { thing: "Cauliflower", colour: "white", colourAliases: [], display: "A white cauliflower", draw: "cauliflower" },
+      { thing: "Potatoes", colour: "brown", colourAliases: [], display: "Brown potatoes", draw: "potatoes" },
+      { thing: "Onions", colour: "pink", colourAliases: [], display: "Pink onions", draw: "onions" },
+      { thing: "Basket", colour: "blue", colourAliases: [], display: "A blue basket", draw: "basket" },
+      { thing: "Weighing scale", colour: "black", colourAliases: [], display: "A black weighing scale", draw: "scale" }
+    ] },
+    story: "Bilal was a boy of twelve who lived in a small village near a river. One morning, his father gave him a brass key and said, 'Keep this safe, Bilal. It opens the storeroom.' Bilal put the key in his shirt pocket and went to school. At noon, when he checked his pocket, the key was gone! He felt very sad. He searched the classroom, the playground and the road. At last, near the big mango tree, he saw something shining in the grass. It was the brass key! Bilal ran home happily and gave the key to his father. His father smiled and said, 'Good boy. You searched and did not give up.' That evening, Bilal tied the key with a red thread so he would never lose it again.",
+    questions: [
+      { q: "What is the boy's name?", keywords: ["bilal"] },
+      { q: "How old is Bilal?", keywords: ["twelve", "12"] },
+      { q: "Where did Bilal live?", keywords: ["village", "river"] },
+      { q: "Who gave Bilal the key?", keywords: ["father"] },
+      { q: "What was the key made of?", keywords: ["brass"] },
+      { q: "What did the key open?", keywords: ["storeroom"] },
+      { q: "Where did Bilal keep the key?", keywords: ["pocket", "shirt pocket"] },
+      { q: "Where did he find the key?", keywords: ["mango tree", "grass"] },
+      { q: "What did his father say when Bilal gave back the key?", keywords: ["good boy", "did not give up", "searched"] },
+      { q: "What did Bilal tie the key with?", keywords: ["red thread", "thread"] }
+    ]
+  },
+  {
+    n: 12, title: "Level 12 — Fatimah's Garden", desc: "Words · numbers · classroom scene · story",
+    words: ["Camel", "Desert", "Pencil", "Clock", "Parrot", "Boat", "Rain", "Ladder", "Mirror", "Spoon", "Tiger", "Cloud", "Chair", "Lemon", "Drum"],
+    numbers: [6, 19, 2, 28, 11, 4, 23, 8, 16, 27],
+    scene: { name: "A classroom", items: [
+      { thing: "Board", colour: "green", colourAliases: [], display: "A green board", draw: "board" },
+      { thing: "Desk", colour: "brown", colourAliases: [], display: "A brown desk", draw: "desk" },
+      { thing: "Bag", colour: "red", colourAliases: [], display: "A red bag", draw: "bag" },
+      { thing: "Bottle", colour: "blue", colourAliases: [], display: "A blue bottle", draw: "bottle" },
+      { thing: "Pencil box", colour: "yellow", colourAliases: [], display: "A yellow pencil box", draw: "pencilbox" },
+      { thing: "Paper", colour: "white", colourAliases: [], display: "White paper", draw: "paper" },
+      { thing: "Pen", colour: "black", colourAliases: [], display: "A black pen", draw: "pen" },
+      { thing: "Book", colour: "orange", colourAliases: [], display: "An orange book", draw: "book" },
+      { thing: "Eraser", colour: "pink", colourAliases: [], display: "A pink eraser", draw: "eraser" },
+      { thing: "Chair", colour: "grey", colourAliases: ["gray"], display: "A grey chair", draw: "chair" }
+    ] },
+    story: "Fatimah loved plants. Every morning before school, she watered the small garden behind her house. She had tomatoes, chillies and a rose plant with red flowers. One day, a little goat from the neighbour's house came into the garden and ate the leaves of the tomato plants. Fatimah felt sad, but she did not get angry. She made a small fence with sticks and rope around the garden. After two weeks, new leaves grew on the tomato plants. Soon, small green tomatoes appeared. Fatimah was very happy. She picked the first red tomato and gave it to her mother. Her mother said, 'Your patience made this garden grow again.'",
+    questions: [
+      { q: "What is the girl's name?", keywords: ["fatimah"] },
+      { q: "What did Fatimah do every morning before school?", keywords: ["watered", "watered the garden", "water the garden"] },
+      { q: "Where was the garden?", keywords: ["behind her house", "behind the house", "behind"] },
+      { q: "Which three plants did she have?", keywords: ["tomatoes", "chillies", "rose plant", "rose"] },
+      { q: "What colour were the rose flowers?", keywords: ["red"] },
+      { q: "Which animal came into the garden?", keywords: ["goat"] },
+      { q: "What did the goat eat?", keywords: ["leaves", "tomato leaves"] },
+      { q: "What did Fatimah make around the garden?", keywords: ["fence", "sticks and rope", "sticks"] },
+      { q: "After how many weeks did new leaves grow?", keywords: ["two weeks", "two", "2"] },
+      { q: "To whom did she give the first red tomato?", keywords: ["mother"] }
+    ]
+  },
+  {
+    n: 13, title: "Level 13 — The Old Well", desc: "Words · numbers · park scene · story",
+    words: ["Horse", "Village", "Cup", "Snake", "Train", "Moon", "Basket", "Doctor", "Tree", "Shoe", "Lion", "Kite", "Well", "Bread", "Bell"],
+    numbers: [15, 1, 22, 10, 29, 6, 13, 26, 4, 20],
+    scene: { name: "A park", items: [
+      { thing: "Grass", colour: "green", colourAliases: [], display: "Green grass", draw: "grass" },
+      { thing: "Slide", colour: "red", colourAliases: [], display: "A red slide", draw: "slide" },
+      { thing: "Swing", colour: "blue", colourAliases: [], display: "A blue swing", draw: "swing" },
+      { thing: "Bench", colour: "yellow", colourAliases: [], display: "A yellow bench", draw: "bench" },
+      { thing: "Duck", colour: "white", colourAliases: [], display: "A white duck", draw: "duck" },
+      { thing: "Dog", colour: "brown", colourAliases: [], display: "A brown dog", draw: "dog" },
+      { thing: "Ball", colour: "orange", colourAliases: [], display: "An orange ball", draw: "ball" },
+      { thing: "Flowers", colour: "pink", colourAliases: [], display: "Pink flowers", draw: "flowers" },
+      { thing: "Gate", colour: "black", colourAliases: [], display: "A black gate", draw: "gate" },
+      { thing: "Path", colour: "grey", colourAliases: ["gray"], display: "A grey path", draw: "path" }
+    ] },
+    story: "Yusuf was travelling with his uncle to a nearby town. On the way, they stopped near an old well to rest. Yusuf looked into the well and saw his face in the water far below. He dropped a small stone, and the water made rings. 'Uncle, how deep is this well?' Yusuf asked. His uncle said, 'Very deep. Long ago, travellers drank water from it.' Then Yusuf saw a small bird sitting on the edge of the well. The bird was thirsty. Yusuf poured some water from his bottle into a leaf and kept it near the bird. The bird drank happily and flew away. His uncle smiled and said, 'Kindness is the best water, Yusuf.'",
+    questions: [
+      { q: "Who was Yusuf travelling with?", keywords: ["uncle"] },
+      { q: "Where were they going?", keywords: ["nearby town", "town"] },
+      { q: "Where did they stop to rest?", keywords: ["old well", "well"] },
+      { q: "What did Yusuf see in the water?", keywords: ["face"] },
+      { q: "What did Yusuf drop into the well?", keywords: ["small stone", "stone"] },
+      { q: "What happened when the stone fell?", keywords: ["rings", "made rings"] },
+      { q: "Who drank water from the well long ago?", keywords: ["travellers", "travelers"] },
+      { q: "Which animal sat on the edge of the well?", keywords: ["small bird", "bird"] },
+      { q: "How did Yusuf give water to the bird?", keywords: ["leaf", "poured", "bottle into a leaf"] },
+      { q: "What did his uncle say at the end?", keywords: ["kindness is the best water", "kindness"] }
     ]
   }
 ];

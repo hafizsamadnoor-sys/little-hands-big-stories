@@ -714,7 +714,7 @@ CREATE TABLE IF NOT EXISTS mt_game_sessions (
 CREATE TABLE IF NOT EXISTS mt_game_attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE,
-  level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 10),
+  level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 13),
   score INTEGER NOT NULL,
   total INTEGER NOT NULL DEFAULT 45,
   r1 INTEGER NOT NULL DEFAULT 0,
@@ -850,6 +850,35 @@ try { db.exec("ALTER TABLE holiday_checklists ADD COLUMN points_awarded INTEGER 
 // Memory Test timing (Nov 2026): minutes Afeef used per attempt, in seconds.
 // Older DBs (attempts played before timing) get the column here; their rows stay NULL.
 try { db.exec("ALTER TABLE mt_game_attempts ADD COLUMN duration_seconds INTEGER"); } catch (e) { /* already there */ }
+// Migration: widen mt_game_attempts to levels 1..13 (Samad's 3 new Memory
+// Test sets, 2026-11-22). Table rebuild, rows preserved.
+try {
+  var mtrow = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='mt_game_attempts'").get();
+  var mtsql = mtrow && mtrow.sql ? mtrow.sql : "";
+  if (mtsql && mtsql.indexOf("BETWEEN 1 AND 10") >= 0) {
+    db.exec("PRAGMA foreign_keys=OFF;");
+    db.exec("CREATE TABLE mt_game_attempts_new (" +
+      "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+      "player_id INTEGER NOT NULL REFERENCES mt_game_players(id) ON DELETE CASCADE," +
+      "level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 13)," +
+      "score INTEGER NOT NULL," +
+      "total INTEGER NOT NULL DEFAULT 45," +
+      "r1 INTEGER NOT NULL DEFAULT 0," +
+      "r2 INTEGER NOT NULL DEFAULT 0," +
+      "r3 INTEGER NOT NULL DEFAULT 0," +
+      "r4 INTEGER NOT NULL DEFAULT 0," +
+      "passed INTEGER NOT NULL DEFAULT 0," +
+      "duration_seconds INTEGER," +
+      "created_at TEXT DEFAULT (datetime('now'))" +
+      ");" +
+      "INSERT INTO mt_game_attempts_new (id, player_id, level, score, total, r1, r2, r3, r4, passed, duration_seconds, created_at)" +
+      " SELECT id, player_id, level, score, total, r1, r2, r3, r4, passed, duration_seconds, created_at FROM mt_game_attempts;" +
+      "DROP TABLE mt_game_attempts;" +
+      "ALTER TABLE mt_game_attempts_new RENAME TO mt_game_attempts;" +
+      "PRAGMA foreign_keys=ON;");
+    console.log("Migrated mt_game_attempts to allow 13 levels.");
+  }
+} catch (e) { console.log("mt_game_attempts migration:", e.message); try { db.exec("PRAGMA foreign_keys=ON;"); } catch(_){} }
 // Diary/checklist manual lock-open (2026-11-08): older DBs get the columns here.
 try { db.exec("ALTER TABLE holiday_diary_tasks ADD COLUMN diary_state TEXT NOT NULL DEFAULT 'auto'"); } catch (e) { /* already there */ }
 try { db.exec("ALTER TABLE holiday_diary_tasks ADD COLUMN checklist_state TEXT NOT NULL DEFAULT 'auto'"); } catch (e) { /* already there */ }
@@ -3932,7 +3961,7 @@ function mtMarkStory(level, given) {
 }
 function mtUnlocked(pid) {
   const row = db.prepare("SELECT MAX(level) AS m FROM mt_game_attempts WHERE player_id=? AND passed=1").get(pid);
-  return Math.min(10, (row && row.m ? row.m : 0) + 1);
+  return Math.min(MT_GAME.MT_GAME_LEVELS.length, (row && row.m ? row.m : 0) + 1);
 }
 function mtRefreshProgress(pid) {
   const unlocked = mtUnlocked(pid);
