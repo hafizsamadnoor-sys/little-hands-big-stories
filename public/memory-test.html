@@ -137,7 +137,7 @@ function renderHome() {
   box.innerHTML = `<h1>🧠 Memory Test &amp; Vocabulary</h1>
     <p class="muted">SIBAQ 26 · Playing as <b>${esc(ME.name)}</b>. Choose a test:</p>
     <div class="lvl next">
-      <div><b>🧠 Memory Test (BNO14)</b><br><span class="muted" style="font-size:.9rem">10 levels · 4 rounds · 45 marks · pass at 36/45 to open the next level</span></div>
+      <div><b>🧠 Memory Test (BNO14)</b><br><span class="muted" style="font-size:.9rem">13 levels · 4 rounds · 45 marks · pass at 36/45 to open the next level</span></div>
       <div style="margin-top:10px"><button class="btn" id="gomt">▶ Play Memory Test</button></div>
     </div>
     <div class="lvl next">
@@ -153,7 +153,7 @@ function renderLevels() {
   const next = LEVELS.find(l => l.unlocked && !l.passed) || null;
   box.innerHTML = `<p><button class="btn ghost" id="backhome">← Memory Test &amp; Vocabulary</button></p>
     <h1>🧠 Memory Test</h1>
-    <p class="muted">SIBAQ 26 · Memory Test (BNO14) · 10 levels · each level is one full test of 4 rounds, 45 marks. Pass a level at <b>${PASS}/${TOTAL}</b> to open the next level. No multiple choice — you type what you remember. Playing as <b>${esc(ME.name)}</b>.</p>
+    <p class="muted">SIBAQ 26 · Memory Test (BNO14) · 13 levels · each level is one full test of 4 rounds, 45 marks. Pass a level at <b>${PASS}/${TOTAL}</b> to open the next level. No multiple choice — you type what you remember. Playing as <b>${esc(ME.name)}</b>.</p>
     <div class="card" style="background:#f8fafc"><b>Official concept:</b> “To memorize and reproduce the read, shown or heard things within a given time.”</div>
     ${LEVELS.map(l => `<div class="lvl ${l.passed ? "passed" : ""} ${!l.unlocked ? "locked" : ""} ${next && l.n === next.n ? "next" : ""}">
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
@@ -257,7 +257,7 @@ async function submitLevel() {
     const rnd = (n, got, tot) => `<p><b>Round ${n}:</b> ${got} / ${tot}</p>`;
     const dur = (r.duration_seconds === null || r.duration_seconds === undefined) ? null : r.duration_seconds;
     box.innerHTML = `<div class="card"><h1>${r.passed ? "🎉 Level passed!" : "💪 Keep practising!"}</h1>
-      <p style="font-size:1.3rem"><b>${r.score} / ${r.total}</b> ${r.passed ? `— Level ${PLAY.n + 1 <= 10 ? PLAY.n + 1 : ""} ${PLAY.n < 10 ? "is now open!" : "— all 10 levels done! 🌟"}` : `— you need ${PASS}/${TOTAL} to open the next level.`}</p>
+      <p style="font-size:1.3rem"><b>${r.score} / ${r.total}</b> ${r.passed ? `— Level ${PLAY.n + 1 <= 13 ? PLAY.n + 1 : ""} ${PLAY.n < 13 ? "is now open!" : "— all 13 levels done! 🌟"}` : `— you need ${PASS}/${TOTAL} to open the next level.`}</p>
       <p>You finished in <b>${fmtMinutes(dur)}</b>${dur === null ? "" : (mtWithin30(dur) ? ` · ✅ within 30 minutes` : ` · ⏱️ over 30 minutes`)}</p>
       ${rnd(1, r.r1, 15)}${rnd(2, r.r2, 10)}${rnd(3, r.r3, 10)}${rnd(4, r.r4, 10)}
       <h3>Your answers</h3>

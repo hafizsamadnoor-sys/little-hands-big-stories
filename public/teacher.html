@@ -165,7 +165,7 @@ async function updateTileCounts(o) {
     if (mt.status === "fulfilled") {
       const p = mt.value.player;
       set("mtgame", p
-        ? (mt.value.totals.attempts ? `Best ${mt.value.totals.best} / 45 · ${mt.value.totals.levelsPassed} / 10 levels passed` : "Not played yet")
+        ? (mt.value.totals.attempts ? `Best ${mt.value.totals.best} / 45 · ${mt.value.totals.levelsPassed} / 13 levels passed` : "Not played yet")
         : "Afeef only");
     }
     if (lf.status === "fulfilled") {
@@ -1550,7 +1550,7 @@ async function vWfGame(p) {
 
 
 // ── Memory Test — SIBAQ 2026, Bidaya BNO14 (Samad, Nov 2026) ───
-// Afeef only (N1306). 10 levels, each a full 4-round test (45 marks),
+// Afeef only (N1306). 13 levels, each a full 4-round test (45 marks),
 // pass at 36/45 (80%) to unlock the next level. NO multiple choice —
 // the boy types what he remembers. Game scores are SEPARATE from
 // writing points — they never touch the Points Board, clubs or
@@ -1571,7 +1571,7 @@ async function vMtGame(p) {
   const subBtn = (k, label) => `<button class="btn small ${mtSub === k ? "" : "ghost"}" data-mtsub="${k}">${label}</button>`;
   let html = `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
     <h2 style="color:#fff;margin:0">🧠 Memory Test</h2>
-    <p style="margin:6px 0 0;color:#d4f0f5">SIBAQ 2026 Memory Test (BNO14) · 10 levels · each level is one full test of 4 rounds, 45 marks · pass at 36/45 to open the next level</p>
+    <p style="margin:6px 0 0;color:#d4f0f5">SIBAQ 2026 Memory Test (BNO14) · 13 levels · each level is one full test of 4 rounds, 45 marks · pass at 36/45 to open the next level</p>
     <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">“To memorize and reproduce the read, shown or heard things within a given time.” Round 1 Words (15) · Round 2 Numbers (10, in order) · Round 3 Picture (10 things + colours) · Round 4 Story (10 questions). No multiple choice — Afeef types what he remembers. Game scores are separate from writing points — they never touch the Points Board, clubs or certificates.</p></div>
     <div class="card"><label>Boy</label>
       <p style="margin:4px 0"><b>${me ? esc(me.player.name) : "MUHAMMAD AFEEF"}</b> <span class="muted">(Bidaya, N1306 — not one of the 38 S1 boys, so he plays with a game PIN, not a student login)</span></p>
@@ -1581,7 +1581,7 @@ async function vMtGame(p) {
   } else if (mtSub === "board") {
     const hist = (me.attempts || []).slice().sort((x, y) => (y.created_at || "").localeCompare(x.created_at || ""));
     html += `<div class="card"><h3>📊 ${esc(me.player.name)} — per-level scores</h3>
-      <p class="muted">${me.totals.attempts ? `Best score: <b>${me.totals.best} / 45</b> · Levels passed: <b>${me.totals.levelsPassed} / 10</b> · Attempts: ${me.totals.attempts}` : "Not played yet."}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}</p>
+      <p class="muted">${me.totals.attempts ? `Best score: <b>${me.totals.best} / 45</b> · Levels passed: <b>${me.totals.levelsPassed} / 13</b> · Attempts: ${me.totals.attempts}` : "Not played yet."}${me.lastPlayedAt ? ` · Last played: ${fmtDateTime(me.lastPlayedAt)}` : ""}</p>
       <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
       <tr><th>Level</th><th>Best</th><th>Latest</th><th>Time</th><th>Played</th><th>Passed</th></tr>
       ${me.perLevel.map(l => `<tr><td>${l.n}. ${esc(l.title.replace(/^Level \d+ — /, ""))}</td>
