@@ -23,7 +23,7 @@
 const TABS = [["approvals","📮 Approvals"],["tasks","📅 Weekly Tasks"],["diary","🏖️ Holiday Diary"],
   ["checklist","📋 Checklist"],
   ["letterfb","💌 Letter Feedback"],
-  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["gkgame","🧠 GK Kids"],["wfgame","⚔️ Word Fight"],["mtgame","🧠 Memory Test"],["vtgame","📖 Vocabulary"],["uvgame","📖 Ula Vocabulary"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
+  ["challenges","🎯 Challenges"],["gala","🎉 Twelfth Gala"],["mapgame","🗺️ Map Study Game"],["gkgame","🧠 GK Kids"],["wfgame","⚔️ Word Fight"],["mtgame","🧠 Memory Test"],["vtgame","📖 Vocabulary"],["uvgame","📖 Ula Vocabulary"],["sqgame","📖 Seerah Quiz"],["students","👥 Students & Accounts"],["parents","👪 Parents"],["points","➕ Points"],
   ["learning","📋 Learning Tasks"],["completion","🎓 Completion"],["marks","📊 Marks"],
   ["wow","🌟 Writer of Week"],["settings","⚙️ Settings"],["activity","📊 Activity"],["account","👤 My Account"],["books","📚 Books"],
   ["messages","💬 Little Hands Messages"],["notices","📢 Notices"],["finance","💰 Finance"]];
@@ -192,7 +192,7 @@ async function render() {
   // not when the tab opens — see vMessages.
   document.querySelectorAll("#tiles [data-t]").forEach(b => b.classList.toggle("on", b.dataset.t === cur));
   const p = document.getElementById("panel");
-  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame, gkgame: vGkGame, wfgame: vWfGame, mtgame: vMtGame, vtgame: vVtGame, uvgame: vUvGame,
+  ({ approvals: vApprovals, tasks: vTasks, diary: vDiary, checklist: vChecklist, letterfb: vLetterFb, challenges: vChallenges, gala: vGala, mapgame: vMapGame, gkgame: vGkGame, wfgame: vWfGame, mtgame: vMtGame, vtgame: vVtGame, uvgame: vUvGame, sqgame: vSqGame,
      students: vStudents, parents: vParents, points: vPoints, learning: vLearning, completion: vCompletion, marks: vMarks, wow: vWow, settings: vSettings, activity: vActivity, account: vAccount, books: vBooks, messages: vMessages, notices: vNotices, finance: vFinance })[cur](p);
 }
 
@@ -1748,6 +1748,65 @@ async function vVtGame(p) {
 // transliteration only in study/review. Game scores are SEPARATE
 // from writing points.
 let uvSub = "board", uvAttempt = null;
+let sqAttempt = null;
+async function vSqGame(p) {
+  const fmtSqMin = (sec) => {
+    if (sec === null || sec === undefined || sec === "") return "—";
+    const v = Math.round((sec / 60) * 10) / 10;
+    return (Number.isInteger(v) ? v : v.toFixed(1)) + " min";
+  };
+  const ov = await api("GET", "/api/teacher/sq-game/overview");
+  const pl = (ov.players || [])[0] || null;
+  const me = pl ? (await api("GET", "/api/teacher/sq-game/summary/" + pl.id)) : null;
+  let html = `<div class="card" style="background:linear-gradient(135deg,#0b3c46,#0e7c8c);color:#fff">
+    <h2 style="color:#fff;margin:0">📖 Seerah Quiz</h2>
+    <p style="margin:6px 0 0;color:#d4f0f5">200 questions in 6 parts · 6 options per question · instant correct/wrong with the book's full answer · result + full review</p>
+    <p style="margin:4px 0 0;color:#d4f0f5;font-size:.85rem">For Faaz (Ad 494) — he opens it from his student home page ("📖 Seerah Quiz") after his normal login. Game scores are separate from writing points.</p></div>`;
+  if (!me) {
+    html += `<div class="card"><p class="muted">No player yet — the Seerah Quiz was not set up. Tell Muse.</p></div>`;
+  } else {
+    const hist = (me.attempts || []).slice();
+    html += `<div class="card"><h3>📊 ${esc(me.student.name)} — per-part scores</h3>
+      <p class="muted">${pl.attempts ? `Attempts: <b>${pl.attempts}</b> · Parts played: <b>${pl.partsPlayed} / 6</b>` : "Not played yet."}${pl.lastPlayedAt ? ` · Last played: ${fmtDateTime(pl.lastPlayedAt)}` : ""}</p>
+      <div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>Part</th><th>Questions</th><th>Best</th><th>Latest</th><th>Time</th><th>Played</th></tr>
+      ${me.parts.map(x => `<tr><td><b>Part ${x.n}</b> — ${esc(x.name)}</td><td>${x.count}</td>
+        <td><b>${x.best === null || x.best === undefined ? "—" : x.best + " / " + x.count}</b></td>
+        <td>${x.latest === null ? "—" : x.latest.score + " / " + x.latest.total}</td>
+        <td>${x.latest === null ? "—" : fmtSqMin(x.latest.duration_seconds)}</td>
+        <td>${x.attempts}</td></tr>`).join("")}
+      </table></div></div>
+    <div class="card"><h3>🕒 Attempt history</h3>
+      ${hist.length ? `<div style="overflow-x:auto"><table style="width:100%;font-size:.9rem">
+      <tr><th>When</th><th>Part</th><th>Score</th><th>Minutes</th><th></th></tr>
+      ${hist.map(a => { const pt = me.parts.find(x => x.n === a.part); return `<tr><td>${fmtDateTime(a.created_at)}</td><td>Part ${a.part} — ${esc(pt ? pt.name : "")}</td>
+        <td><b>${a.score} / ${a.total}</b></td>
+        <td>${fmtSqMin(a.duration_seconds)}</td>
+        <td><button class="btn small ghost" data-sq-attempt="${a.id}">View review</button></td></tr>`; }).join("")}
+      </table></div>` : `<p class="muted">No attempts yet.</p>`}</div>`;
+  }
+  if (sqAttempt) {
+    html += `<div class="card" id="sq-detail"><p class="muted">Loading this attempt…</p></div>`;
+  }
+  p.innerHTML = html;
+  p.querySelectorAll("[data-sq-attempt]").forEach(b => b.onclick = async () => {
+    sqAttempt = +b.dataset.sqAttempt;
+    const d = await api("GET", "/api/teacher/sq-game/attempt/" + sqAttempt);
+    const el = document.getElementById("sq-detail");
+    if (!el) return;
+    const wrong = d.review.filter(r => !r.ok);
+    el.innerHTML = `<h3>🔎 Attempt — Part ${d.attempt.part} ${esc(d.partName)} · ${d.attempt.score} / ${d.attempt.total} · ${fmtDateTime(d.attempt.created_at)}</h3>
+      <p>Finished in <b>${fmtSqMin(d.attempt.duration_seconds)}</b> · Wrong: <b>${wrong.length}</b></p>
+      ${d.review.map((x, i) => `<div style="border-bottom:1px solid #e2e8f0;padding:8px 4px">
+        <p style="margin:0">${x.ok ? "✅" : "❌"} <b>Q${i + 1}.</b> ${esc(x.question)}</p>
+        <p class="muted" style="margin:2px 0">Faaz picked: ${esc(x.given || "(no answer)")}${x.ok ? "" : ` · correct: <b>${esc(x.correct_answer)}</b>`}</p>
+        <p style="margin:2px 0;font-size:.92rem">📖 ${esc(x.answer_full)}</p>
+      </div>`).join("")}
+      <p><button class="btn ghost" id="sq-detail-close">Close this attempt</button></p>`;
+    document.getElementById("sq-detail-close").onclick = () => { sqAttempt = null; render(); };
+    el.scrollIntoView({ behavior: "smooth" });
+  });
+}
 async function vUvGame(p) {
   const fmtUvMin = (sec) => {
     if (sec === null || sec === undefined || sec === "") return "—";

@@ -1,0 +1,157 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seerah Quiz · Little Hands, Big Stories</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js"></script><link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="/icons/flower-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Little Hands">
+<style>
+.sq-opt{display:block;width:100%;text-align:left;padding:14px 16px;margin:8px 0;font-size:1.02rem;
+  background:#fff;border:2px solid #cbd5e1;border-radius:12px;cursor:pointer}
+.sq-opt:disabled{cursor:default;opacity:1}
+.sq-opt.right{border-color:#16a34a;background:#dcfce7}
+.sq-opt.wrong{border-color:#dc2626;background:#fee2e2}
+.sq-bar{height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden;margin:8px 0}
+.sq-bar>div{height:100%;background:#0e7c8c;border-radius:6px}
+.sq-full{background:#fef9c3;border:1px solid #facc15;border-radius:12px;padding:12px 14px;margin:12px 0}
+.sq-q{font-size:1.15rem;font-weight:700;line-height:1.45;margin:10px 0}
+</style>
+</head>
+<body><div id="nav"></div><div class="wrap">
+<div id="game"></div>
+<div class="footer"><div class="finst">NOORUL HUDA CENTRE FOR EXCELLENCE</div>Little Hands, Big Stories · Noorul Huda Centre for Excellence · S1 — 12th Batch</div>
+</div>
+<script>
+let PARTS = null;   // parts data from /api/sq-game/parts
+let PLAY = null;    // { part, name, questions, idx, picks, score, startedAt, timerId, checked }
+
+function fmtClock(sec) {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+}
+function fmtMinutes(sec) {
+  if (sec === null || sec === undefined || sec === "") return "—";
+  const v = Math.round((sec / 60) * 10) / 10;
+  return (Number.isInteger(v) ? v : v.toFixed(1)) + " min";
+}
+function stopTimer() { if (PLAY && PLAY.timerId) { clearInterval(PLAY.timerId); PLAY.timerId = null; } }
+
+async function loadParts() {
+  const d = await api("GET", "/api/sq-game/parts");
+  PARTS = d.parts;
+  renderHome();
+}
+function renderHome() {
+  stopTimer(); PLAY = null;
+  const box = document.getElementById("game");
+  box.innerHTML = `<h1>📖 Seerah Quiz</h1>
+    <p class="muted">SIBAQ 26 · 200 questions about the life of the Prophet (peace be upon him) — in 6 parts.
+    Tap one of the 6 answers for each question. You will see the correct answer and the book's full answer straight away.</p>
+    ${PARTS.map(p => `<div class="card">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+        <div><b>Part ${p.n} — ${esc(p.name)}</b><br><span class="muted" style="font-size:.9rem">${p.count} questions</span></div>
+        <div style="text-align:right"><b>${p.best === null ? "—" : p.best + "/" + p.count}</b>${p.attempts ? `<br><span class="muted" style="font-size:.85rem">Played ${p.attempts} time${p.attempts === 1 ? "" : "s"}</span>` : ""}${p.latest && p.latest.duration_seconds !== null && p.latest.duration_seconds !== undefined ? `<br><span class="muted" style="font-size:.85rem">Last time: ${fmtMinutes(p.latest.duration_seconds)}</span>` : ""}</div>
+      </div>
+      <div style="margin-top:10px"><button class="btn" data-part="${p.n}">▶ Play Part ${p.n}</button></div>
+    </div>`).join("")}
+    <p><a class="btn ghost" href="/dashboard.html">← Back home</a></p>`;
+  box.querySelectorAll("[data-part]").forEach(b => b.onclick = () => startPart(+b.dataset.part));
+}
+async function startPart(n) {
+  try {
+    const d = await api("GET", `/api/sq-game/part/${n}/questions`);
+    PLAY = { part: n, name: d.name, questions: d.questions, idx: 0, picks: [], score: 0,
+             startedAt: Date.now(), timerId: null, checked: false };
+    renderQuestion();
+    PLAY.timerId = setInterval(() => {
+      const el = document.getElementById("sqtime");
+      if (el && PLAY) el.textContent = fmtClock(Math.floor((Date.now() - PLAY.startedAt) / 1000));
+    }, 1000);
+  } catch (e) { toast(e.message, false); }
+}
+function renderQuestion() {
+  const box = document.getElementById("game");
+  const q = PLAY.questions[PLAY.idx];
+  const total = PLAY.questions.length;
+  PLAY.checked = false;
+  box.innerHTML = `<div class="card">
+    <p class="muted" style="margin:0">Part ${PLAY.part} — ${esc(PLAY.name)}</p>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+      <b>Question ${PLAY.idx + 1} of ${total}</b>
+      <span>⏱️ <b id="sqtime">${fmtClock(Math.floor((Date.now() - PLAY.startedAt) / 1000))}</b> · ⭐ Score: <b id="sqscore">${PLAY.score}</b></span>
+    </div>
+    <div class="sq-bar"><div style="width:${Math.round(PLAY.idx / total * 100)}%"></div></div>
+    <p class="sq-q">${esc(q.question)}</p>
+    <div id="sqopts">${q.options.map((o, i) => `<button class="sq-opt" data-pick="${i}">${esc(o)}</button>`).join("")}</div>
+    <div id="sqfb"></div>
+  </div>`;
+  box.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => pickOption(+b.dataset.pick));
+}
+async function pickOption(pick) {
+  if (!PLAY || PLAY.checked) return;
+  PLAY.checked = true;
+  const q = PLAY.questions[PLAY.idx];
+  PLAY.picks.push({ num: q.num, pick });
+  let r;
+  try { r = await api("POST", `/api/sq-game/part/${PLAY.part}/check`, { num: q.num, pick }); }
+  catch (e) { toast(e.message, false); PLAY.checked = false; PLAY.picks.pop(); return; }
+  if (r.correct) PLAY.score++;
+  const scoreEl = document.getElementById("sqscore");
+  if (scoreEl) scoreEl.textContent = PLAY.score;
+  document.querySelectorAll("[data-pick]").forEach(b => {
+    b.disabled = true;
+    const i = +b.dataset.pick;
+    if (i === r.correct_index) b.classList.add("right");
+    else if (i === pick) b.classList.add("wrong");
+  });
+  const last = PLAY.idx + 1 >= PLAY.questions.length;
+  document.getElementById("sqfb").innerHTML = `
+    <p style="font-size:1.1rem;font-weight:800;color:${r.correct ? "#16a34a" : "#dc2626"}">${r.correct ? "✅ Correct!" : "❌ Not quite — the correct answer is highlighted."}</p>
+    <div class="sq-full"><b>📖 Full answer:</b> ${esc(r.answer_full)}</div>
+    <p><button class="btn" id="sqnext">${last ? "🏁 See my result" : "Next question ▶"}</button></p>`;
+  document.getElementById("sqnext").onclick = () => {
+    if (last) submitPart();
+    else { PLAY.idx++; renderQuestion(); }
+  };
+  window.scrollTo(0, 0);
+}
+async function submitPart() {
+  stopTimer();
+  const durationSeconds = Math.max(0, Math.round((Date.now() - PLAY.startedAt) / 1000));
+  try {
+    const r = await api("POST", `/api/sq-game/part/${PLAY.part}/attempt`,
+      { answers: PLAY.picks, duration_seconds: durationSeconds });
+    renderResult(r);
+  } catch (e) { toast(e.message, false); loadParts(); }
+}
+function renderResult(r) {
+  const box = document.getElementById("game");
+  box.innerHTML = `<div class="card">
+    <h2>Part ${r.part} — ${esc(r.name)}</h2>
+    <p style="font-size:1.5rem"><b>${r.score} / ${r.total}</b> · ${r.pct}%</p>
+    <p>⏱️ Time taken: <b>${fmtClock(r.duration_seconds || 0)}</b> (${fmtMinutes(r.duration_seconds)})</p>
+    <p><button class="btn" id="sqagain">↻ Play Part ${r.part} again</button>
+    <button class="btn ghost" id="sqhome" style="margin-left:8px">← All parts</button></p>
+    </div>
+    <div class="card"><h3>📝 Review — your answers</h3>
+    ${r.review.map((d, i) => `<p>${d.ok ? "✅" : "❌"} <b>Q${i + 1}.</b> ${esc(d.question)}<br>
+      <span class="muted">You: ${esc(d.given || "(no answer)")} · Correct: <b>${esc(d.correct_answer)}</b></span><br>
+      <span style="font-size:.92rem">📖 ${esc(d.answer_full)}</span></p>`).join("")}
+    </div>`;
+  document.getElementById("sqagain").onclick = () => startPart(r.part);
+  document.getElementById("sqhome").onclick = loadParts;
+  window.scrollTo(0, 0);
+}
+(async () => {
+  const user = await guard("student"); if (!user) return;
+  document.getElementById("nav").innerHTML = studentNav("seerah-quiz.html");
+  try { await loadParts(); }
+  catch (e) {
+    document.getElementById("game").innerHTML = `<div class="card"><h1>📖 Seerah Quiz</h1>
+      <p>${esc(e.message)}</p><a class="btn" href="/dashboard.html">← Back home</a></div>`;
+  }
+})();
+</script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}</script>
+</body></html>
