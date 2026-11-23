@@ -17,6 +17,7 @@ const WF_GAME = require("./wf-game-data");
 const MT_GAME = require("./memory-test-data");
 const VT_GAME = require("./vocab-data");
 const UV_GAME = require("./ula-data");
+const SQ_GAME = require("./seerah-data");
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -809,6 +810,37 @@ CREATE TABLE IF NOT EXISTS uv_game_answers (
   b_ok INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
+-- Seerah Quiz game (Nov 2026 — Samad): game scores live ONLY here,
+-- never in points_log / Points Board / clubs / certificates.
+-- sq_game_players: which boys may play (Faaz first; add more later).
+-- sq_game_attempts: one row per finished part play (score out of part size).
+-- sq_game_answers: one row per question answered (pick + correct + full answer).
+CREATE TABLE IF NOT EXISTS sq_game_players (
+  student_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  added_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS sq_game_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  part INTEGER NOT NULL CHECK(part BETWEEN 1 AND 6),
+  score INTEGER NOT NULL,
+  total INTEGER NOT NULL,
+  duration_seconds INTEGER,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS sq_game_answers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  attempt_id INTEGER NOT NULL REFERENCES sq_game_attempts(id) ON DELETE CASCADE,
+  student_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  part INTEGER NOT NULL,
+  question_num INTEGER NOT NULL,
+  question TEXT NOT NULL,
+  given_answer TEXT NOT NULL DEFAULT '',
+  correct_answer TEXT NOT NULL,
+  answer_full TEXT NOT NULL DEFAULT '',
+  is_correct INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 try { db.exec("ALTER TABLE student_badges ADD COLUMN celebrated_at TEXT"); } catch (e) { /* already there */ }
 // Migration: widen uv_game_attempts to categories 1..7 (Ula Vocabulary
@@ -1022,6 +1054,19 @@ function seedUvGamePlayer() {
   } catch (e) { console.log("Ula Vocabulary seeding:", e.message); }
 }
 seedUvGamePlayer();
+// Seerah Quiz: Faaz (Ad 494) is the only player for now — the same boy
+// as the Map Study game. Other boys can be added later.
+// Named (not an IIFE) so the restore handler below can call it too: a
+// wipe-restore replaces sq_game_players from the backup, and a backup
+// taken before Faaz was ticked would drop him — re-seeding keeps the
+// Seerah Quiz player enrolled after every deploy, wipe and restore.
+function seedSqGamePlayers() {
+  try {
+    const faaz = db.prepare("SELECT id FROM users WHERE role='student' AND (ad_no='494' OR display_name LIKE '%FAAZ%')").get();
+    if (faaz) db.prepare("INSERT OR IGNORE INTO sq_game_players (student_id) VALUES (?)").run(faaz.id);
+  } catch (e) { console.log("Seerah Quiz seeding:", e.message); }
+}
+seedSqGamePlayers();
 
 // ── Points & badges ───────────────────────────────────────────
 const BADGES = [
@@ -4495,6 +4540,117 @@ app.post("/api/teacher/uv-game/session", requireTeacher, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Seerah Quiz (Faaz) ──────────────────────────────────────────
+// 200 questions in 6 parts (seerah-data.js — content EXACT as given).
+// One question at a time, 6 options, instant check per question, then
+// the whole part is submitted and re-marked server-side. Game scores
+// live ONLY in sq_game_* — never in points_log.
+const sqGameIsPlayer = (sid) => !!db.prepare("SELECT 1 FROM sq_game_players WHERE student_id=?").get(sid);
+const sqPart = (n) => SQ_GAME.SQ_PARTS.find(p => p.n === n) || null;
+const sqQuestionsInPart = (n) => SQ_GAME.SQ_QUESTIONS.filter(q => q.part === n);
+function sqPerPart(sid) {
+  return SQ_GAME.SQ_PARTS.map(p => {
+    const best = db.prepare("SELECT MAX(score) m FROM sq_game_attempts WHERE student_id=? AND part=?").get(sid, p.n).m;
+    const att = db.prepare("SELECT COUNT(*) c FROM sq_game_attempts WHERE student_id=? AND part=?").get(sid, p.n).c;
+    const latest = db.prepare("SELECT score, total, duration_seconds, created_at FROM sq_game_attempts WHERE student_id=? AND part=? ORDER BY id DESC LIMIT 1").get(sid, p.n);
+    return { n: p.n, name: p.name, count: p.count, best, attempts: att, latest: latest || null };
+  });
+}
+app.get("/api/my/sq-game", requireStudent, (req, res) => {
+  res.json({ isPlayer: sqGameIsPlayer(req.user.id) });
+});
+app.get("/api/sq-game/parts", requireStudent, (req, res) => {
+  if (!sqGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Seerah Quiz is only for Faaz for now." });
+  res.json({ parts: sqPerPart(req.user.id), student: { id: req.user.id, name: req.user.display_name } });
+});
+// Player: the questions of one part — NO correct answers in this payload.
+app.get("/api/sq-game/part/:n/questions", requireStudent, (req, res) => {
+  if (!sqGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Seerah Quiz is only for Faaz for now." });
+  const n = Number(req.params.n);
+  const part = sqPart(n);
+  if (!part) return res.status(404).json({ error: "No such part." });
+  res.json({ part: n, name: part.name,
+    questions: sqQuestionsInPart(n).map(q => ({ num: q.num, question: q.question, options: q.options })) });
+});
+// Player: instant check for ONE tapped option — returns the correct
+// option + the book's full answer (nothing is stored here).
+app.post("/api/sq-game/part/:n/check", requireStudent, (req, res) => {
+  if (!sqGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Seerah Quiz is only for Faaz for now." });
+  const n = Number(req.params.n);
+  if (!sqPart(n)) return res.status(404).json({ error: "No such part." });
+  const num = Number(req.body && req.body.num), pick = Number(req.body && req.body.pick);
+  const q = sqQuestionsInPart(n).find(x => x.num === num);
+  if (!q) return res.status(404).json({ error: "No such question." });
+  res.json({ correct: pick === q.correct_index, correct_index: q.correct_index,
+    correct_answer: q.options[q.correct_index], answer_full: q.answer_full });
+});
+// Player: submit one finished part play. Body: { answers: [{num, pick}], duration_seconds }.
+// Server re-marks everything — the client never scores.
+app.post("/api/sq-game/part/:n/attempt", requireStudent, (req, res) => {
+  if (!sqGameIsPlayer(req.user.id)) return res.status(403).json({ error: "The Seerah Quiz is only for Faaz for now." });
+  const n = Number(req.params.n);
+  const part = sqPart(n);
+  if (!part) return res.status(404).json({ error: "No such part." });
+  const questions = sqQuestionsInPart(n);
+  const given = Array.isArray(req.body && req.body.answers) ? req.body.answers : [];
+  const byNum = new Map(given.map(a => [Number(a && a.num), Number(a && a.pick)]));
+  let durationSeconds = null;
+  const ds = req.body ? req.body.duration_seconds : null;
+  const dsNum = (typeof ds === "number" && Number.isFinite(ds)) ? Math.round(ds) : null;
+  if (dsNum !== null && dsNum >= 0 && dsNum <= 86400) durationSeconds = dsNum;
+  let score = 0;
+  const review = questions.map(q => {
+    const pick = byNum.get(q.num);
+    const ok = pick === q.correct_index;
+    if (ok) score++;
+    return { num: q.num, question: q.question,
+      given: (Number.isInteger(pick) && q.options[pick] !== undefined) ? q.options[pick] : "",
+      correct_answer: q.options[q.correct_index], answer_full: q.answer_full, ok: ok ? 1 : 0 };
+  });
+  db.exec("BEGIN");
+  try {
+    const att = db.prepare("INSERT INTO sq_game_attempts (student_id, part, score, total, duration_seconds) VALUES (?,?,?,?,?)")
+      .run(req.user.id, n, score, questions.length, durationSeconds);
+    const ins = db.prepare(`INSERT INTO sq_game_answers
+      (attempt_id, student_id, part, question_num, question, given_answer, correct_answer, answer_full, is_correct)
+      VALUES (?,?,?,?,?,?,?,?,?)`);
+    for (const r of review) ins.run(att.lastInsertRowid, req.user.id, n, r.num, r.question, r.given, r.correct_answer, r.answer_full, r.ok);
+    db.exec("COMMIT");
+    res.json({ attempt_id: att.lastInsertRowid, part: n, name: part.name, score,
+      total: questions.length, pct: Math.round(score / questions.length * 100),
+      duration_seconds: durationSeconds, review });
+  } catch (e) {
+    try { db.exec("ROLLBACK"); } catch (_) {}
+    res.status(500).json({ error: "Could not save the attempt." });
+  }
+});
+// Teacher: Seerah Quiz overview, per-boy summary and attempt review.
+app.get("/api/teacher/sq-game/overview", requireTeacher, (req, res) => {
+  const players = db.prepare(`SELECT u.id, u.display_name AS name, u.ad_no FROM sq_game_players p
+    JOIN users u ON u.id = p.student_id ORDER BY u.display_name`).all().map(pl => {
+    const tot = db.prepare("SELECT COUNT(*) c, MAX(score) m FROM sq_game_attempts WHERE student_id=?").get(pl.id);
+    const partsPlayed = db.prepare("SELECT COUNT(DISTINCT part) c FROM sq_game_attempts WHERE student_id=?").get(pl.id).c;
+    const last = db.prepare("SELECT created_at FROM sq_game_attempts WHERE student_id=? ORDER BY id DESC LIMIT 1").get(pl.id);
+    return { ...pl, attempts: tot.c, best: tot.m, partsPlayed, lastPlayedAt: last ? last.created_at : null };
+  });
+  res.json({ players, parts: SQ_GAME.SQ_PARTS });
+});
+app.get("/api/teacher/sq-game/summary/:id", requireTeacher, (req, res) => {
+  const sid = Number(req.params.id);
+  const boy = db.prepare("SELECT id, display_name AS name, ad_no FROM users WHERE id=? AND role='student'").get(sid);
+  if (!boy) return res.status(404).json({ error: "No such student." });
+  const attempts = db.prepare("SELECT id, part, score, total, duration_seconds, created_at FROM sq_game_attempts WHERE student_id=? ORDER BY id DESC").all(sid);
+  res.json({ student: boy, parts: sqPerPart(sid), attempts });
+});
+app.get("/api/teacher/sq-game/attempt/:id", requireTeacher, (req, res) => {
+  const att = db.prepare(`SELECT a.*, u.display_name AS name FROM sq_game_attempts a
+    JOIN users u ON u.id = a.student_id WHERE a.id=?`).get(Number(req.params.id));
+  if (!att) return res.status(404).json({ error: "No such attempt." });
+  const review = db.prepare(`SELECT question_num AS num, question, given_answer AS given,
+    correct_answer, answer_full, is_correct AS ok FROM sq_game_answers WHERE attempt_id=? ORDER BY question_num`).all(att.id);
+  res.json({ attempt: att, partName: (sqPart(att.part) || {}).name || "", review });
+});
+
 // ── Points board, authors, writer of week, badges ─────────────
 app.get("/api/points-board", requireLogin, (req, res) => {
   const period = req.query.period === "month" ? "month" : "all";
@@ -5085,7 +5241,8 @@ const RESTORE_TABLES = ["users","sessions","works","reads","likes","points_log",
   "wf_game_players","wf_game_matches","wf_game_attempts","wf_game_answers","wf_game_progress","wf_game_key_status","wf_game_revision_answers",
   "mt_game_players","mt_game_attempts","mt_game_answers","mt_game_progress",
   "vt_game_attempts","vt_game_answers",
-  "uv_game_attempts","uv_game_answers"];
+  "uv_game_attempts","uv_game_answers",
+  "sq_game_players","sq_game_attempts","sq_game_answers"];
 app.post("/api/teacher/restore", requireTeacher, (req, res) => {
   const dump = (req.body || {}).backup;
   if (!dump || typeof dump !== "object" || Array.isArray(dump))
@@ -5123,6 +5280,7 @@ app.post("/api/teacher/restore", requireTeacher, (req, res) => {
     seedWFGamePlayers(); // same for the Word Fight player (Thalha, BNS35)
     seedMtGamePlayers(); // same for the Memory Test player (Afeef, BNO14)
     seedUvGamePlayer(); // same for the Ula Vocabulary player (Rehab Abbas, UNO17)
+    seedSqGamePlayers(); // same for the Seerah Quiz player (Faaz)
     const skippedObj = {};
     for (const [t, s] of Object.entries(skipped)) skippedObj[t] = [...s].join(",");
     res.json({ ok: true, skippedColumns: skippedObj });
